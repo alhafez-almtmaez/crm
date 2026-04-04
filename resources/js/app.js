@@ -16,8 +16,20 @@ import { createAppI18n } from './i18n';
 
 initThemeMode();
 
+const inertiaRoot = document.getElementById('app');
+let appName = document.title || 'Vita';
+
+if (inertiaRoot?.dataset?.page) {
+    try {
+        const page = JSON.parse(inertiaRoot.dataset.page);
+        appName = page?.props?.app?.name || appName;
+    } catch {
+        // Keep default app name when initial page payload is unavailable.
+    }
+}
+
 createInertiaApp({
-    title: (title) => (title ? `${title} | Vita` : 'Vita'),
+    title: (title) => (title ? `${title} | ${appName}` : appName),
     resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
     setup({ el, App, props, plugin }) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');

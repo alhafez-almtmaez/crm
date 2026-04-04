@@ -47,7 +47,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'app' => [
-                'name' => $settings['brandName'] ?? config('app.name'),
+                'name' => config('app.name', 'Vita'),
                 'tagline' => $settings['brandTagline'] ?? '',
             ],
             'auth' => [
