@@ -4,6 +4,7 @@ import Column from 'primevue/column';
 import PrimeDataTable from 'primevue/datatable';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
@@ -28,6 +29,10 @@ const props = defineProps({
     showHistory: {
         type: Boolean,
         default: false,
+    },
+    rowActions: {
+        type: Array,
+        default: () => [],
     },
     currentPage: {
         type: Number,
@@ -75,11 +80,48 @@ const props = defineProps({
     },
 });
 
-const emit = defineEmits(['create', 'delete', 'edit', 'history', 'pageChange', 'sortChange', 'update:search']);
+const emit = defineEmits(['create', 'delete', 'edit', 'history', 'rowAction', 'pageChange', 'sortChange', 'update:search']);
 const resolvedCreateLabel = () => props.createLabel || t('common.create');
 const resolvedSearchLabel = () => props.searchLabel || t('common.search');
 const resolvedTableTitle = () => props.tableTitle || t('common.records');
 const resolvedEmptyMessage = () => props.emptyMessage || t('common.noRecords');
+const resolveBadgeClass = (column, rowData) => {
+    if (typeof column.badgeClassField === 'string' && column.badgeClassField !== '') {
+        return rowData?.[column.badgeClassField] ?? '';
+    }
+
+    return '';
+};
+const normalizedRowActions = computed(() => (props.rowActions ?? []).filter((action) => action && action.key));
+const actionColumnWidth = computed(() => {
+    const baseButtonsCount = 2 + (props.showHistory ? 1 : 0);
+    const totalButtons = baseButtonsCount + normalizedRowActions.value.length;
+    const width = Math.max(170, totalButtons * 48 + 20);
+
+    return `${width}px`;
+});
+const shouldShowRowAction = (action, rowData) => {
+    if (typeof action.show !== 'function') {
+        return true;
+    }
+
+    return action.show(rowData);
+};
+const resolveRowActionTitle = (action, rowData) => {
+    if (typeof action.title === 'function') {
+        return action.title(rowData);
+    }
+
+    if (typeof action.title === 'string' && action.title !== '') {
+        return action.title;
+    }
+
+    if (typeof action.titleKey === 'string' && action.titleKey !== '') {
+        return t(action.titleKey);
+    }
+
+    return t('common.actions');
+};
 
 const handlePage = (event) => {
     emit('pageChange', {
@@ -152,23 +194,58 @@ const handleSort = (event) => {
                 :header="column.header"
                 :sortable="Boolean(column.sortable)"
                 :sort-field="column.sortField ?? column.field"
-            />
+            >
+                <template v-if="column.ltr" #body="{ data }">
+                    <span dir="ltr" class="inline-block" style="unicode-bidi: plaintext">{{ data[column.field] }}</span>
+                </template>
+                <template v-else-if="column.badge" #body="{ data }">
+                    <span
+                        class="inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold"
+                        :class="resolveBadgeClass(column, data)"
+                    >
+                        {{ data[column.field] }}
+                    </span>
+                </template>
+            </Column>
 
-            <Column v-if="showActions" :header="t('common.actions')" :style="{ width: showHistory ? '220px' : '170px' }">
+            <Column v-if="showActions" :header="t('common.actions')" :style="{ width: actionColumnWidth }">
                 <template #body="{ data }">
                     <div class="flex gap-2">
+                        <Button
+                            v-for="action in normalizedRowActions"
+                            v-show="shouldShowRowAction(action, data)"
+                            :key="action.key + '-' + data.id"
+                            size="small"
+                            :severity="action.severity ?? 'secondary'"
+                            :icon="action.icon"
+                            :outlined="Boolean(action.outlined)"
+                            :title="resolveRowActionTitle(action, data)"
+                            :aria-label="resolveRowActionTitle(action, data)"
+                            @click="emit('rowAction', { action: action.key, data, event: $event })"
+                        />
                         <Button
                             v-if="showHistory"
                             size="small"
                             severity="secondary"
                             icon="pi pi-history"
+                            :title="t('common.history')"
+                            :aria-label="t('common.history')"
                             @click="emit('history', data)"
                         />
-                        <Button size="small" severity="secondary" icon="pi pi-pencil" @click="emit('edit', data)" />
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            icon="pi pi-pencil"
+                            :title="t('common.edit')"
+                            :aria-label="t('common.edit')"
+                            @click="emit('edit', data)"
+                        />
                         <Button
                             size="small"
                             severity="danger"
                             icon="pi pi-trash"
+                            :title="t('common.delete')"
+                            :aria-label="t('common.delete')"
                             @click="emit('delete', { data, event: $event })"
                         />
                     </div>

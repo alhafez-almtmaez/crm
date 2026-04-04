@@ -175,3 +175,8 @@ select:-webkit-autofill:focus {
 .p-toast {
     z-index: 9999 !important;
 }
+
+/* Global dialog spacing */
+.p-dialog .p-dialog-content {
+    padding-top: 10px !important;
+}

@@ -38,6 +38,9 @@ return [
         'users',
         'roles',
         'plans',
+        'centers',
+        'groups',
+        'students',
     ],
 
     /*

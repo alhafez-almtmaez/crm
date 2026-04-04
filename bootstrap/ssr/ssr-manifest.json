@@ -1,97 +1,133 @@
 {
   "node_modules/laravel-vite-plugin/inertia-helpers/index.js": [],
   "resources/js/Pages/Admin/ActivityLogs.vue": [
-    "/build/assets/ActivityLogs-uXpwczkA.js"
+    "/build/assets/ActivityLogs-CJwZBr4D.js"
+  ],
+  "resources/js/Pages/Admin/Centers.vue": [
+    "/build/assets/Centers-DWpGGF4m.js"
+  ],
+  "resources/js/Pages/Admin/Centers/Create.vue": [
+    "/build/assets/Create-DoZASvVp.js"
+  ],
+  "resources/js/Pages/Admin/Centers/Edit.vue": [
+    "/build/assets/Edit-ChUXOXdZ.js"
   ],
   "resources/js/Pages/Admin/Dashboard.vue": [
-    "/build/assets/Dashboard-BLO6zgRP.js"
+    "/build/assets/Dashboard-Bi6YsKKt.js"
+  ],
+  "resources/js/Pages/Admin/Groups.vue": [
+    "/build/assets/Groups-aJLL2Hg_.js"
+  ],
+  "resources/js/Pages/Admin/Groups/Create.vue": [
+    "/build/assets/Create-Bh2QuSua.js"
+  ],
+  "resources/js/Pages/Admin/Groups/Edit.vue": [
+    "/build/assets/Edit-DzQG3isj.js"
   ],
   "resources/js/Pages/Admin/Plans.vue": [
-    "/build/assets/Plans-CGuE4AWg.js"
+    "/build/assets/Plans-CVEhP84Y.js"
   ],
   "resources/js/Pages/Admin/Plans/Create.vue": [
-    "/build/assets/Create-C8afBWsE.js"
+    "/build/assets/Create-C2zjtRf_.js"
   ],
   "resources/js/Pages/Admin/Plans/Edit.vue": [
-    "/build/assets/Edit-BSZtqmeX.js"
+    "/build/assets/Edit-dnrjMj6z.js"
   ],
   "resources/js/Pages/Admin/Profile/Password.vue": [
-    "/build/assets/Password-DVnfDlFI.js"
+    "/build/assets/Password-Dkw4U1UK.js"
   ],
   "resources/js/Pages/Admin/Roles.vue": [
-    "/build/assets/Roles-CydpZ03S.js"
+    "/build/assets/Roles-CYQ3WVD-.js"
   ],
   "resources/js/Pages/Admin/Roles/Create.vue": [
-    "/build/assets/Create-BFgRq7bf.js"
+    "/build/assets/Create--xiIqZh6.js"
   ],
   "resources/js/Pages/Admin/Roles/Edit.vue": [
-    "/build/assets/Edit-jUYQOPJP.js"
+    "/build/assets/Edit-BsZ2DWD9.js"
   ],
   "resources/js/Pages/Admin/Settings.vue": [
-    "/build/assets/Settings-Q4gomKKE.js"
+    "/build/assets/Settings-AAT2A-am.js"
+  ],
+  "resources/js/Pages/Admin/Students.vue": [
+    "/build/assets/Students-BTdQdoOZ.js"
+  ],
+  "resources/js/Pages/Admin/Students/Create.vue": [
+    "/build/assets/Create-CAXqkJsz.js"
+  ],
+  "resources/js/Pages/Admin/Students/Edit.vue": [
+    "/build/assets/Edit-IkXDeJ3H.js"
   ],
   "resources/js/Pages/Admin/Users.vue": [
-    "/build/assets/Users-DJ8BoykS.js"
+    "/build/assets/Users-DlVd8i38.js"
   ],
   "resources/js/Pages/Admin/Users/Create.vue": [
-    "/build/assets/Create-CTPVRbAj.js"
+    "/build/assets/Create-BAsmMVei.js"
   ],
   "resources/js/Pages/Admin/Users/Edit.vue": [
-    "/build/assets/Edit-DihBX8jo.js"
+    "/build/assets/Edit-CNbuQ84O.js"
   ],
   "resources/js/Pages/Admin/WhatsApp.vue": [
-    "/build/assets/WhatsApp-CnduwVSB.js"
+    "/build/assets/WhatsApp-Dl_4S2_K.js"
   ],
   "resources/js/Pages/Auth/Login.vue": [
-    "/build/assets/Login-DB8yyyXw.js"
+    "/build/assets/Login-CSfmkdTW.js"
   ],
   "resources/js/Pages/Error.vue": [
-    "/build/assets/Error-D555ua16.js"
+    "/build/assets/Error-BtmfC8ms.js"
   ],
   "resources/js/admin/navItems.js": [
-    "/build/assets/AdminLayout-XMnZ2yke.js"
+    "/build/assets/AdminLayout-BF10tE24.js"
   ],
   "resources/js/components/admin/AdminBreadcrumbs.vue": [
-    "/build/assets/AdminBreadcrumbs-Ddp11j0e.js"
+    "/build/assets/AdminBreadcrumbs-bko8S22w.js"
   ],
   "resources/js/components/admin/AdminLayout.vue": [
-    "/build/assets/AdminLayout-XMnZ2yke.js"
+    "/build/assets/AdminLayout-BF10tE24.js"
   ],
   "resources/js/components/admin/AdminSidebar.vue": [
-    "/build/assets/AdminLayout-XMnZ2yke.js"
+    "/build/assets/AdminLayout-BF10tE24.js"
   ],
   "resources/js/components/admin/AdminTopbar.vue": [
-    "/build/assets/AdminLayout-XMnZ2yke.js"
+    "/build/assets/AdminLayout-BF10tE24.js"
+  ],
+  "resources/js/components/admin/CenterFormCard.vue": [
+    "/build/assets/CenterFormCard-sfbEuyBL.js"
   ],
   "resources/js/components/admin/DataTable.vue": [
-    "/build/assets/useServerTable-Cr3UKBMR.js"
+    "/build/assets/useServerTable-DVhC3PRA.js"
   ],
   "resources/js/components/admin/EntityActivityDrawer.vue": [
-    "/build/assets/EntityActivityDrawer-DRL4EbK_.js"
+    "/build/assets/EntityActivityDrawer-1xapWtcw.js"
+  ],
+  "resources/js/components/admin/GroupFormCard.vue": [
+    "/build/assets/GroupFormCard-BYXQV2yT.js"
   ],
   "resources/js/components/admin/PlanFormCard.vue": [
-    "/build/assets/PlanFormCard-9Ngf-CFl.js"
+    "/build/assets/PlanFormCard-CIc_PDNK.js"
   ],
   "resources/js/components/admin/RoleFormCard.vue": [
-    "/build/assets/RoleFormCard-CPKiIiXZ.js"
+    "/build/assets/RoleFormCard-C_gLx5wa.js"
+  ],
+  "resources/js/components/admin/StudentFormCard.vue": [
+    "/build/assets/StudentFormCard-C8Lqeyxl.js"
   ],
   "resources/js/components/admin/UserFormCard.vue": [
-    "/build/assets/UserFormCard-Fg8HmzyS.js"
+    "/build/assets/UserFormCard-B0l0SDrX.js"
   ],
   "resources/js/components/form/FormFieldLabel.vue": [
-    "/build/assets/PrimeFloatField-D_Dm9Fud.js"
+    "/build/assets/PrimeFloatField-Dkp3hpsC.js"
   ],
   "resources/js/components/form/ImageUploadModal.vue": [
-    "/build/assets/Settings-Q4gomKKE.js"
+    "/build/assets/Settings-AAT2A-am.js"
   ],
   "resources/js/components/form/PrimeFloatField.vue": [
-    "/build/assets/PrimeFloatField-D_Dm9Fud.js"
+    "/build/assets/PrimeFloatField-Dkp3hpsC.js"
   ],
   "resources/js/composables/useAppToast.js": [
     "/build/assets/useSystemSettings-CGKqSGLN.js"
   ],
   "resources/js/composables/useServerTable.js": [
-    "/build/assets/useServerTable-Cr3UKBMR.js"
+    "/build/assets/useServerTable-DVhC3PRA.js"
   ],
   "resources/js/composables/useSystemSettings.js": [
     "/build/assets/useSystemSettings-CGKqSGLN.js"

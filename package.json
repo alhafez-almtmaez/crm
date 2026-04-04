@@ -20,6 +20,7 @@
     "dependencies": {
         "@inertiajs/vue3": "^3.0.2",
         "@primeuix/themes": "^2.0.3",
+        "intl-tel-input": "^26.9.2",
         "primeicons": "^7.0.0",
         "primevue": "^4.5.4",
         "vue": "^3.5.31",

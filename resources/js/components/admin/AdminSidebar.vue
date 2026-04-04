@@ -367,12 +367,12 @@ const translateClass = computed(() => {
                 </div>
             </div>
 
-            <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-4">
-                <section v-for="group in groupedItems" :key="group.id" class="space-y-1">
+            <nav class="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-4">
+                <section v-for="group in groupedItems" :key="group.id" class="space-y-0.5">
                     <button
                         v-if="!effectiveCollapsed && group.collapsible"
                         type="button"
-                        class="flex w-full items-center justify-between rounded-sm px-2 py-2 text-sm font-semibold tracking-wide text-(--muted-foreground) uppercase transition-colors duration-200 hover:bg-[color-mix(in_oklab,var(--accent)_8%,transparent)]"
+                        class="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-xs font-semibold tracking-wide text-(--muted-foreground) uppercase transition-colors duration-200 hover:bg-[color-mix(in_oklab,var(--accent)_8%,transparent)]"
                         @click="toggleGroup(group.id)"
                     >
                         <span>{{ group.label }}</span>
@@ -383,14 +383,14 @@ const translateClass = computed(() => {
                         v-if="effectiveCollapsed || !group.collapsible || groupState[group.id]"
                         class="relative space-y-1"
                         :class="
-                            effectiveCollapsed || !group.collapsible ? '' : 'before:absolute before:inset-y-2 before:inset-s-[0.85rem] before:w-px before:bg-[color-mix(in_oklab,var(--border)_88%,transparent)]'
+                            effectiveCollapsed || !group.collapsible ? '' : 'before:absolute before:inset-y-1.5 before:inset-s-[0.8rem] before:w-px before:bg-[color-mix(in_oklab,var(--border)_88%,transparent)]'
                         "
                     >
                         <Link
                             v-for="item in group.items"
                             :key="item.href"
                             :href="item.href"
-                            class="relative flex items-center gap-3 rounded-[calc(var(--radius-base)-0.25rem)] py-3.5 text-base font-medium transition-all duration-200"
+                            class="relative flex items-center gap-2.5 rounded-[calc(var(--radius-base)-0.25rem)] py-2.5 text-base font-medium transition-all duration-200"
                             :title="item.label"
                             :class="
                                 [

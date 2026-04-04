@@ -1,5 +1,6 @@
 import '../css/app.css';
 import 'primeicons/primeicons.css';
+import 'intl-tel-input/styles';
 import axios from 'axios';
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
