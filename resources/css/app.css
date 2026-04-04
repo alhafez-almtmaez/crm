@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Fira+Sans:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Merriweather:wght@400;700&family=Nunito:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap');
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.vue';
+
+:root {
+    --app-font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Semantic colors */
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --card: #fdfdfd;
+    --card-foreground: #0f172a;
+    --muted-foreground: #6b7280;
+    --border: #e8e8e8;
+    --accent: #059669;
+    --accent-contrast: #ffffff;
+
+    /* Spacing scale */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+
+    /* Radius scale */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-base: 0.85rem;
+    --radius-lg: 1rem;
+
+    /* Type scale */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-md: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+
+    /* Effects and layout */
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
+    --focus-ring: 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent);
+    --sidebar-width: 18rem;
+    --sidebar-collapsed-width: 5rem;
+    --topbar-height: 4rem;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: #010101;
+        --foreground: #e2e8f0;
+        --card: #0a0a0a;
+        --card-foreground: #e2e8f0;
+        --muted-foreground: #a3a3a3;
+        --border: #242424;
+        color-scheme: dark;
+    }
+}
+
+:root.dark {
+    --background: #010101;
+    --foreground: #e2e8f0;
+    --card: #0a0a0a;
+    --card-foreground: #e2e8f0;
+    --muted-foreground: #a3a3a3;
+    --border: #242424;
+    color-scheme: dark;
+}
+
+:root.light {
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --card: #fdfdfd;
+    --card-foreground: #0f172a;
+    --muted-foreground: #6b7280;
+    --border: #e8e8e8;
+    color-scheme: light;
+}
+
+:root.shape-compact {
+    --radius-sm: 0.35rem;
+    --radius-md: 0.5rem;
+    --radius-base: 0.6rem;
+    --radius-lg: 0.7rem;
+    --topbar-height: 3.25rem;
+}
+
+:root.shape-comfortable {
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-base: 0.85rem;
+    --radius-lg: 1rem;
+    --topbar-height: 4rem;
+}
+
+:root.shape-rounded {
+    --radius-sm: 0.75rem;
+    --radius-md: 1rem;
+    --radius-base: 1.2rem;
+    --radius-lg: 1.4rem;
+    --topbar-height: 4.25rem;
+}
+
+*,
+*::before,
+*::after {
+    border-color: var(--border);
+}
+
+body {
+    font-family: var(--app-font-sans);
+    background-color: var(--background);
+    color: var(--foreground);
+}
+
+button,
+[type='button'],
+[type='submit'],
+[type='reset'],
+a[href],
+[role='button'],
+.p-button,
+.p-select,
+.p-multiselect,
+.p-checkbox,
+.p-radiobutton {
+    cursor: pointer;
+}
+
+button:disabled,
+[type='button']:disabled,
+[type='submit']:disabled,
+[type='reset']:disabled,
+.p-disabled {
+    cursor: not-allowed;
+}
+
+
+::selection {
+    background-color: color-mix(in oklab, var(--accent) 28%, transparent);
+    color: var(--foreground);
+}
+
+::-moz-selection {
+    background-color: color-mix(in oklab, var(--accent) 28%, transparent);
+    color: var(--foreground);
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--foreground);
+    -webkit-box-shadow: 0 0 0 1000px var(--background) inset;
+    box-shadow: 0 0 0 1000px var(--background) inset;
+    transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Keep toast notifications above sidebar/backdrop/topbar layers. */
+.p-toast {
+    z-index: 9999 !important;
+}

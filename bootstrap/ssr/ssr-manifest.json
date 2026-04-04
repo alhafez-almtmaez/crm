@@ -1,0 +1,106 @@
+{
+  "node_modules/laravel-vite-plugin/inertia-helpers/index.js": [],
+  "resources/js/Pages/Admin/ActivityLogs.vue": [
+    "/build/assets/ActivityLogs-uXpwczkA.js"
+  ],
+  "resources/js/Pages/Admin/Dashboard.vue": [
+    "/build/assets/Dashboard-BLO6zgRP.js"
+  ],
+  "resources/js/Pages/Admin/Plans.vue": [
+    "/build/assets/Plans-CGuE4AWg.js"
+  ],
+  "resources/js/Pages/Admin/Plans/Create.vue": [
+    "/build/assets/Create-C8afBWsE.js"
+  ],
+  "resources/js/Pages/Admin/Plans/Edit.vue": [
+    "/build/assets/Edit-BSZtqmeX.js"
+  ],
+  "resources/js/Pages/Admin/Profile/Password.vue": [
+    "/build/assets/Password-DVnfDlFI.js"
+  ],
+  "resources/js/Pages/Admin/Roles.vue": [
+    "/build/assets/Roles-CydpZ03S.js"
+  ],
+  "resources/js/Pages/Admin/Roles/Create.vue": [
+    "/build/assets/Create-BFgRq7bf.js"
+  ],
+  "resources/js/Pages/Admin/Roles/Edit.vue": [
+    "/build/assets/Edit-jUYQOPJP.js"
+  ],
+  "resources/js/Pages/Admin/Settings.vue": [
+    "/build/assets/Settings-Q4gomKKE.js"
+  ],
+  "resources/js/Pages/Admin/Users.vue": [
+    "/build/assets/Users-DJ8BoykS.js"
+  ],
+  "resources/js/Pages/Admin/Users/Create.vue": [
+    "/build/assets/Create-CTPVRbAj.js"
+  ],
+  "resources/js/Pages/Admin/Users/Edit.vue": [
+    "/build/assets/Edit-DihBX8jo.js"
+  ],
+  "resources/js/Pages/Admin/WhatsApp.vue": [
+    "/build/assets/WhatsApp-CnduwVSB.js"
+  ],
+  "resources/js/Pages/Auth/Login.vue": [
+    "/build/assets/Login-DB8yyyXw.js"
+  ],
+  "resources/js/Pages/Error.vue": [
+    "/build/assets/Error-D555ua16.js"
+  ],
+  "resources/js/admin/navItems.js": [
+    "/build/assets/AdminLayout-XMnZ2yke.js"
+  ],
+  "resources/js/components/admin/AdminBreadcrumbs.vue": [
+    "/build/assets/AdminBreadcrumbs-Ddp11j0e.js"
+  ],
+  "resources/js/components/admin/AdminLayout.vue": [
+    "/build/assets/AdminLayout-XMnZ2yke.js"
+  ],
+  "resources/js/components/admin/AdminSidebar.vue": [
+    "/build/assets/AdminLayout-XMnZ2yke.js"
+  ],
+  "resources/js/components/admin/AdminTopbar.vue": [
+    "/build/assets/AdminLayout-XMnZ2yke.js"
+  ],
+  "resources/js/components/admin/DataTable.vue": [
+    "/build/assets/useServerTable-Cr3UKBMR.js"
+  ],
+  "resources/js/components/admin/EntityActivityDrawer.vue": [
+    "/build/assets/EntityActivityDrawer-DRL4EbK_.js"
+  ],
+  "resources/js/components/admin/PlanFormCard.vue": [
+    "/build/assets/PlanFormCard-9Ngf-CFl.js"
+  ],
+  "resources/js/components/admin/RoleFormCard.vue": [
+    "/build/assets/RoleFormCard-CPKiIiXZ.js"
+  ],
+  "resources/js/components/admin/UserFormCard.vue": [
+    "/build/assets/UserFormCard-Fg8HmzyS.js"
+  ],
+  "resources/js/components/form/FormFieldLabel.vue": [
+    "/build/assets/PrimeFloatField-D_Dm9Fud.js"
+  ],
+  "resources/js/components/form/ImageUploadModal.vue": [
+    "/build/assets/Settings-Q4gomKKE.js"
+  ],
+  "resources/js/components/form/PrimeFloatField.vue": [
+    "/build/assets/PrimeFloatField-D_Dm9Fud.js"
+  ],
+  "resources/js/composables/useAppToast.js": [
+    "/build/assets/useSystemSettings-CGKqSGLN.js"
+  ],
+  "resources/js/composables/useServerTable.js": [
+    "/build/assets/useServerTable-Cr3UKBMR.js"
+  ],
+  "resources/js/composables/useSystemSettings.js": [
+    "/build/assets/useSystemSettings-CGKqSGLN.js"
+  ],
+  "resources/js/composables/useThemeMode.js": [
+    "/build/assets/useSystemSettings-CGKqSGLN.js"
+  ],
+  "resources/js/i18n/index.js": [],
+  "resources/js/locales/ar.json": [],
+  "resources/js/locales/en.json": [],
+  "resources/js/ssr.js": []
+}
