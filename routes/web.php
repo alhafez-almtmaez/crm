@@ -3,6 +3,8 @@
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\AbsenceRuleController;
+use App\Http\Controllers\Admin\MessageTemplateController;
 use App\Http\Controllers\Admin\CenterController;
 use App\Http\Controllers\Admin\GroupController;
 use App\Http\Controllers\Admin\StudentController;
@@ -74,6 +76,12 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::post('students/{student}/unfreeze', [StudentController::class, 'unfreeze'])->name('students.unfreeze');
         Route::post('students/{student}/congratulatory', [StudentController::class, 'congratulatory'])->name('students.congratulatory');
         Route::resource('students', StudentController::class)->except(['show']);
+
+        Route::get('absence-rules/records', [AbsenceRuleController::class, 'records'])->name('absence-rules.records');
+        Route::resource('absence-rules', AbsenceRuleController::class)->except(['show']);
+
+        Route::get('message-templates/records', [MessageTemplateController::class, 'records'])->name('message-templates.records');
+        Route::resource('message-templates', MessageTemplateController::class)->except(['show']);
 
         Route::get('activity-logs/records', [ActivityLogController::class, 'records'])->name('activity-logs.records');
         Route::resource('activity-logs', ActivityLogController::class)->only(['index']);

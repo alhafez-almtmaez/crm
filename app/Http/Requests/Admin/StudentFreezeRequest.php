@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Support\PhoneNumberHelper;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StudentFreezeRequest extends FormRequest
@@ -30,8 +31,8 @@ class StudentFreezeRequest extends FormRequest
     {
         $this->merge([
             'phone' => $this->emptyToNull($this->input('phone')),
-            'parent_phone_number' => $this->emptyToNull($this->input('parent_phone_number')),
-            'phone_number' => $this->emptyToNull($this->input('phone_number')),
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('parent_phone_number')),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('phone_number')),
         ]);
     }
 

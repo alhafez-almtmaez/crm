@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Models\Student;
 use App\Models\StudentCongratulatory;
 use App\Models\StudentFreeze;
+use App\Support\PhoneNumberHelper;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -40,8 +41,8 @@ class StudentCommunicationService
         );
 
         $student->update([
-            'parent_phone_number' => $data['parent_phone_number'] ?? null,
-            'phone_number' => $data['phone_number'] ?? null,
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($data['parent_phone_number'] ?? null),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($data['phone_number'] ?? null),
             'is_active' => 2,
         ]);
 
@@ -118,8 +119,8 @@ class StudentCommunicationService
         );
 
         $student->update([
-            'parent_phone_number' => $data['parent_phone_number'] ?? null,
-            'phone_number' => $data['phone_number'] ?? null,
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($data['parent_phone_number'] ?? null),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($data['phone_number'] ?? null),
         ]);
 
         StudentCongratulatory::query()->create([

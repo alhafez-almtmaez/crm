@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Support\PhoneNumberHelper;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StudentCongratulatoryRequest extends FormRequest
@@ -26,19 +27,8 @@ class StudentCongratulatoryRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'parent_phone_number' => $this->emptyToNull($this->input('parent_phone_number')),
-            'phone_number' => $this->emptyToNull($this->input('phone_number')),
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('parent_phone_number')),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('phone_number')),
         ]);
-    }
-
-    private function emptyToNull(mixed $value): mixed
-    {
-        if (!is_string($value)) {
-            return $value;
-        }
-
-        $trimmed = trim($value);
-
-        return $trimmed === '' ? null : $trimmed;
     }
 }

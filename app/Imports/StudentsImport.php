@@ -3,6 +3,8 @@
 namespace App\Imports;
 
 use App\Models\Student;
+use App\Support\PhoneNumberHelper;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -34,34 +36,28 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         /** @var array<string, mixed> $rowData */
         $rowData = $row->toArray();
         $lineNumber = $row->getIndex();
-        $studentId = (int) ($rowData['id'] ?? 0);
+        $studentId = $this->intOrNull(Arr::get($rowData, 'student_id', Arr::get($rowData, 'id')));
 
-        if ($studentId <= 0) {
-            $this->markSkipped("Line {$lineNumber}: missing or invalid student id.");
-            return;
-        }
-
-        $student = Student::query()->find($studentId);
-        if (!$student) {
-            $this->markSkipped("Line {$lineNumber}: student with id {$studentId} not found.");
-            return;
+        $student = null;
+        if ($studentId !== null) {
+            $student = Student::query()->find($studentId);
         }
 
         $payload = [
-            'first_name' => $this->nullIfEmpty($rowData['first_name'] ?? null),
-            'second_name' => $this->nullIfEmpty($rowData['second_name'] ?? null),
-            'middle_name' => $this->nullIfEmpty($rowData['middle_name'] ?? null),
-            'last_name' => $this->nullIfEmpty($rowData['last_name'] ?? null),
-            'id_number' => $this->nullIfEmpty($rowData['id_number'] ?? null),
-            'parent_phone_number' => $this->nullIfEmpty($rowData['parent_phone_number'] ?? null),
-            'phone_number' => $this->nullIfEmpty($rowData['phone_number'] ?? null),
-            'email' => $this->nullIfEmpty($rowData['email'] ?? null),
-            'date_of_birth' => $this->normalizeDateValue($rowData['date_of_birth'] ?? null),
-            'center_id' => $this->intOrNull($rowData['center_id'] ?? null),
-            'group_id' => $this->intOrNull($rowData['group_id'] ?? null),
-            'plan_type_id' => $this->intOrNull($rowData['plan_type_id'] ?? null),
-            'admin_id' => $this->intOrNull($rowData['admin_id'] ?? null),
-            'is_active' => $this->intOrNull($rowData['is_active'] ?? null),
+            'first_name' => $this->nullIfEmpty(Arr::get($rowData, 'first_name')),
+            'second_name' => $this->nullIfEmpty(Arr::get($rowData, 'second_name')),
+            'middle_name' => $this->nullIfEmpty(Arr::get($rowData, 'middle_name')),
+            'last_name' => $this->nullIfEmpty(Arr::get($rowData, 'last_name')),
+            'id_number' => $this->nullIfEmpty(Arr::get($rowData, 'id_number')),
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage(Arr::get($rowData, 'parent_phone_number')),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage(Arr::get($rowData, 'phone_number')),
+            'email' => $this->nullIfEmpty(Arr::get($rowData, 'email')),
+            'date_of_birth' => $this->normalizeDateValue(Arr::get($rowData, 'date_of_birth')),
+            'center_id' => $this->intOrNull(Arr::get($rowData, 'center_id')),
+            'group_id' => $this->intOrNull(Arr::get($rowData, 'group_id')),
+            'plan_type_id' => $this->intOrNull(Arr::get($rowData, 'plan_type_id')),
+            'admin_id' => $this->intOrNull(Arr::get($rowData, 'admin_id')),
+            'is_active' => $this->intOrNull(Arr::get($rowData, 'is_active')),
         ];
 
         $validator = Validator::make($payload, [
@@ -76,12 +72,23 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
                 'string',
                 'max:20',
                 'regex:/^\+?[0-9]{8,15}$/',
-                Rule::unique('students', 'phone_number')->ignore($student->id),
+                $student
+                    ? Rule::unique('students', 'phone_number')->ignore($student->id)
+                    : Rule::unique('students', 'phone_number'),
             ],
-            'email' => ['nullable', 'string', 'email', 'max:255', Rule::unique('students', 'email')->ignore($student->id)],
+            'email' => [
+                'nullable',
+                'string',
+                'email',
+                'max:255',
+                $student
+                    ? Rule::unique('students', 'email')->ignore($student->id)
+                    : Rule::unique('students', 'email'),
+            ],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
             'center_id' => ['required', Rule::exists('centers', 'id')],
-            'group_id' => ['nullable', Rule::exists('groups', 'id')->where('center_id', (int) ($payload['center_id'] ?? 0))],
+            'group_id' => ['nullable', Rule::exists('groups', 'id')
+                ->where('center_id', (int) ($payload['center_id'] ?? 0))],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
             'admin_id' => ['nullable', Rule::exists('users', 'id')],
             'is_active' => ['nullable', 'integer', Rule::in([0, 1, 2])],
@@ -94,7 +101,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
         $validated = $validator->validated();
 
-        $student->update([
+        $payload = [
             'first_name' => (string) $validated['first_name'],
             'second_name' => (string) $validated['second_name'],
             'middle_name' => (string) $validated['middle_name'],
@@ -106,8 +113,8 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
                 (string) $validated['last_name'],
             ])),
             'id_number' => $validated['id_number'] ?? null,
-            'parent_phone_number' => $validated['parent_phone_number'] ?? null,
-            'phone_number' => $validated['phone_number'] ?? null,
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($validated['parent_phone_number'] ?? null),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($validated['phone_number'] ?? null),
             'email' => $validated['email'] ?? null,
             'date_of_birth' => $validated['date_of_birth'] ?? null,
             'center_id' => (int) $validated['center_id'],
@@ -115,10 +122,16 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'plan_type_id' => (int) $validated['plan_type_id'],
             'admin_id' => $this->resolveAdminId(
                 importedAdminId: $validated['admin_id'] ?? null,
-                currentStudentAdminId: $student->admin_id,
+                currentStudentAdminId: $student?->admin_id,
             ),
             'is_active' => (int) ($validated['is_active'] ?? 1),
-        ]);
+        ];
+
+        if ($student) {
+            $student->update($payload);
+        } else {
+            Student::query()->create($payload);
+        }
 
         $this->updated++;
     }
@@ -202,7 +215,6 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             } catch (Throwable) {
             }
         }
-
         return $raw;
     }
 }

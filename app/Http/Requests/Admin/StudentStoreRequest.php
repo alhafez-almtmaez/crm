@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Support\PhoneNumberHelper;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -59,8 +60,8 @@ class StudentStoreRequest extends FormRequest
     {
         $this->merge([
             'id_number' => $this->emptyToNull($this->input('id_number')),
-            'parent_phone_number' => $this->emptyToNull($this->input('parent_phone_number')),
-            'phone_number' => $this->emptyToNull($this->input('phone_number')),
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('parent_phone_number')),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('phone_number')),
             'email' => $this->emptyToNull($this->input('email')),
             'date_of_birth' => $this->emptyToNull($this->input('date_of_birth')),
             'group_id' => $this->emptyToNull($this->input('group_id')),

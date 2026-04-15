@@ -3,7 +3,6 @@ export const adminNavItems = [
         labelKey: 'nav.dashboard',
         href: '/admin/dashboard',
         icon: 'pi pi-th-large',
-        permissions: ['view admin dashboard'],
     },
     {
         groupId: 'student-tools',
@@ -12,6 +11,22 @@ export const adminNavItems = [
         href: '/admin/students',
         icon: 'pi pi-user-edit',
         permissions: ['students.view'],
+    },
+    {
+        groupId: 'student-tools',
+        groupKey: 'nav.studentTools',
+        labelKey: 'nav.messageTemplates',
+        href: '/admin/message-templates',
+        icon: 'pi pi-file-edit',
+        permissions: ['message_templates.view'],
+    },
+    {
+        groupId: 'student-tools',
+        groupKey: 'nav.studentTools',
+        labelKey: 'nav.absenceRules',
+        href: '/admin/absence-rules',
+        icon: 'pi pi-exclamation-circle',
+        permissions: ['absence_rules.view'],
     },
     {
         groupId: 'lists',

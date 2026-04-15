@@ -32,6 +32,21 @@ class Center extends Model
         return $this->hasMany(Student::class);
     }
 
+    public function evaluations(): HasMany
+    {
+        return $this->hasMany(Evaluation::class);
+    }
+
+    public function absenceRules(): HasMany
+    {
+        return $this->hasMany(AbsenceRule::class);
+    }
+
+    public function absenceRuleExecutionLogs(): HasMany
+    {
+        return $this->hasMany(AbsenceRuleExecutionLog::class);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

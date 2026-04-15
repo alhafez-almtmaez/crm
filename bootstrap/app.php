@@ -33,9 +33,13 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->respond(function (Response $response, \Throwable $exception, Request $request) {
+            if (config('app.debug')) {
+                return $response;
+            }
+
             $status = $response->getStatusCode();
 
-            if (in_array($status, [403, 404, 419, 500, 503], true)) {
+            if (!$request->expectsJson() && in_array($status, [403, 404, 419, 500, 503], true)) {
                 return Inertia::render('Error', [
                     'status' => $status,
                 ])->toResponse($request)->setStatusCode($status);

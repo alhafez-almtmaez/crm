@@ -23,6 +23,8 @@ const labelKeyBySegment = {
     centers: 'breadcrumbs.centers',
     groups: 'breadcrumbs.groups',
     students: 'breadcrumbs.students',
+    'absence-rules': 'breadcrumbs.absenceRules',
+    'message-templates': 'breadcrumbs.messageTemplates',
     'activity-logs': 'breadcrumbs.activityLogs',
     settings: 'breadcrumbs.settings',
     password: 'breadcrumbs.password',

@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\System\DateTimeFormatterService;
+use App\Support\PhoneNumberHelper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -219,8 +220,8 @@ class StudentService
             'last_name' => (string) $data['last_name'],
             'full_name' => $this->fullNameFromData($data),
             'id_number' => $data['id_number'] ?? null,
-            'parent_phone_number' => $data['parent_phone_number'] ?? null,
-            'phone_number' => $data['phone_number'] ?? null,
+            'parent_phone_number' => PhoneNumberHelper::normalizeForStorage($data['parent_phone_number'] ?? null),
+            'phone_number' => PhoneNumberHelper::normalizeForStorage($data['phone_number'] ?? null),
             'email' => $data['email'] ?? null,
             'date_of_birth' => $data['date_of_birth'] ?? null,
             'center_id' => isset($data['center_id']) ? (int) $data['center_id'] : null,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PhoneNumberHelper;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,10 @@ use Spatie\Activitylog\Support\LogOptions;
 class Student extends Model
 {
     use LogsActivity;
+
+    public const STATUS_INACTIVE = 0;
+    public const STATUS_ACTIVE = 1;
+    public const STATUS_FROZEN = 2;
 
     protected $fillable = [
         'first_name',
@@ -28,6 +33,12 @@ class Student extends Model
         'plan_type_id',
         'admin_id',
         'is_active',
+        'deducted_points_count',
+    ];
+
+    protected $casts = [
+        'is_active' => 'int',
+        'deducted_points_count' => 'int',
     ];
 
     public function center(): BelongsTo
@@ -60,6 +71,26 @@ class Student extends Model
         return $this->hasMany(StudentCongratulatory::class);
     }
 
+    public function evaluationItems(): HasMany
+    {
+        return $this->hasMany(EvaluationStudent::class);
+    }
+
+    public function absenceRuleExecutionLogs(): HasMany
+    {
+        return $this->hasMany(AbsenceRuleExecutionLog::class);
+    }
+
+    public function setParentPhoneNumberAttribute(mixed $value): void
+    {
+        $this->attributes['parent_phone_number'] = PhoneNumberHelper::normalizeForStorage($value);
+    }
+
+    public function setPhoneNumberAttribute(mixed $value): void
+    {
+        $this->attributes['phone_number'] = PhoneNumberHelper::normalizeForStorage($value);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -80,6 +111,7 @@ class Student extends Model
                 'plan_type_id',
                 'admin_id',
                 'is_active',
+                'deducted_points_count',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();

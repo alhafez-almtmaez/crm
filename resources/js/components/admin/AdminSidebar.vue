@@ -390,11 +390,11 @@ const translateClass = computed(() => {
                             v-for="item in group.items"
                             :key="item.href"
                             :href="item.href"
-                            class="relative flex items-center gap-2.5 rounded-[calc(var(--radius-base)-0.25rem)] py-2.5 text-base font-medium transition-all duration-200"
+                            class="relative flex items-center gap-2 rounded-[calc(var(--radius-base)-0.25rem)] py-2 text-sm font-medium transition-all duration-200"
                             :title="item.label"
                             :class="
                                 [
-                                    effectiveCollapsed ? 'justify-center px-2' : (group.collapsible ? 'ps-7 pe-3' : 'px-3'),
+                                    effectiveCollapsed ? 'justify-center px-1.5' : (group.collapsible ? 'ps-6 pe-2.5' : 'px-2.5'),
                                     isActive(item.href)
                                         ? 'bg-(--accent) text-(--accent-contrast) shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--accent)_65%,white)]'
                                         : 'text-(--muted-foreground) hover:bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] hover:text-(--foreground)',
@@ -402,7 +402,7 @@ const translateClass = computed(() => {
                             "
                             @click="emit('closeMobile')"
                         >
-                            <i :class="[item.icon ?? 'pi pi-circle', 'text-sm']"></i>
+                            <i :class="[item.icon ?? 'pi pi-circle', 'text-xs']"></i>
                             <span :class="['transition-opacity duration-200', effectiveCollapsed ? 'hidden opacity-0' : 'opacity-100']">{{ item.label }}</span>
                         </Link>
                     </div>

@@ -13,7 +13,6 @@ return [
     |
     */
     'permissions' => [
-        'view admin dashboard',
         'activity_logs.view',
         'whatsapp.view',
     ],
@@ -41,6 +40,8 @@ return [
         'centers',
         'groups',
         'students',
+        'absence_rules',
+        'message_templates',
     ],
 
     /*
