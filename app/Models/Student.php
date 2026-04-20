@@ -39,6 +39,7 @@ class Student extends Model
     ];
 
     protected $casts = [
+        'date_of_birth' => 'date',
         'is_active' => 'int',
         'deducted_points_count' => 'int',
     ];
