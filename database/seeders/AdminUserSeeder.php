@@ -16,9 +16,9 @@ class AdminUserSeeder extends Seeder
             'guard_name' => $guard,
         ]);
 
-        $adminEmail = env('ADMIN_EMAIL', 'admin@unmaro.com');
+        $adminEmail = env('ADMIN_EMAIL', 'admin@gmail.com');
         $adminName = env('ADMIN_NAME', 'Admin');
-        $adminPassword = env('ADMIN_PASSWORD', 'UNmaro@yolo');
+        $adminPassword = env('ADMIN_PASSWORD', 'G!gc@vcWzxk*3MMn');
 
         $adminUser = User::query()->updateOrCreate(
             ['email' => $adminEmail],

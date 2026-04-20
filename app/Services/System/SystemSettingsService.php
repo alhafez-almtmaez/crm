@@ -29,8 +29,8 @@ class SystemSettingsService
             'shape' => 'comfortable',
             'sidebarBehavior' => 'default',
             'fontFamily' => 'instrument',
-            'language' => 'en',
-            'direction' => 'ltr',
+            'language' => 'ar',
+            'direction' => 'rtl',
             'timezone' => 'Asia/Amman',
             'dateFormat' => 'DD/MM/YYYY',
             'timeFormat' => 'HH:mm',
@@ -121,8 +121,8 @@ class SystemSettingsService
     {
         $defaults = $this->defaults();
 
-        $language = ($value['language'] ?? 'en') === 'ar' ? 'ar' : 'en';
-        $direction = ($value['direction'] ?? 'ltr') === 'rtl' ? 'rtl' : 'ltr';
+        $language = ($value['language'] ?? 'ar') === 'ar' ? 'ar' : 'en';
+        $direction = ($value['direction'] ?? 'rtl') === 'rtl' ? 'rtl' : 'ltr';
         $shape = in_array($value['shape'] ?? 'comfortable', ['compact', 'comfortable', 'rounded'], true)
             ? $value['shape']
             : 'comfortable';

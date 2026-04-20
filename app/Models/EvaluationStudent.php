@@ -2,14 +2,19 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EvaluationStudent extends Model
 {
+    use HasFactory;
+
     public const ATTENDANCE_PRESENT = 1;
     public const ATTENDANCE_EXCUSED_ABSENCE = 2;
     public const ATTENDANCE_ABSENCE = 3;
+    public const ATTENDANCE_FROZEN = 4;
+    public const ATTENDANCE_EXEMPT = 5;
 
     protected $table = 'evaluations_users';
 
@@ -17,6 +22,7 @@ class EvaluationStudent extends Model
         'alhifz',
         'warud',
         'akhlaqi',
+        'tajwid',
         'note',
         'attendances',
         'student_id',
@@ -25,6 +31,10 @@ class EvaluationStudent extends Model
     ];
 
     protected $casts = [
+        'alhifz' => 'int',
+        'warud' => 'int',
+        'akhlaqi' => 'int',
+        'tajwid' => 'int',
         'attendances' => 'int',
         'student_id' => 'int',
         'user_id' => 'int',

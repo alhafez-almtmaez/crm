@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\PhoneNumberHelper;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,7 @@ use Spatie\Activitylog\Support\LogOptions;
 
 class Student extends Model
 {
+    use HasFactory;
     use LogsActivity;
 
     public const STATUS_INACTIVE = 0;

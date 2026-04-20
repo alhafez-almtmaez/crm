@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AbsenceRule extends Model
 {
+    use HasFactory;
+
     public const ATTENDANCE_TYPE_ABSENCE = 'absence';
     public const ATTENDANCE_TYPE_EXCUSED_ABSENCE = 'excused_absence';
 

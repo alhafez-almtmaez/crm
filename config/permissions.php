@@ -40,6 +40,7 @@ return [
         'centers',
         'groups',
         'students',
+        'evaluations',
         'absence_rules',
         'message_templates',
     ],

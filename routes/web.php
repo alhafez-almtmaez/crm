@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\MessageTemplateController;
 use App\Http\Controllers\Admin\CenterController;
 use App\Http\Controllers\Admin\GroupController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\EvaluationController;
 use App\Http\Controllers\Admin\SystemSettingsController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\WhatsAppController;
@@ -16,9 +17,7 @@ use App\Http\Controllers\Auth\PasswordController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('Home');
-});
+Route::redirect('/', '/admin');
 
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::middleware('guest')->group(function (): void {
@@ -76,6 +75,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::post('students/{student}/unfreeze', [StudentController::class, 'unfreeze'])->name('students.unfreeze');
         Route::post('students/{student}/congratulatory', [StudentController::class, 'congratulatory'])->name('students.congratulatory');
         Route::resource('students', StudentController::class)->except(['show']);
+
+        Route::get('evaluations/records', [EvaluationController::class, 'records'])->name('evaluations.records');
+        Route::post('evaluations/{evaluation}/absence-alerts', [EvaluationController::class, 'sendAbsenceAlerts'])->name('evaluations.absence-alerts');
+        Route::resource('evaluations', EvaluationController::class)->except(['show']);
 
         Route::get('absence-rules/records', [AbsenceRuleController::class, 'records'])->name('absence-rules.records');
         Route::resource('absence-rules', AbsenceRuleController::class)->except(['show']);

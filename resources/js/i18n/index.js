@@ -5,13 +5,13 @@ import en from '../locales/en.json';
 const SUPPORTED_LOCALES = ['en', 'ar'];
 let i18nInstance = null;
 
-export const normalizeLocale = (locale) => (SUPPORTED_LOCALES.includes(locale) ? locale : 'en');
+export const normalizeLocale = (locale) => (SUPPORTED_LOCALES.includes(locale) ? locale : 'ar');
 
-export const createAppI18n = (locale = 'en') => {
+export const createAppI18n = (locale = 'ar') => {
     i18nInstance = createI18n({
         legacy: false,
         locale: normalizeLocale(locale),
-        fallbackLocale: 'en',
+        fallbackLocale: 'ar',
         messages: {
             en,
             ar,
