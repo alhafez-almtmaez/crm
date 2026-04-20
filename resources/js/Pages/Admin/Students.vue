@@ -80,10 +80,10 @@ const rows = computed(() => (students.value ?? []).map((student) => ({
         ? t('students.statusFrozen')
         : (student.is_active === 0 ? t('students.statusInactive') : t('students.statusActive')),
     status_badge_class: student.is_active === 2
-        ? 'bg-amber-700 text-white'
+        ? 'bg-amber-700 text-white min-w-28 justify-center whitespace-nowrap'
         : (student.is_active === 0
-            ? 'bg-red-700 text-white'
-            : 'bg-emerald-700 text-white'),
+            ? 'bg-red-700 text-white min-w-28 justify-center whitespace-nowrap'
+            : 'bg-emerald-700 text-white min-w-28 justify-center whitespace-nowrap'),
 })));
 
 const columns = computed(() => [
