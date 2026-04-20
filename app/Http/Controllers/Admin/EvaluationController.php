@@ -56,14 +56,17 @@ class EvaluationController extends Controller implements HasMiddleware
         $query = $request->validate([
             'center_id' => ['nullable', 'integer', 'exists:centers,id'],
             'date' => ['nullable', 'date_format:Y-m-d'],
+            'evaluation_type' => ['nullable', 'integer', 'in:1,2'],
         ]);
 
         $centerId = isset($query['center_id']) ? (int) $query['center_id'] : null;
         $date = isset($query['date']) ? (string) $query['date'] : null;
+        $evaluationType = isset($query['evaluation_type']) ? (int) $query['evaluation_type'] : Evaluation::TYPE_ALHIFZ;
         $formPayload = $this->service->createFormPayload($centerId, $date);
 
         return Inertia::render('Admin/Evaluations/Create', [
             'centers' => $this->service->centerOptions(),
+            'selected_evaluation_type' => $evaluationType,
             ...$formPayload,
         ]);
     }
@@ -76,6 +79,7 @@ class EvaluationController extends Controller implements HasMiddleware
                 'center_id' => $evaluation->center_id,
                 'date' => $evaluation->date?->format('Y-m-d'),
                 'center_name' => $evaluation->center?->name,
+                'evaluation_type' => (int) ($evaluation->evaluation_type ?? Evaluation::TYPE_ALHIFZ),
             ],
             'centers' => $this->service->centerOptions(),
             'students' => $this->service->editStudentRows($evaluation),

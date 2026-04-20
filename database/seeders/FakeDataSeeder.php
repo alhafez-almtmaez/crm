@@ -414,7 +414,17 @@ class FakeDataSeeder extends Seeder
                         continue;
                     }
 
-                    $builder->present()->create();
+                    if ((int) ($evaluation->evaluation_type ?? Evaluation::TYPE_ALHIFZ) === Evaluation::TYPE_TAJWID) {
+                        $builder->present()->state([
+                            'alhifz' => null,
+                            'tajwid' => fake()->numberBetween(4, 10),
+                        ])->create();
+                        continue;
+                    }
+
+                    $builder->present()->state([
+                        'tajwid' => null,
+                    ])->create();
                 }
             }
         }

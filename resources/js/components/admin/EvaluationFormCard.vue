@@ -3,7 +3,7 @@ import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import FormFieldLabel from '../form/FormFieldLabel.vue';
 
@@ -32,6 +32,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    lockScoreMode: {
+        type: Boolean,
+        default: false,
+    },
     submitLabel: {
         type: String,
         default: 'Save',
@@ -44,20 +48,29 @@ const props = defineProps({
 
 const emit = defineEmits(['cancel', 'reload', 'submit']);
 const { t } = useI18n();
+const EVALUATION_TYPE_ALHIFZ = 1;
+const EVALUATION_TYPE_TAJWID = 2;
 
 const attendanceOptions = computed(() => [
     { value: 1, label: t('evaluations.present') },
     { value: 2, label: t('evaluations.excusedAbsence') },
     { value: 3, label: t('evaluations.absence') },
 ]);
-const scoreMode = ref('alhifz');
+const scoreMode = computed({
+    get: () => (Number(props.form.evaluation_type) === EVALUATION_TYPE_TAJWID ? EVALUATION_TYPE_TAJWID : EVALUATION_TYPE_ALHIFZ),
+    set: (value) => {
+        props.form.evaluation_type = Number(value) === EVALUATION_TYPE_TAJWID
+            ? EVALUATION_TYPE_TAJWID
+            : EVALUATION_TYPE_ALHIFZ;
+    },
+});
 const scoreModeOptions = computed(() => [
-    { value: 'alhifz', label: t('evaluations.alhifz') },
-    { value: 'tajwid', label: t('evaluations.tajwid') },
+    { value: EVALUATION_TYPE_ALHIFZ, label: t('evaluations.alhifz') },
+    { value: EVALUATION_TYPE_TAJWID, label: t('evaluations.tajwid') },
 ]);
-const visiblePrimaryScoreField = computed(() => (scoreMode.value === 'tajwid' ? 'tajwid' : 'alhifz'));
+const visiblePrimaryScoreField = computed(() => (scoreMode.value === EVALUATION_TYPE_TAJWID ? 'tajwid' : 'alhifz'));
 const visiblePrimaryScoreLabel = computed(() => (
-    visiblePrimaryScoreField.value === 'tajwid'
+    scoreMode.value === EVALUATION_TYPE_TAJWID
         ? t('evaluations.tajwid')
         : t('evaluations.alhifz')
 ));
@@ -249,9 +262,11 @@ const rowMarkerClass = (item) => {
                             option-label="label"
                             option-value="value"
                             class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            :disabled="lockScoreMode"
                         />
                         <FormFieldLabel for-id="evaluation-score-mode" :text="t('evaluations.scoreFieldMode')" />
                     </FloatLabel>
+                    <small v-if="form.errors.evaluation_type" class="text-sm text-red-600">{{ form.errors.evaluation_type }}</small>
                 </div>
 
                 <Button

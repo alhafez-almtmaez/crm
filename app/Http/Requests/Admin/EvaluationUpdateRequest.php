@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -15,6 +16,10 @@ class EvaluationUpdateRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $routeEvaluation = $this->route('evaluation');
+        $fallbackEvaluationType = $routeEvaluation instanceof Evaluation
+            ? (int) ($routeEvaluation->evaluation_type ?? Evaluation::TYPE_ALHIFZ)
+            : Evaluation::TYPE_ALHIFZ;
         $items = $this->input('items', []);
         if (! is_array($items)) {
             $items = [];
@@ -45,6 +50,7 @@ class EvaluationUpdateRequest extends FormRequest
         }, $items);
 
         $this->merge([
+            'evaluation_type' => (int) $this->input('evaluation_type', $fallbackEvaluationType),
             'items' => $normalizedItems,
         ]);
     }
@@ -55,6 +61,7 @@ class EvaluationUpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'evaluation_type' => ['required', 'integer', Rule::in([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID])],
             'items' => ['required', 'array', 'min:1'],
             'items.*.student_id' => ['required', Rule::exists('students', 'id')],
             'items.*.attendances' => ['required', Rule::in([

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -46,6 +47,7 @@ class EvaluationStoreRequest extends FormRequest
 
         $this->merge([
             'center_id' => (int) $this->input('center_id'),
+            'evaluation_type' => (int) $this->input('evaluation_type', Evaluation::TYPE_ALHIFZ),
             'date' => (string) $this->input('date'),
             'items' => $normalizedItems,
         ]);
@@ -58,6 +60,7 @@ class EvaluationStoreRequest extends FormRequest
     {
         return [
             'center_id' => ['required', Rule::exists('centers', 'id')],
+            'evaluation_type' => ['required', 'integer', Rule::in([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID])],
             'date' => ['required', 'date_format:Y-m-d'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.student_id' => ['required', Rule::exists('students', 'id')],

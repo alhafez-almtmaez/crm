@@ -20,6 +20,10 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    selected_evaluation_type: {
+        type: Number,
+        default: 1,
+    },
     students: {
         type: Array,
         default: () => [],
@@ -83,6 +87,7 @@ const mapStudents = (rows = []) => rows.map((row) => {
 const form = useForm({
     center_id: props.selected_center_id,
     date: props.selected_date,
+    evaluation_type: props.selected_evaluation_type,
     items: mapStudents(props.students),
 });
 
@@ -97,6 +102,13 @@ watch(
     () => props.selected_date,
     (value) => {
         form.date = value;
+    },
+);
+
+watch(
+    () => props.selected_evaluation_type,
+    (value) => {
+        form.evaluation_type = Number(value) === 2 ? 2 : 1;
     },
 );
 
@@ -122,6 +134,7 @@ const reloadStudents = () => {
     router.get('/admin/evaluations/create', {
         center_id: form.center_id,
         date: form.date,
+        evaluation_type: form.evaluation_type,
     });
 };
 

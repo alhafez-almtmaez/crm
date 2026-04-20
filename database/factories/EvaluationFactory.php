@@ -26,7 +26,7 @@ class EvaluationFactory extends Factory
             'center_id' => Center::factory(),
             'admin_id' => User::factory(),
             'is_send_absence_alerts' => fake()->boolean(35),
+            'evaluation_type' => fake()->randomElement([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID]),
         ];
     }
 }
-

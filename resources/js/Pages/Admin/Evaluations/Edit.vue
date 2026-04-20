@@ -74,6 +74,7 @@ const mapStudents = (rows = []) => rows.map((row) => {
 const form = useForm({
     center_id: props.evaluation.center_id,
     date: props.evaluation.date,
+    evaluation_type: Number(props.evaluation.evaluation_type ?? 1) === 2 ? 2 : 1,
     items: mapStudents(props.students),
 });
 
@@ -101,7 +102,9 @@ const goBack = () => {
                 :submit-label="t('common.saveChanges')"
                 :title="t('evaluations.editEvaluation')"
                 :description="t('evaluations.editDescription')"
+                show-score-mode-selector
                 lock-center-and-date
+                lock-score-mode
                 highlight-unchanged
                 @submit="submit"
                 @cancel="goBack"

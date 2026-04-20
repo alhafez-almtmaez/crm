@@ -165,6 +165,7 @@ class EvaluationService
         $centerId = (int) $data['center_id'];
         $date = $this->resolveDate((string) $data['date']);
         $adminId = Auth::id();
+        $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? Evaluation::TYPE_ALHIFZ);
 
         $exists = Evaluation::query()
             ->where('center_id', $centerId)
@@ -177,16 +178,17 @@ class EvaluationService
             ]);
         }
 
-        return DB::transaction(function () use ($centerId, $date, $adminId, $data): Evaluation {
+        return DB::transaction(function () use ($centerId, $date, $adminId, $data, $evaluationType): Evaluation {
             $evaluation = Evaluation::query()->create([
                 'ulid' => (string) Str::ulid(),
                 'date' => $date,
                 'center_id' => $centerId,
                 'admin_id' => $adminId,
                 'is_send_absence_alerts' => false,
+                'evaluation_type' => $evaluationType,
             ]);
 
-            $this->replaceEvaluationRows($evaluation, $data['items'] ?? []);
+            $this->replaceEvaluationRows($evaluation, $data['items'] ?? [], $evaluationType);
             $this->ensureFrozenRows($evaluation);
 
             return $evaluation->refresh();
@@ -199,7 +201,12 @@ class EvaluationService
     public function update(Evaluation $evaluation, array $data): Evaluation
     {
         return DB::transaction(function () use ($evaluation, $data): Evaluation {
-            $this->syncEvaluationRows($evaluation, $data['items'] ?? []);
+            $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? $evaluation->evaluation_type);
+            if ((int) $evaluation->evaluation_type !== $evaluationType) {
+                $evaluation->update(['evaluation_type' => $evaluationType]);
+            }
+
+            $this->syncEvaluationRows($evaluation, $data['items'] ?? [], $evaluationType);
             $this->ensureFrozenRows($evaluation);
 
             if ($evaluation->is_send_absence_alerts) {
@@ -234,7 +241,7 @@ class EvaluationService
     /**
      * @param array<int, mixed> $items
      */
-    private function replaceEvaluationRows(Evaluation $evaluation, array $items): void
+    private function replaceEvaluationRows(Evaluation $evaluation, array $items, int $evaluationType): void
     {
         $rows = [];
         $rowsByStudent = [];
@@ -258,12 +265,10 @@ class EvaluationService
             }
 
             $isPresent = $attendance === EvaluationStudent::ATTENDANCE_PRESENT;
+            $scorePayload = $this->buildScorePayload($item, $isPresent, $evaluationType);
 
             $rowsByStudent[$studentId] = [
-                'alhifz' => $isPresent ? $this->normalizeScore($item, 'alhifz') : null,
-                'warud' => $isPresent ? $this->normalizeScore($item, 'warud') : null,
-                'akhlaqi' => $isPresent ? $this->normalizeScore($item, 'akhlaqi') : null,
-                'tajwid' => $isPresent ? $this->normalizeScore($item, 'tajwid') : null,
+                ...$scorePayload,
                 'note' => $this->normalizeNote($item),
                 'attendances' => $attendance,
                 'student_id' => $studentId,
@@ -288,7 +293,7 @@ class EvaluationService
     /**
      * @param array<int, mixed> $items
      */
-    private function syncEvaluationRows(Evaluation $evaluation, array $items): void
+    private function syncEvaluationRows(Evaluation $evaluation, array $items, int $evaluationType): void
     {
         $existingRows = EvaluationStudent::query()
             ->where('evaluation_id', $evaluation->id)
@@ -319,11 +324,9 @@ class EvaluationService
             }
 
             $isPresent = $attendance === EvaluationStudent::ATTENDANCE_PRESENT;
+            $scorePayload = $this->buildScorePayload($item, $isPresent, $evaluationType);
             $payload = [
-                'alhifz' => $isPresent ? $this->normalizeScore($item, 'alhifz') : null,
-                'warud' => $isPresent ? $this->normalizeScore($item, 'warud') : null,
-                'akhlaqi' => $isPresent ? $this->normalizeScore($item, 'akhlaqi') : null,
-                'tajwid' => $isPresent ? $this->normalizeScore($item, 'tajwid') : null,
+                ...$scorePayload,
                 'note' => $this->normalizeNote($item),
                 'attendances' => $attendance,
                 'student_id' => $studentId,
@@ -571,5 +574,33 @@ class EvaluationService
         }
 
         return Carbon::parse($date)->toDateString();
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array{alhifz: ?int, warud: ?int, akhlaqi: ?int, tajwid: ?int}
+     */
+    private function buildScorePayload(array $item, bool $isPresent, int $evaluationType): array
+    {
+        if (! $isPresent) {
+            return [
+                'alhifz' => null,
+                'warud' => null,
+                'akhlaqi' => null,
+                'tajwid' => null,
+            ];
+        }
+
+        return [
+            'alhifz' => $evaluationType === Evaluation::TYPE_ALHIFZ ? $this->normalizeScore($item, 'alhifz') : null,
+            'warud' => $this->normalizeScore($item, 'warud'),
+            'akhlaqi' => $this->normalizeScore($item, 'akhlaqi'),
+            'tajwid' => $evaluationType === Evaluation::TYPE_TAJWID ? $this->normalizeScore($item, 'tajwid') : null,
+        ];
+    }
+
+    private function resolveEvaluationType(mixed $value): int
+    {
+        return (int) $value === Evaluation::TYPE_TAJWID ? Evaluation::TYPE_TAJWID : Evaluation::TYPE_ALHIFZ;
     }
 }
