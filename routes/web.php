@@ -32,7 +32,6 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::middleware(['auth:web'])->group(function (): void {
         Route::redirect('/', '/admin/dashboard')->name('index');
         Route::get('dashboard', fn () => Inertia::render('Admin/Dashboard'))
-            ->middleware('can:view admin dashboard')
             ->name('dashboard');
 
         Route::prefix('whatsapp')
