@@ -288,6 +288,7 @@ var ar_default = {
 		"alertsPending": "غير مرسلة",
 		"alertsSent": "مرسلة",
 		"createdAt": "تاريخ الإنشاء",
+		"openReport": "فتح تقرير التقييم",
 		"sendAlerts": "إرسال تنبيهات الغياب",
 		"sendAlertsConfirm": "إرسال تنبيهات الغياب لهذا التقييم الآن؟",
 		"sendAlertsFailed": "تعذر إرسال تنبيهات الغياب.",
@@ -814,6 +815,7 @@ var en_default = {
 		"alertsPending": "Pending",
 		"alertsSent": "Sent",
 		"createdAt": "Created At",
+		"openReport": "Open Evaluation Report",
 		"sendAlerts": "Send Absence Alerts",
 		"sendAlertsConfirm": "Send absence alerts for this evaluation now?",
 		"sendAlertsFailed": "Could not send absence alerts.",
@@ -1104,7 +1106,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/Dashboard.vue": () => import("./assets/Dashboard-C3X6rAAE.js"),
 		"./Pages/Admin/Evaluations/Create.vue": () => import("./assets/Create-BYQg4Lfz.js"),
 		"./Pages/Admin/Evaluations/Edit.vue": () => import("./assets/Edit-BAiZeMqK.js"),
-		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-D4m6Vp1D.js"),
+		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-Br2I2YRT.js"),
 		"./Pages/Admin/Groups/Create.vue": () => import("./assets/Create-vs5o7cfN.js"),
 		"./Pages/Admin/Groups/Edit.vue": () => import("./assets/Edit-DqpnCfbo.js"),
 		"./Pages/Admin/Groups.vue": () => import("./assets/Groups-C1cV1Vwe.js"),
@@ -1127,7 +1129,8 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/Users.vue": () => import("./assets/Users-d5U8cmJ8.js"),
 		"./Pages/Admin/WhatsApp.vue": () => import("./assets/WhatsApp-FZKoVqJa.js"),
 		"./Pages/Auth/Login.vue": () => import("./assets/Login-BXOR7zNo.js"),
-		"./Pages/Error.vue": () => import("./assets/Error-C7b-UIHX.js")
+		"./Pages/Error.vue": () => import("./assets/Error-C7b-UIHX.js"),
+		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-BDu_zUfx.js")
 	})),
 	setup({ App, props, plugin }) {
 		const i18n = createAppI18n(props.initialPage?.props?.systemSettings?.language ?? "en");

@@ -19,6 +19,9 @@ use Inertia\Inertia;
 
 Route::redirect('/', '/admin');
 
+Route::get('evaluations/report/{publicId}', [EvaluationController::class, 'report'])
+    ->name('evaluations.report');
+
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::middleware('guest')->group(function (): void {
         Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');

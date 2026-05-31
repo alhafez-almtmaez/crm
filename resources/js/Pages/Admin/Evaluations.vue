@@ -61,6 +61,14 @@ const columns = computed(() => [
 
 const rowActions = computed(() => [
     {
+        key: 'open-report',
+        icon: 'pi pi-external-link',
+        severity: 'info',
+        outlined: true,
+        titleKey: 'evaluations.openReport',
+        show: (row) => Boolean(row.report_url),
+    },
+    {
         key: 'send-alerts',
         icon: 'pi pi-bell',
         severity: 'warning',
@@ -76,6 +84,14 @@ const openCreate = () => {
 
 const openEdit = (row) => {
     router.get(`/admin/evaluations/${row.id}/edit`);
+};
+
+const openReport = (row) => {
+    if (!row.report_url) {
+        return;
+    }
+
+    window.open(row.report_url, '_blank', 'noopener');
 };
 
 const deleteRow = async (row) => {
@@ -130,6 +146,11 @@ const askDelete = ({ data: row, event }) => {
 };
 
 const handleRowAction = ({ action, data: row, event }) => {
+    if (action === 'open-report') {
+        openReport(row);
+        return;
+    }
+
     if (action !== 'send-alerts') {
         return;
     }

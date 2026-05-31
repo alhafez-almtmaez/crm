@@ -14,6 +14,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -85,6 +86,10 @@ class EvaluationService
                 $row->setAttribute(
                     'date_formatted',
                     Carbon::parse((string) $row->date)->locale(app()->getLocale())->translatedFormat('l ، j F ، Y'),
+                );
+                $row->setAttribute(
+                    'report_url',
+                    filled($row->ulid) ? route('evaluations.report', ['publicId' => $row->ulid]) : null,
                 );
 
                 return $row;
@@ -236,6 +241,105 @@ class EvaluationService
             evaluationId: $evaluation->id,
             executedBy: Auth::id(),
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function reportPayload(string $publicId): array
+    {
+        $publicId = trim($publicId);
+        abort_if($publicId === '', 404);
+
+        $evaluationQuery = Evaluation::query()
+            ->with('center:id,name')
+            ->where('ulid', $publicId);
+
+        if (Schema::hasColumn('evaluations', 'uuid')) {
+            $evaluationQuery->orWhere('uuid', $publicId);
+        }
+
+        /** @var Evaluation $evaluation */
+        $evaluation = $evaluationQuery->firstOrFail();
+        $date = Carbon::parse((string) $evaluation->date);
+        $dateForQuery = $date->toDateString();
+        $evaluationType = $this->resolveEvaluationType($evaluation->evaluation_type);
+
+        $rows = EvaluationStudent::query()
+            ->leftJoin('students', function ($join): void {
+                $join->on('evaluations_users.student_id', '=', 'students.id')
+                    ->orOn('evaluations_users.user_id', '=', 'students.id');
+            })
+            ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
+            ->leftJoin('student_freezes', function ($join) use ($dateForQuery): void {
+                $join->on('students.id', '=', 'student_freezes.student_id')
+                    ->whereDate('student_freezes.from', '<=', $dateForQuery)
+                    ->whereDate('student_freezes.to', '>=', $dateForQuery);
+            })
+            ->where('evaluations_users.evaluation_id', $evaluation->id)
+            ->orderBy('students.plan_type_id')
+            ->orderBy('students.full_name')
+            ->orderBy('evaluations_users.id')
+            ->select([
+                'evaluations_users.id as item_id',
+                'evaluations_users.alhifz',
+                'evaluations_users.warud',
+                'evaluations_users.akhlaqi',
+                'evaluations_users.tajwid',
+                'evaluations_users.note',
+                'evaluations_users.attendances',
+                'students.id as student_id',
+                DB::raw("COALESCE(students.full_name, '') as full_name"),
+                'students.plan_type_id',
+                'plan_types.name as plan_name',
+                'student_freezes.from as freeze_from',
+                'student_freezes.to as freeze_to',
+                'student_freezes.reason as freeze_reason',
+            ])
+            ->get()
+            ->values()
+            ->map(function ($row, int $index) use ($evaluationType): array {
+                $attendance = (int) ($row->attendances ?? EvaluationStudent::ATTENDANCE_PRESENT);
+                $primaryScore = $this->nullableInt(
+                    $evaluationType === Evaluation::TYPE_TAJWID ? $row->tajwid : $row->alhifz,
+                );
+                $warud = $this->nullableInt($row->warud);
+                $akhlaqi = $this->nullableInt($row->akhlaqi);
+                $scoreTotal = $primaryScore + ($warud ?? 0) + $akhlaqi;
+                $maxTotal = $warud !== null ? 30 : 20;
+
+                return [
+                    'number' => $index + 1,
+                    'item_id' => (int) $row->item_id,
+                    'student_id' => $row->student_id !== null ? (int) $row->student_id : null,
+                    'full_name' => trim((string) $row->full_name) !== '' ? (string) $row->full_name : '-',
+                    'plan_type_id' => $row->plan_type_id !== null ? (int) $row->plan_type_id : null,
+                    'plan_name' => $row->plan_name !== null ? (string) $row->plan_name : '-',
+                    'attendance' => $attendance,
+                    'primary_score' => $primaryScore,
+                    'warud' => $warud,
+                    'akhlaqi' => $akhlaqi,
+                    'note' => $row->note !== null ? (string) $row->note : null,
+                    'freeze_from' => $this->formatArabicShortDate($row->freeze_from),
+                    'freeze_to' => $this->formatArabicShortDate($row->freeze_to),
+                    'freeze_reason' => $row->freeze_reason !== null ? (string) $row->freeze_reason : null,
+                    'is_perfect' => $attendance === EvaluationStudent::ATTENDANCE_PRESENT
+                        && $primaryScore !== null
+                        && $akhlaqi !== null
+                        && $scoreTotal === $maxTotal,
+                ];
+            })
+            ->all();
+
+        return [
+            'title' => 'تقييمات الطلاب',
+            'center_name' => $evaluation->center?->name ?? '-',
+            'date' => $date->copy()->locale('ar')->translatedFormat('l ، j F ، Y'),
+            'hijri_date' => $this->formatHijriDate($date),
+            'evaluation_type' => $evaluationType,
+            'primary_score_label' => $evaluationType === Evaluation::TYPE_TAJWID ? 'التجويد' : 'الحفظ',
+            'rows' => $rows,
+        ];
     }
 
     /**
@@ -602,5 +706,43 @@ class EvaluationService
     private function resolveEvaluationType(mixed $value): int
     {
         return (int) $value === Evaluation::TYPE_TAJWID ? Evaluation::TYPE_TAJWID : Evaluation::TYPE_ALHIFZ;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function formatArabicShortDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return Carbon::parse((string) $value)->locale('ar')->translatedFormat('l ، Y/m/j');
+    }
+
+    private function formatHijriDate(Carbon $date): string
+    {
+        if (! class_exists(\IntlDateFormatter::class)) {
+            return '';
+        }
+
+        $formatter = new \IntlDateFormatter(
+            'ar@calendar=islamic-umalqura',
+            \IntlDateFormatter::FULL,
+            \IntlDateFormatter::NONE,
+            config('app.timezone'),
+            \IntlDateFormatter::TRADITIONAL,
+            'EEEE ، d MMMM ، y',
+        );
+
+        $formatted = $formatter->format($date->toDateTime());
+
+        return is_string($formatted) ? $formatted : '';
     }
 }

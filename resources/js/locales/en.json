@@ -272,6 +272,7 @@
     "alertsPending": "Pending",
     "alertsSent": "Sent",
     "createdAt": "Created At",
+    "openReport": "Open Evaluation Report",
     "sendAlerts": "Send Absence Alerts",
     "sendAlertsConfirm": "Send absence alerts for this evaluation now?",
     "sendAlertsFailed": "Could not send absence alerts.",

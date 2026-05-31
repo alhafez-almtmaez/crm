@@ -37,6 +37,13 @@ class EvaluationController extends Controller implements HasMiddleware
         return Inertia::render('Admin/Evaluations');
     }
 
+    public function report(string $publicId): Response
+    {
+        return Inertia::render('Evaluations/Report', [
+            'report' => $this->service->reportPayload($publicId),
+        ]);
+    }
+
     public function records(EvaluationIndexRequest $request): JsonResponse
     {
         $rows = $this->service->list($request->validated());

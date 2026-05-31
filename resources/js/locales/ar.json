@@ -272,6 +272,7 @@
     "alertsPending": "غير مرسلة",
     "alertsSent": "مرسلة",
     "createdAt": "تاريخ الإنشاء",
+    "openReport": "فتح تقرير التقييم",
     "sendAlerts": "إرسال تنبيهات الغياب",
     "sendAlertsConfirm": "إرسال تنبيهات الغياب لهذا التقييم الآن؟",
     "sendAlertsFailed": "تعذر إرسال تنبيهات الغياب.",
