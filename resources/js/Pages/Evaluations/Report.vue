@@ -1,5 +1,4 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -12,15 +11,7 @@ const props = defineProps({
 const copied = ref(false);
 const rows = computed(() => props.report.rows ?? []);
 const logoUrl = computed(() => '/media/logos/logo.png');
-const absoluteLogoUrl = computed(() => {
-    if (typeof window === 'undefined') {
-        return logoUrl.value;
-    }
-
-    return new URL(logoUrl.value, window.location.origin).toString();
-});
 const scoreLabel = computed(() => props.report.primary_score_label || 'الحفظ');
-const metaDescription = computed(() => `${props.report.center_name ?? ''} / ${props.report.date ?? ''}`.trim());
 
 const attendanceValue = (row) => Number(row.attendance ?? 1);
 const hasScore = (value) => value !== null && value !== undefined && value !== '';
@@ -225,18 +216,6 @@ const copyReportLink = async () => {
 </script>
 
 <template>
-    <Head title="تقييمات الطلاب | مشروع الحافظ المتميز">
-        <meta name="description" :content="metaDescription">
-        <meta property="og:type" content="website">
-        <meta property="og:title" content="تقييمات الطلاب | مشروع الحافظ المتميز">
-        <meta property="og:description" :content="metaDescription">
-        <meta property="og:image" :content="absoluteLogoUrl">
-        <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="تقييمات الطلاب | مشروع الحافظ المتميز">
-        <meta name="twitter:description" :content="metaDescription">
-        <meta name="twitter:image" :content="absoluteLogoUrl">
-    </Head>
-
     <main dir="rtl" class="report-page">
         <div class="report-shell">
             <section class="report-hero" aria-label="بيانات التقرير">
@@ -395,19 +374,20 @@ const copyReportLink = async () => {
                     <div class="student-card__header">
                         <div class="student-title">
                             <span class="student-number">{{ row.number }}</span>
-                            <h2>{{ row.full_name }}</h2>
+                            <div class="student-title__content">
+                                <div class="student-name-line">
+                                    <h2>{{ row.full_name }}</h2>
+                                    <span class="status-pill" :class="statusClass(row)">
+                                        <i v-if="row.is_perfect" class="pi pi-trophy" aria-hidden="true" />
+                                        <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock" aria-hidden="true" />
+                                        {{ statusLabel(row) }}
+                                    </span>
+                                    <span class="plan-badge" :class="planBadgeClass(row)">
+                                        {{ row.plan_name }}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <span class="status-pill" :class="statusClass(row)">
-                            <i v-if="row.is_perfect" class="pi pi-trophy" aria-hidden="true" />
-                            <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock" aria-hidden="true" />
-                            {{ statusLabel(row) }}
-                        </span>
-                    </div>
-
-                    <div class="student-plan">
-                        <span class="plan-badge" :class="planBadgeClass(row)">
-                            {{ row.plan_name }}
-                        </span>
                     </div>
 
                     <div v-if="[2, 3, 4].includes(attendanceValue(row))" class="state-band">
@@ -465,9 +445,9 @@ const copyReportLink = async () => {
 .report-hero {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 24px;
-    padding: 28px;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 18px;
+    padding: 22px;
     overflow: hidden;
     border: 1px solid #dfe7ef;
     border-radius: 8px;
@@ -521,31 +501,31 @@ const copyReportLink = async () => {
 .brand-lockup {
     display: flex;
     align-items: center;
-    gap: 22px;
-    padding-inline-end: 110px;
+    gap: 16px;
+    padding-inline-end: 96px;
     grid-column: 1 / 2;
 }
 
 .report-logo {
-    width: 118px;
-    height: 118px;
+    width: 86px;
+    height: 86px;
     flex: 0 0 auto;
     object-fit: contain;
 }
 
 .report-kicker {
-    margin: 0 0 8px;
+    margin: 0 0 6px;
     color: #016e3d;
-    font-size: 0.95rem;
+    font-size: 0.82rem;
     font-weight: 800;
 }
 
 .report-hero h1 {
     margin: 0;
     color: #111827;
-    font-size: 3rem;
+    font-size: 2.1rem;
     font-weight: 900;
-    line-height: 1.12;
+    line-height: 1.18;
     letter-spacing: 0;
 }
 
@@ -558,7 +538,7 @@ const copyReportLink = async () => {
 .report-center {
     margin: 0;
     color: #0f3d6e;
-    font-size: 2rem;
+    font-size: 1.35rem;
     font-weight: 900;
     line-height: 1.35;
 }
@@ -573,12 +553,13 @@ const copyReportLink = async () => {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 38px;
+    min-height: 34px;
     border: 1px solid #dbe5ef;
     border-radius: 8px;
     background: #f8fafc;
     color: #334155;
-    padding: 8px 12px;
+    padding: 7px 10px;
+    font-size: 0.86rem;
     font-weight: 800;
 }
 
@@ -591,16 +572,16 @@ const copyReportLink = async () => {
     grid-row: 1 / span 2;
     align-self: end;
     display: grid;
-    gap: 18px;
+    gap: 14px;
     border: 1px solid #dbe5ef;
     border-radius: 8px;
     background: #f8fafc;
-    padding: 18px;
+    padding: 14px;
 }
 
 .performance-row {
     display: grid;
-    gap: 10px;
+    gap: 8px;
 }
 
 .performance-row__label {
@@ -609,19 +590,19 @@ const copyReportLink = async () => {
     justify-content: space-between;
     gap: 12px;
     color: #475569;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 900;
 }
 
 .performance-row__label strong {
     color: #0f3d6e;
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 900;
 }
 
 .performance-track {
     position: relative;
-    height: 10px;
+    height: 8px;
     overflow: hidden;
     border-radius: 999px;
     background: #e2e8f0;
@@ -917,13 +898,13 @@ const copyReportLink = async () => {
 .student-card {
     position: relative;
     display: grid;
-    gap: 14px;
+    gap: 12px;
     margin-top: 12px;
     overflow: hidden;
     border: 1px solid #dbe5ef;
     border-radius: 8px;
     background: #ffffff;
-    padding: 14px;
+    padding: 12px;
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
 }
 
@@ -950,16 +931,13 @@ const copyReportLink = async () => {
 }
 
 .student-card__header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
+    display: block;
 }
 
 .student-title {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 9px;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
     align-items: start;
     min-width: 0;
 }
@@ -977,18 +955,39 @@ const copyReportLink = async () => {
     font-weight: 900;
 }
 
-.student-title h2 {
+.student-title__content {
+    min-width: 0;
+}
+
+.student-name-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.student-name-line h2 {
+    flex: 1 1 150px;
+    min-width: 0;
     margin: 0;
     color: #172033;
-    font-size: 1rem;
+    font-size: 0.98rem;
     font-weight: 900;
-    line-height: 1.5;
+    line-height: 1.45;
     overflow-wrap: anywhere;
 }
 
-.student-plan {
-    display: flex;
-    justify-content: flex-start;
+.student-card .plan-badge {
+    min-width: 0;
+    padding: 5px 8px;
+    font-size: 0.74rem;
+    white-space: nowrap;
+}
+
+.student-card .status-pill {
+    padding: 5px 8px;
+    font-size: 0.74rem;
 }
 
 .status-pill {
@@ -1102,9 +1101,9 @@ const copyReportLink = async () => {
     }
 
     .report-hero {
-        gap: 18px;
-        padding: 18px;
-        padding-top: 72px;
+        gap: 14px;
+        padding: 14px;
+        padding-top: 62px;
     }
 
     .report-actions {
@@ -1115,27 +1114,27 @@ const copyReportLink = async () => {
     .brand-lockup {
         display: grid;
         justify-items: center;
-        gap: 12px;
+        gap: 10px;
         padding-inline-end: 0;
         text-align: center;
     }
 
     .performance-panel {
         grid-template-columns: 1fr;
-        padding: 14px;
+        padding: 12px;
     }
 
     .report-logo {
-        width: 92px;
-        height: 92px;
+        width: 72px;
+        height: 72px;
     }
 
     .report-kicker {
-        font-size: 0.85rem;
+        font-size: 0.78rem;
     }
 
     .report-hero h1 {
-        font-size: 2rem;
+        font-size: 1.55rem;
     }
 
     .report-meta {
@@ -1143,7 +1142,7 @@ const copyReportLink = async () => {
     }
 
     .report-center {
-        font-size: 1.25rem;
+        font-size: 1rem;
     }
 
     .date-row {
@@ -1153,7 +1152,7 @@ const copyReportLink = async () => {
     .date-row span {
         width: 100%;
         justify-content: center;
-        font-size: 0.88rem;
+        font-size: 0.78rem;
     }
 
     .summary-grid {
@@ -1193,12 +1192,12 @@ const copyReportLink = async () => {
         font-size: 1.35rem;
     }
 
-    .student-card__header {
-        display: grid;
+    .student-name-line {
+        align-items: flex-start;
     }
 
-    .status-pill {
-        justify-self: start;
+    .student-name-line h2 {
+        flex-basis: 100%;
     }
 }
 

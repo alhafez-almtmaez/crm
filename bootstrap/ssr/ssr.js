@@ -1130,7 +1130,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/WhatsApp.vue": () => import("./assets/WhatsApp-FZKoVqJa.js"),
 		"./Pages/Auth/Login.vue": () => import("./assets/Login-BXOR7zNo.js"),
 		"./Pages/Error.vue": () => import("./assets/Error-C7b-UIHX.js"),
-		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-D7f8MXSQ.js")
+		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-DVXHUFke.js")
 	})),
 	setup({ App, props, plugin }) {
 		const i18n = createAppI18n(props.initialPage?.props?.systemSettings?.language ?? "en");
