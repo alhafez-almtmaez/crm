@@ -12,6 +12,13 @@ const props = defineProps({
 const copied = ref(false);
 const rows = computed(() => props.report.rows ?? []);
 const logoUrl = computed(() => '/media/logos/logo.png');
+const absoluteLogoUrl = computed(() => {
+    if (typeof window === 'undefined') {
+        return logoUrl.value;
+    }
+
+    return new URL(logoUrl.value, window.location.origin).toString();
+});
 const scoreLabel = computed(() => props.report.primary_score_label || 'الحفظ');
 const metaDescription = computed(() => `${props.report.center_name ?? ''} / ${props.report.date ?? ''}`.trim());
 
@@ -218,12 +225,16 @@ const copyReportLink = async () => {
 </script>
 
 <template>
-    <Head title="تقييمات الطلاب">
+    <Head title="تقييمات الطلاب | مشروع الحافظ المتميز">
         <meta name="description" :content="metaDescription">
         <meta property="og:type" content="website">
         <meta property="og:title" content="تقييمات الطلاب | مشروع الحافظ المتميز">
         <meta property="og:description" :content="metaDescription">
-        <meta property="og:image" :content="logoUrl">
+        <meta property="og:image" :content="absoluteLogoUrl">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="تقييمات الطلاب | مشروع الحافظ المتميز">
+        <meta name="twitter:description" :content="metaDescription">
+        <meta name="twitter:image" :content="absoluteLogoUrl">
     </Head>
 
     <main dir="rtl" class="report-page">

@@ -39,8 +39,21 @@ class EvaluationController extends Controller implements HasMiddleware
 
     public function report(string $publicId): Response
     {
+        $report = $this->service->reportPayload($publicId);
+        $title = 'تقييمات الطلاب | مشروع الحافظ المتميز';
+        $description = trim(($report['center_name'] ?? '').' / '.($report['date'] ?? ''));
+        $imageUrl = asset('media/logos/logo.png');
+
         return Inertia::render('Evaluations/Report', [
-            'report' => $this->service->reportPayload($publicId),
+            'report' => $report,
+        ])->withViewData([
+            'pageMeta' => [
+                'title' => $title,
+                'description' => $description,
+                'url' => url()->current(),
+                'image' => $imageUrl,
+                'type' => 'website',
+            ],
         ]);
     }
 
