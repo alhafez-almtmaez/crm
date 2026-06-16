@@ -24,6 +24,7 @@ const summary = computed(() => {
         excused: 0,
         absent: 0,
         frozen: 0,
+        exempt: 0,
         perfect: 0,
         scorePercent: null,
     };
@@ -40,6 +41,8 @@ const summary = computed(() => {
             totals.absent += 1;
         } else if (attendance === 4) {
             totals.frozen += 1;
+        } else if (attendance === 5) {
+            totals.exempt += 1;
         } else {
             totals.present += 1;
         }
@@ -68,6 +71,7 @@ const summaryCards = computed(() => [
     { key: 'absent', label: 'غياب', value: summary.value.absent, icon: 'pi pi-times-circle', tone: 'red' },
     { key: 'excused', label: 'بعذر', value: summary.value.excused, icon: 'pi pi-info-circle', tone: 'amber' },
     { key: 'frozen', label: 'مجمد', value: summary.value.frozen, icon: 'pi pi-lock', tone: 'cyan' },
+    { key: 'exempt', label: 'معفى', value: summary.value.exempt, icon: 'pi pi-minus-circle', tone: 'neutral' },
     { key: 'score', label: 'متوسط الدرجات', value: summary.value.scorePercent === null ? '-' : `${summary.value.scorePercent}%`, icon: 'pi pi-chart-line', tone: 'blue' },
 ]);
 
@@ -109,6 +113,10 @@ const rowToneClass = (row, index) => {
         return 'is-frozen';
     }
 
+    if (attendance === 5) {
+        return 'is-exempt';
+    }
+
     return index % 2 === 0 ? 'is-odd' : 'is-even';
 };
 
@@ -139,6 +147,10 @@ const statusClass = (row) => {
         return 'status-pill--frozen';
     }
 
+    if (attendance === 5) {
+        return 'status-pill--exempt';
+    }
+
     return 'status-pill--present';
 };
 
@@ -157,6 +169,10 @@ const statusLabel = (row) => {
         return 'مجمد';
     }
 
+    if (attendance === 5) {
+        return 'معفى';
+    }
+
     return row.is_perfect ? 'ممتاز' : 'حاضر';
 };
 
@@ -173,6 +189,10 @@ const stateMessage = (row) => {
 
     if (attendance === 4) {
         return `مجمد من ${row.freeze_from ?? '-'} إلى ${row.freeze_to ?? '-'}`;
+    }
+
+    if (attendance === 5) {
+        return 'معفى من الحضور';
     }
 
     return '';
@@ -286,6 +306,7 @@ const copyReportLink = async () => {
                 <span><i class="legend-dot legend-dot--excused" />غائب بعذر</span>
                 <span><i class="legend-dot legend-dot--absent" />غائب</span>
                 <span><i class="legend-dot legend-dot--frozen" />مجمد</span>
+                <span><i class="legend-dot legend-dot--exempt" />معفى</span>
             </div>
 
             <div class="section-heading">
@@ -325,6 +346,7 @@ const copyReportLink = async () => {
                                 <span>{{ row.number }}</span>
                                 <i v-if="row.is_perfect" class="pi pi-trophy report-icon" aria-hidden="true" />
                                 <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock report-icon" aria-hidden="true" />
+                                <i v-else-if="attendanceValue(row) === 5" class="pi pi-minus-circle report-icon" aria-hidden="true" />
                             </td>
                             <td class="report-name">{{ row.full_name }}</td>
                             <td>
@@ -336,10 +358,11 @@ const copyReportLink = async () => {
                                 <span class="status-pill" :class="statusClass(row)">
                                     <i v-if="row.is_perfect" class="pi pi-trophy" aria-hidden="true" />
                                     <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock" aria-hidden="true" />
+                                    <i v-else-if="attendanceValue(row) === 5" class="pi pi-minus-circle" aria-hidden="true" />
                                     {{ statusLabel(row) }}
                                 </span>
                             </td>
-                            <template v-if="[2, 3, 4].includes(attendanceValue(row))">
+                            <template v-if="[2, 3, 4, 5].includes(attendanceValue(row))">
                                 <td colspan="3" class="report-state">{{ stateMessage(row) }}</td>
                             </template>
                             <template v-else>
@@ -380,6 +403,7 @@ const copyReportLink = async () => {
                                     <span class="status-pill" :class="statusClass(row)">
                                         <i v-if="row.is_perfect" class="pi pi-trophy" aria-hidden="true" />
                                         <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock" aria-hidden="true" />
+                                        <i v-else-if="attendanceValue(row) === 5" class="pi pi-minus-circle" aria-hidden="true" />
                                         {{ statusLabel(row) }}
                                     </span>
                                     <span class="plan-badge" :class="planBadgeClass(row)">
@@ -390,7 +414,7 @@ const copyReportLink = async () => {
                         </div>
                     </div>
 
-                    <div v-if="[2, 3, 4].includes(attendanceValue(row))" class="state-band">
+                    <div v-if="[2, 3, 4, 5].includes(attendanceValue(row))" class="state-band">
                         {{ stateMessage(row) }}
                     </div>
                     <div v-else class="scores-grid">
@@ -618,7 +642,7 @@ const copyReportLink = async () => {
 
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 12px;
     margin-top: 18px;
 }
@@ -671,6 +695,10 @@ const copyReportLink = async () => {
     color: #0891b2;
 }
 
+.summary-card--neutral i {
+    color: #475569;
+}
+
 .summary-card--blue i {
     color: #2563eb;
 }
@@ -712,6 +740,10 @@ const copyReportLink = async () => {
 
 .legend-dot--frozen {
     background: #06b6d4;
+}
+
+.legend-dot--exempt {
+    background: #64748b;
 }
 
 .section-heading {
@@ -807,6 +839,10 @@ const copyReportLink = async () => {
 
 .report-row.is-frozen {
     background: #cffafe;
+}
+
+.report-row.is-exempt {
+    background: #e2e8f0;
 }
 
 .report-index {
@@ -930,6 +966,10 @@ const copyReportLink = async () => {
     background: #06b6d4;
 }
 
+.student-card.is-exempt::before {
+    background: #64748b;
+}
+
 .student-card__header {
     display: block;
 }
@@ -1021,6 +1061,11 @@ const copyReportLink = async () => {
 .status-pill--frozen {
     background: #cffafe;
     color: #155e75;
+}
+
+.status-pill--exempt {
+    background: #e2e8f0;
+    color: #334155;
 }
 
 .scores-grid {

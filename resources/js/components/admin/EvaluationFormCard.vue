@@ -55,6 +55,7 @@ const attendanceOptions = computed(() => [
     { value: 1, label: t('evaluations.present') },
     { value: 2, label: t('evaluations.excusedAbsence') },
     { value: 3, label: t('evaluations.absence') },
+    { value: 5, label: t('evaluations.exempt') },
 ]);
 const scoreMode = computed({
     get: () => (Number(props.form.evaluation_type) === EVALUATION_TYPE_TAJWID ? EVALUATION_TYPE_TAJWID : EVALUATION_TYPE_ALHIFZ),

@@ -23,12 +23,10 @@ class EvaluationService
     public function __construct(
         private readonly DateTimeFormatterService $dateTimeFormatter,
         private readonly AbsenceRuleEngine $absenceRuleEngine,
-    )
-    {
-    }
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -163,7 +161,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): Evaluation
     {
@@ -201,7 +199,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(Evaluation $evaluation, array $data): Evaluation
     {
@@ -343,7 +341,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<int, mixed> $items
+     * @param  array<int, mixed>  $items
      */
     private function replaceEvaluationRows(Evaluation $evaluation, array $items, int $evaluationType): void
     {
@@ -360,11 +358,6 @@ class EvaluationService
             $attendance = (int) ($item['attendances'] ?? EvaluationStudent::ATTENDANCE_PRESENT);
 
             if ($studentId <= 0) {
-                continue;
-            }
-
-            if ($attendance === EvaluationStudent::ATTENDANCE_EXEMPT) {
-                $rowsByStudent[$studentId] = null;
                 continue;
             }
 
@@ -395,7 +388,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<int, mixed> $items
+     * @param  array<int, mixed>  $items
      */
     private function syncEvaluationRows(Evaluation $evaluation, array $items, int $evaluationType): void
     {
@@ -423,10 +416,6 @@ class EvaluationService
             }
 
             $attendance = (int) ($item['attendances'] ?? EvaluationStudent::ATTENDANCE_PRESENT);
-            if ($attendance === EvaluationStudent::ATTENDANCE_EXEMPT) {
-                continue;
-            }
-
             $isPresent = $attendance === EvaluationStudent::ATTENDANCE_PRESENT;
             $scorePayload = $this->buildScorePayload($item, $isPresent, $evaluationType);
             $payload = [
@@ -445,6 +434,7 @@ class EvaluationService
                 if ($existing->isDirty()) {
                     $existing->save();
                 }
+
                 continue;
             }
 
@@ -543,7 +533,7 @@ class EvaluationService
 
         foreach ($baseStudents as $student) {
             $studentId = (int) $student->id;
-            if (isset($frozenLookup[$studentId]) && !$existingItemsByStudent->has($studentId)) {
+            if (isset($frozenLookup[$studentId]) && ! $existingItemsByStudent->has($studentId)) {
                 continue;
             }
 
@@ -642,7 +632,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @param  array<string, mixed>  $item
      */
     private function normalizeScore(array $item, string $key): int
     {
@@ -657,7 +647,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @param  array<string, mixed>  $item
      */
     private function normalizeNote(array $item): ?string
     {
@@ -681,7 +671,7 @@ class EvaluationService
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @param  array<string, mixed>  $item
      * @return array{alhifz: ?int, warud: ?int, akhlaqi: ?int, tajwid: ?int}
      */
     private function buildScorePayload(array $item, bool $isPresent, int $evaluationType): array

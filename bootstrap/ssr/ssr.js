@@ -1104,8 +1104,8 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/Centers/Edit.vue": () => import("./assets/Edit-D1g2AAfo.js"),
 		"./Pages/Admin/Centers.vue": () => import("./assets/Centers-FtbDc3t1.js"),
 		"./Pages/Admin/Dashboard.vue": () => import("./assets/Dashboard-C3X6rAAE.js"),
-		"./Pages/Admin/Evaluations/Create.vue": () => import("./assets/Create-BYQg4Lfz.js"),
-		"./Pages/Admin/Evaluations/Edit.vue": () => import("./assets/Edit-BAiZeMqK.js"),
+		"./Pages/Admin/Evaluations/Create.vue": () => import("./assets/Create-Cr3oxNRS.js"),
+		"./Pages/Admin/Evaluations/Edit.vue": () => import("./assets/Edit-DnQMTu3i.js"),
 		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-Br2I2YRT.js"),
 		"./Pages/Admin/Groups/Create.vue": () => import("./assets/Create-vs5o7cfN.js"),
 		"./Pages/Admin/Groups/Edit.vue": () => import("./assets/Edit-DqpnCfbo.js"),
@@ -1130,7 +1130,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/WhatsApp.vue": () => import("./assets/WhatsApp-FZKoVqJa.js"),
 		"./Pages/Auth/Login.vue": () => import("./assets/Login-BXOR7zNo.js"),
 		"./Pages/Error.vue": () => import("./assets/Error-C7b-UIHX.js"),
-		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-DVXHUFke.js")
+		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-SgGGowve.js")
 	})),
 	setup({ App, props, plugin }) {
 		const i18n = createAppI18n(props.initialPage?.props?.systemSettings?.language ?? "en");

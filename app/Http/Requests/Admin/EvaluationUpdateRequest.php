@@ -68,6 +68,7 @@ class EvaluationUpdateRequest extends FormRequest
                 EvaluationStudent::ATTENDANCE_PRESENT,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
+                EvaluationStudent::ATTENDANCE_EXEMPT,
             ])],
             'items.*.alhifz' => ['nullable', 'integer', 'min:0', 'max:10'],
             'items.*.warud' => ['nullable', 'integer', 'min:0', 'max:10'],

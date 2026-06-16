@@ -44,11 +44,12 @@ const mapStudents = (rows = []) => rows.map((row) => {
         return Math.min(10, Math.max(0, parsed));
     };
     const attendance = Number(row.attendances ?? 1);
-    const normalizedAttendance = attendance === 5 ? 1 : attendance;
-    const normalizedAlhifz = normalizeScore(row.alhifz);
-    const normalizedWarud = normalizeScore(row.warud);
-    const normalizedAkhlaqi = normalizeScore(row.akhlaqi);
-    const normalizedTajwid = normalizeScore(row.tajwid);
+    const normalizedAttendance = [1, 2, 3, 5].includes(attendance) ? attendance : 1;
+    const hasScores = normalizedAttendance === 1;
+    const normalizedAlhifz = hasScores ? normalizeScore(row.alhifz) : null;
+    const normalizedWarud = hasScores ? normalizeScore(row.warud) : null;
+    const normalizedAkhlaqi = hasScores ? normalizeScore(row.akhlaqi) : null;
+    const normalizedTajwid = hasScores ? normalizeScore(row.tajwid) : null;
     const normalizedNote = String(row.note ?? '').trim();
     const isDefaultEntry = normalizedAttendance === 1
         && normalizedAlhifz === 10
