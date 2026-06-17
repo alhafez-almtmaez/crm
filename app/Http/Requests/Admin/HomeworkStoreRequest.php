@@ -31,6 +31,7 @@ class HomeworkStoreRequest extends FormRequest
             'date' => ['required', 'date_format:Y-m-d'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.student_id' => ['required', Rule::exists('students', 'id')],
+            'items.*.points_adjustment' => ['nullable', 'integer', 'min:-1000000', 'max:1000000'],
             'items.*.points' => ['array'],
             'items.*.points.*.plan_point_id' => ['required', Rule::exists('plan_points', 'id')],
             'items.*.points.*.is_done' => ['boolean'],
@@ -59,6 +60,7 @@ class HomeworkStoreRequest extends FormRequest
 
             return [
                 'student_id' => isset($row['student_id']) ? (int) $row['student_id'] : null,
+                'points_adjustment' => isset($row['points_adjustment']) ? (int) $row['points_adjustment'] : 0,
                 'points' => array_map(static fn ($point): array => [
                     'plan_point_id' => isset($point['plan_point_id']) ? (int) $point['plan_point_id'] : null,
                     'is_done' => filter_var($point['is_done'] ?? false, FILTER_VALIDATE_BOOLEAN),

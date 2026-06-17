@@ -12,6 +12,8 @@ class StudentPointTransaction extends Model
 
     public const TYPE_HOMEWORK_COMPLETED = 'homework_completed';
 
+    public const TYPE_HOMEWORK_MANUAL_ADJUSTMENT = 'homework_manual_adjustment';
+
     protected $fillable = [
         'student_id',
         'homework_id',

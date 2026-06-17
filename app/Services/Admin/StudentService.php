@@ -17,12 +17,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class StudentService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -92,7 +90,7 @@ class StudentService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): Student
     {
@@ -100,7 +98,7 @@ class StudentService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(Student $student, array $data): Student
     {
@@ -165,6 +163,7 @@ class StudentService
             ->leftJoin('centers', 'students.center_id', '=', 'centers.id')
             ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
+            ->leftJoin('plan_points as current_plan_points', 'students.current_plan_point_id', '=', 'current_plan_points.id')
             ->leftJoin('users as admins', 'students.admin_id', '=', 'admins.id')
             ->when($centerId !== null, static fn ($query) => $query->where('students.center_id', $centerId))
             ->orderBy('students.id')
@@ -186,6 +185,9 @@ class StudentService
                 'students.group_id',
                 'plan_types.name as plan_name',
                 'students.plan_type_id',
+                'current_plan_points.name as plan_point_name',
+                'students.current_plan_point_id as plan_point_id',
+                'students.points_balance',
                 'admins.name as admin_name',
                 'students.admin_id',
                 'students.is_active',
@@ -208,7 +210,7 @@ class StudentService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function buildPayload(array $data): array
@@ -233,7 +235,7 @@ class StudentService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function fullNameFromData(array $data): string
     {
@@ -246,7 +248,7 @@ class StudentService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function resolveAdminId(array $data): ?int
     {
@@ -263,5 +265,4 @@ class StudentService
 
         return $currentUserId;
     }
-
 }

@@ -79,6 +79,58 @@ const totalDonePoints = computed(() => props.form.items.reduce((total, item) => 
     ), 0)
 ), 0));
 
+const totalManualAdjustments = computed(() => props.form.items.reduce((total, item) => (
+    total + Number(item.points_adjustment ?? 0)
+), 0));
+
+const expectedBalanceAfterAdjustment = (item) => (
+    Number(item.points_balance ?? 0)
+    + Number(item.points_adjustment ?? 0)
+    - Number(item.points_adjustment_original ?? 0)
+);
+
+const studentNameToneClass = (index) => {
+    const accents = [
+        'text-cyan-700 dark:text-cyan-300',
+        'text-emerald-700 dark:text-emerald-300',
+        'text-amber-700 dark:text-amber-300',
+        'text-rose-700 dark:text-rose-300',
+    ];
+
+    return accents[index % accents.length];
+};
+
+const planToneClass = (index) => {
+    const accents = [
+        'border-cyan-200 text-cyan-700 dark:border-cyan-800 dark:text-cyan-300',
+        'border-emerald-200 text-emerald-700 dark:border-emerald-800 dark:text-emerald-300',
+        'border-amber-200 text-amber-700 dark:border-amber-800 dark:text-amber-300',
+        'border-rose-200 text-rose-700 dark:border-rose-800 dark:text-rose-300',
+    ];
+
+    return accents[index % accents.length];
+};
+
+const adjustmentToneClass = (item) => {
+    const value = Number(item.points_adjustment ?? 0);
+
+    if (value > 0) {
+        return 'border-emerald-300 text-emerald-800 dark:border-emerald-700 dark:text-emerald-200';
+    }
+
+    if (value < 0) {
+        return 'border-rose-300 text-rose-800 dark:border-rose-700 dark:text-rose-200';
+    }
+
+    return 'border-(--border) text-(--muted-foreground)';
+};
+
+const updatePointsAdjustment = (item, event) => {
+    const rawValue = event?.target?.value ?? '';
+    const parsedValue = rawValue === '' ? 0 : Number(rawValue);
+    item.points_adjustment = Number.isFinite(parsedValue) ? parsedValue : 0;
+};
+
 const openHistory = async (item) => {
     historyStudent.value = item;
     historyRows.value = [];
@@ -170,24 +222,37 @@ const togglePoint = (point, value) => {
                     <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
                         {{ t('homeworks.selectedPointsTotal', { points: totalDonePoints }) }}
                     </div>
+                    <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
+                        {{ t('homeworks.manualAdjustmentsTotal', { points: totalManualAdjustments }) }}
+                    </div>
                 </div>
 
                 <div v-if="form.items.length === 0" class="px-4 py-6 text-sm text-(--muted-foreground)">
                     {{ t('homeworks.noStudentsLoaded') }}
                 </div>
 
-                <div v-else class="divide-y divide-(--border)">
-                    <section
-                        v-for="(item, itemIndex) in form.items"
-                        :key="item.student_id"
-                        class="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,18rem)_minmax(11rem,13rem)_1fr]"
-                    >
+                <div v-else>
+                    <div v-if="form.errors.items" class="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {{ form.errors.items }}
+                    </div>
+
+                    <div class="divide-y divide-(--border)">
+                        <section
+                            v-for="(item, itemIndex) in form.items"
+                            :key="item.student_id"
+                            class="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,18rem)_minmax(11rem,13rem)_1fr]"
+                        >
                         <div class="min-w-0">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <p class="truncate font-semibold">{{ item.full_name }}</p>
-                                    <p class="mt-1 text-xs text-(--muted-foreground)">
-                                        {{ item.plan_name || t('common.na') }}
+                                    <p class="truncate font-semibold" :class="studentNameToneClass(itemIndex)">{{ item.full_name }}</p>
+                                    <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-(--muted-foreground)">
+                                        <span
+                                            class="inline-flex max-w-full items-center rounded-md border px-2 py-0.5 font-medium"
+                                            :class="planToneClass(itemIndex)"
+                                        >
+                                            {{ item.plan_name || t('common.na') }}
+                                        </span>
                                         <span v-if="item.group_name">/ {{ item.group_name }}</span>
                                     </p>
                                 </div>
@@ -207,6 +272,32 @@ const togglePoint = (point, value) => {
                                 {{ t('homeworks.balance') }}: {{ item.points_balance ?? 0 }}
                             </div>
 
+                            <div class="mt-3 grid gap-2 rounded-md border bg-(--background) p-2.5" :class="adjustmentToneClass(item)">
+                                <label :for="`points-adjustment-${item.student_id}`" class="text-xs font-semibold">
+                                    {{ t('homeworks.pointsAdjustment') }}
+                                </label>
+                                <input
+                                    :id="`points-adjustment-${item.student_id}`"
+                                    type="number"
+                                    step="1"
+                                    class="h-10 w-full rounded-md border border-(--border) bg-(--background) px-3 text-sm text-(--foreground) outline-none transition-colors focus:border-(--primary)"
+                                    :value="item.points_adjustment ?? 0"
+                                    @input="updatePointsAdjustment(item, $event)"
+                                >
+                                <div class="flex flex-wrap items-center gap-2 text-xs text-(--muted-foreground)">
+                                    <span>{{ t('homeworks.pointsAdjustmentHint') }}</span>
+                                    <span class="rounded-md border border-current/20 px-2 py-1 font-semibold">
+                                        {{ t('homeworks.balanceAfterAdjustment') }}: {{ expectedBalanceAfterAdjustment(item) }}
+                                    </span>
+                                </div>
+                                <small
+                                    v-if="form.errors[`items.${itemIndex}.points_adjustment`]"
+                                    class="text-xs text-red-600"
+                                >
+                                    {{ form.errors[`items.${itemIndex}.points_adjustment`] }}
+                                </small>
+                            </div>
+
                             <small
                                 v-if="form.errors[`items.${itemIndex}.student_id`]"
                                 class="mt-2 block text-xs text-red-600"
@@ -217,7 +308,7 @@ const togglePoint = (point, value) => {
 
                         <div class="rounded-md border border-(--border) bg-(--background) p-2.5 text-sm">
                             <p class="text-xs font-medium text-(--muted-foreground)">{{ t('homeworks.progress') }}</p>
-                            <p class="mt-2 line-clamp-3 font-semibold">
+                            <p class="mt-2 line-clamp-2 font-semibold leading-5">
                                 {{ item.current_plan_point_name || t('homeworks.notStarted') }}
                             </p>
                         </div>
@@ -227,21 +318,21 @@ const togglePoint = (point, value) => {
                                 {{ t('homeworks.noPlanPoints') }}
                             </div>
 
-                            <div v-else class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
+                            <div v-else class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-10">
                                 <label
                                     v-for="(point, pointIndex) in item.points"
                                     :key="point.plan_point_id"
-                                    class="flex min-h-24 cursor-pointer flex-col justify-between rounded-md border border-(--border) bg-(--background) p-2 text-sm transition-colors"
+                                    class="flex min-h-20 cursor-pointer flex-col justify-between rounded-md border border-(--border) bg-(--background) p-2 text-xs transition-colors"
                                     :class="[
                                         point.is_done ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100' : 'hover:border-(--primary)',
                                         point.is_locked ? 'cursor-default opacity-80' : '',
                                     ]"
                                 >
-                                    <span class="line-clamp-2 font-medium leading-5">{{ point.name }}</span>
+                                    <span class="line-clamp-2 font-medium leading-4">{{ point.name }}</span>
                                     <span class="mt-1 text-xs text-(--muted-foreground)">
                                         {{ t('homeworks.pointValue', { points: point.points ?? 0 }) }}
                                     </span>
-                                    <span class="mt-2 flex items-center justify-between gap-2">
+                                    <span class="mt-1.5 flex items-center justify-between gap-2">
                                         <span class="text-xs font-medium">
                                             {{ point.is_locked ? t('homeworks.awarded') : t('homeworks.done') }}
                                         </span>
@@ -262,7 +353,8 @@ const togglePoint = (point, value) => {
                                 </label>
                             </div>
                         </div>
-                    </section>
+                        </section>
+                    </div>
                 </div>
             </div>
 

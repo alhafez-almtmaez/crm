@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class HomeworkService
 {
-    private const POINT_WINDOW_SIZE = 10;
+    private const POINT_WINDOW_SIZE = 20;
 
     public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
@@ -225,7 +225,9 @@ class HomeworkService
                 'id' => $transaction->id,
                 'date' => $transaction->created_at?->locale(app()->getLocale())->translatedFormat('l ، j F ، Y H:i'),
                 'homework_date' => $transaction->homework?->date?->locale(app()->getLocale())->translatedFormat('l ، j F ، Y'),
-                'plan_point_name' => $transaction->planPoint?->name,
+                'plan_point_name' => $transaction->type === StudentPointTransaction::TYPE_HOMEWORK_MANUAL_ADJUSTMENT
+                    ? __('homeworks.manual_adjustment')
+                    : $transaction->planPoint?->name,
                 'points' => $transaction->points,
                 'balance_before' => $transaction->balance_before,
                 'balance_after' => $transaction->balance_after,
@@ -249,6 +251,7 @@ class HomeworkService
                 'full_name',
                 'group_id',
                 'plan_type_id',
+                'current_plan_point_id',
                 'points_balance',
             ]);
 
@@ -272,6 +275,8 @@ class HomeworkService
             'plan_name' => $student->plan?->name,
             'group_name' => $student->group?->name,
             'points_balance' => (int) $student->points_balance,
+            'points_adjustment' => 0,
+            'points_adjustment_original' => 0,
             'current_plan_point_name' => $currentPlanPoint?->name,
             'points' => $points->map(fn (PlanPoint $point): array => $this->pointPayload($point))->all(),
         ];
@@ -289,6 +294,8 @@ class HomeworkService
             'group_name' => $student?->group?->name,
             'points_balance' => (int) ($student?->points_balance ?? $row->points_balance_after),
             'points_balance_before' => (int) $row->points_balance_before,
+            'points_adjustment' => (int) $row->points_adjustment,
+            'points_adjustment_original' => (int) $row->points_adjustment,
             'points_balance_after' => (int) $row->points_balance_after,
             'current_plan_point_name' => $row->currentPlanPoint?->name,
             'points' => $row->points
@@ -365,6 +372,7 @@ class HomeworkService
                     'plan_id' => $planId,
                     'current_plan_point_id' => $currentPlanPoint?->id,
                     'points_balance_before' => (int) $student->points_balance,
+                    'points_adjustment' => 0,
                     'points_balance_after' => (int) $student->points_balance,
                 ]);
             } else {
@@ -375,6 +383,7 @@ class HomeworkService
             }
 
             $this->syncHomeworkStudentPoints($homework, $homeworkStudent, $student, $item['points'] ?? []);
+            $this->applyManualPointsAdjustment($homework, $homeworkStudent, $student, (int) ($item['points_adjustment'] ?? 0));
 
             $student->refresh();
             $homeworkStudent->update([
@@ -447,6 +456,50 @@ class HomeworkService
         }
     }
 
+    private function applyManualPointsAdjustment(
+        Homework $homework,
+        HomeworkStudent $homeworkStudent,
+        Student $student,
+        int $newAdjustment,
+    ): void {
+        $oldAdjustment = (int) $homeworkStudent->points_adjustment;
+        $delta = $newAdjustment - $oldAdjustment;
+
+        if ($delta === 0) {
+            return;
+        }
+
+        /** @var Student $lockedStudent */
+        $lockedStudent = Student::query()
+            ->whereKey($student->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        $balanceBefore = (int) $lockedStudent->points_balance;
+        $balanceAfter = $balanceBefore + $delta;
+
+        if ($balanceAfter < 0) {
+            throw ValidationException::withMessages([
+                'items' => __('homeworks.points_adjustment_insufficient_balance'),
+            ]);
+        }
+
+        $lockedStudent->update(['points_balance' => $balanceAfter]);
+        $homeworkStudent->update(['points_adjustment' => $newAdjustment]);
+
+        StudentPointTransaction::query()->create([
+            'student_id' => $lockedStudent->id,
+            'homework_id' => $homework->id,
+            'homework_student_point_id' => null,
+            'plan_point_id' => null,
+            'type' => StudentPointTransaction::TYPE_HOMEWORK_MANUAL_ADJUSTMENT,
+            'points' => $delta,
+            'balance_before' => $balanceBefore,
+            'balance_after' => $balanceAfter,
+            'created_by' => Auth::id(),
+        ]);
+    }
+
     private function awardHomeworkPoint(HomeworkStudentPoint $homeworkPoint, Student $student, PlanPoint $planPoint): void
     {
         if ($homeworkPoint->awarded_at !== null) {
@@ -479,7 +532,21 @@ class HomeworkService
         $balanceBefore = (int) $lockedStudent->points_balance;
         $balanceAfter = $balanceBefore + $points;
 
-        $lockedStudent->update(['points_balance' => $balanceAfter]);
+        $studentUpdate = ['points_balance' => $balanceAfter];
+        $currentPlanPoint = $lockedStudent->current_plan_point_id !== null
+            ? PlanPoint::query()->find($lockedStudent->current_plan_point_id)
+            : null;
+
+        if (
+            $currentPlanPoint === null
+            || $currentPlanPoint->plan_id !== $planPoint->plan_id
+            || $planPoint->sort_order > $currentPlanPoint->sort_order
+            || ($planPoint->sort_order === $currentPlanPoint->sort_order && $planPoint->id > $currentPlanPoint->id)
+        ) {
+            $studentUpdate['current_plan_point_id'] = $planPoint->id;
+        }
+
+        $lockedStudent->update($studentUpdate);
 
         $homeworkPoint->update([
             'is_done' => true,
@@ -502,6 +569,13 @@ class HomeworkService
 
     private function latestCompletedPlanPoint(Student $student, int $planId): ?PlanPoint
     {
+        if ($student->current_plan_point_id !== null) {
+            return PlanPoint::query()
+                ->whereKey($student->current_plan_point_id)
+                ->where('plan_id', $planId)
+                ->first();
+        }
+
         return PlanPoint::query()
             ->join('student_point_transactions', 'plan_points.id', '=', 'student_point_transactions.plan_point_id')
             ->where('student_point_transactions.student_id', $student->id)
@@ -518,13 +592,15 @@ class HomeworkService
      */
     private function nextPlanPoints(Student $student, int $planId, ?PlanPoint $currentPlanPoint): EloquentCollection
     {
-        $completedIds = StudentPointTransaction::query()
-            ->where('student_id', $student->id)
-            ->where('type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
-            ->pluck('plan_point_id')
-            ->filter(static fn ($value): bool => $value !== null)
-            ->map(static fn ($value): int => (int) $value)
-            ->all();
+        $completedIds = $student->current_plan_point_id !== null
+            ? []
+            : StudentPointTransaction::query()
+                ->where('student_id', $student->id)
+                ->where('type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
+                ->pluck('plan_point_id')
+                ->filter(static fn ($value): bool => $value !== null)
+                ->map(static fn ($value): int => (int) $value)
+                ->all();
 
         return PlanPoint::query()
             ->where('plan_id', $planId)

@@ -17,6 +17,7 @@ class HomeworkStudent extends Model
         'plan_id',
         'current_plan_point_id',
         'points_balance_before',
+        'points_adjustment',
         'points_balance_after',
     ];
 
@@ -26,6 +27,7 @@ class HomeworkStudent extends Model
         'plan_id' => 'int',
         'current_plan_point_id' => 'int',
         'points_balance_before' => 'int',
+        'points_adjustment' => 'int',
         'points_balance_after' => 'int',
     ];
 

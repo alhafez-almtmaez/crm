@@ -111,7 +111,7 @@ class GroupService
             ->where('group_id', $group->id)
             ->where('is_active', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
-            ->get(['id', 'full_name', 'plan_type_id', 'points_balance'])
+            ->get(['id', 'full_name', 'plan_type_id', 'current_plan_point_id', 'points_balance'])
             ->values()
             ->map(fn (Student $student, int $index): array => $this->homeworkReportStudentRow($student, $index))
             ->all();
@@ -174,6 +174,13 @@ class GroupService
 
     private function latestCompletedPlanPoint(Student $student, int $planId): ?PlanPoint
     {
+        if ($student->current_plan_point_id !== null) {
+            return PlanPoint::query()
+                ->whereKey($student->current_plan_point_id)
+                ->where('plan_id', $planId)
+                ->first();
+        }
+
         return PlanPoint::query()
             ->join('student_point_transactions', 'plan_points.id', '=', 'student_point_transactions.plan_point_id')
             ->where('student_point_transactions.student_id', $student->id)
@@ -190,13 +197,15 @@ class GroupService
      */
     private function nextPlanPoints(Student $student, int $planId, ?PlanPoint $currentPlanPoint): EloquentCollection
     {
-        $completedIds = StudentPointTransaction::query()
-            ->where('student_id', $student->id)
-            ->where('type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
-            ->pluck('plan_point_id')
-            ->filter(static fn ($value): bool => $value !== null)
-            ->map(static fn ($value): int => (int) $value)
-            ->all();
+        $completedIds = $student->current_plan_point_id !== null
+            ? []
+            : StudentPointTransaction::query()
+                ->where('student_id', $student->id)
+                ->where('type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
+                ->pluck('plan_point_id')
+                ->filter(static fn ($value): bool => $value !== null)
+                ->map(static fn ($value): int => (int) $value)
+                ->all();
 
         return PlanPoint::query()
             ->where('plan_id', $planId)

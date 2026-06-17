@@ -25,12 +25,12 @@
     "/build/assets/Edit-B-yt7fnu.js"
   ],
   "resources/js/Pages/Admin/Dashboard.vue": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
-  "resources/js/Pages/Admin/Dashboard.vue?vue&type=style&index=0&scoped=e5a6ab8f&lang.css": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+  "resources/js/Pages/Admin/Dashboard.vue?vue&type=style&index=0&scoped=94b4d540&lang.css": [
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/Pages/Admin/Evaluations.vue": [
     "/build/assets/Evaluations-CNmgsTbz.js"
@@ -54,10 +54,10 @@
     "/build/assets/Homeworks-DDoYLJj-.js"
   ],
   "resources/js/Pages/Admin/Homeworks/Create.vue": [
-    "/build/assets/Create-C-VG3vtY.js"
+    "/build/assets/Create-DvoeK9ol.js"
   ],
   "resources/js/Pages/Admin/Homeworks/Edit.vue": [
-    "/build/assets/Edit-Czr4XlVL.js"
+    "/build/assets/Edit-Cvf3SCj7.js"
   ],
   "resources/js/Pages/Admin/MessageTemplates.vue": [
     "/build/assets/MessageTemplates-BbP0Hhaq.js"
@@ -128,12 +128,12 @@
     "/build/assets/Report-CcH8u5Xm.css"
   ],
   "resources/js/Pages/Groups/HomeworkReport.vue": [
-    "/build/assets/HomeworkReport-C5xnAXGK.js",
-    "/build/assets/HomeworkReport-BYkHk9kZ.css"
+    "/build/assets/HomeworkReport-CMeMonD4.js",
+    "/build/assets/HomeworkReport-C4oATmp4.css"
   ],
-  "resources/js/Pages/Groups/HomeworkReport.vue?vue&type=style&index=0&scoped=3107e3e4&lang.css": [
-    "/build/assets/HomeworkReport-C5xnAXGK.js",
-    "/build/assets/HomeworkReport-BYkHk9kZ.css"
+  "resources/js/Pages/Groups/HomeworkReport.vue?vue&type=style&index=0&scoped=cc5088f2&lang.css": [
+    "/build/assets/HomeworkReport-CMeMonD4.js",
+    "/build/assets/HomeworkReport-C4oATmp4.css"
   ],
   "resources/js/admin/navItems.js": [
     "/build/assets/AdminBreadcrumbs-HyORiAQe.js"
@@ -169,7 +169,7 @@
     "/build/assets/GroupFormCard-DrXz0_MB.js"
   ],
   "resources/js/components/admin/HomeworkFormCard.vue": [
-    "/build/assets/HomeworkFormCard-BGTE2HbM.js"
+    "/build/assets/HomeworkFormCard-83ty9yQQ.js"
   ],
   "resources/js/components/admin/MessageTemplateFormCard.vue": [
     "/build/assets/MessageTemplateFormCard-DfQg9fL7.js"
@@ -187,28 +187,28 @@
     "/build/assets/UserFormCard-BiU6NAq3.js"
   ],
   "resources/js/components/admin/dashboard/DashboardChartCard.vue": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardChartCard.vue?vue&type=style&index=0&scoped=cc79b318&lang.css": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardListCard.vue": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardListCard.vue?vue&type=style&index=0&scoped=f3f18072&lang.css": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardMetricCard.vue": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardMetricCard.vue?vue&type=style&index=0&scoped=5ed71623&lang.css": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/form/FormFieldLabel.vue": [
     "/build/assets/FormFieldLabel-DJcO6mnn.js"
@@ -223,8 +223,8 @@
     "/build/assets/useSystemSettings-CcgUEggp.js"
   ],
   "resources/js/composables/useDashboardCharts.js": [
-    "/build/assets/Dashboard-D3QDC7g4.js",
-    "/build/assets/Dashboard-WNRKbsLA.css"
+    "/build/assets/Dashboard-kBPVpDSp.js",
+    "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/composables/useServerTable.js": [
     "/build/assets/useServerTable-DnBd-Dy1.js"

@@ -27,9 +27,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
     public function __construct(
         private readonly ?int $currentUserId,
         private readonly bool $canAssignAdmin,
-    )
-    {
-    }
+    ) {}
 
     public function onRow(Row $row): void
     {
@@ -37,6 +35,8 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         $rowData = $row->toArray();
         $lineNumber = $row->getIndex();
         $studentId = $this->intOrNull(Arr::get($rowData, 'student_id', Arr::get($rowData, 'id')));
+        $hasPlanPointColumn = array_key_exists('plan_point_id', $rowData) || array_key_exists('current_plan_point_id', $rowData);
+        $hasPointsBalanceColumn = array_key_exists('points_balance', $rowData);
 
         $student = null;
         if ($studentId !== null) {
@@ -60,7 +60,15 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'is_active' => $this->intOrNull(Arr::get($rowData, 'is_active')),
         ];
 
-        $validator = Validator::make($payload, [
+        if ($hasPlanPointColumn) {
+            $payload['plan_point_id'] = $this->intOrNull(Arr::get($rowData, 'plan_point_id', Arr::get($rowData, 'current_plan_point_id')));
+        }
+
+        if ($hasPointsBalanceColumn) {
+            $payload['points_balance'] = $this->intOrNull(Arr::get($rowData, 'points_balance'));
+        }
+
+        $rules = [
             'first_name' => ['required', 'string', 'max:100'],
             'second_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['required', 'string', 'max:100'],
@@ -92,10 +100,25 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
             'admin_id' => ['nullable', Rule::exists('users', 'id')],
             'is_active' => ['nullable', 'integer', Rule::in([0, 1, 2])],
-        ]);
+        ];
+
+        if ($hasPlanPointColumn) {
+            $rules['plan_point_id'] = [
+                'nullable',
+                Rule::exists('plan_points', 'id')
+                    ->where('plan_id', (int) ($payload['plan_type_id'] ?? 0)),
+            ];
+        }
+
+        if ($hasPointsBalanceColumn) {
+            $rules['points_balance'] = ['nullable', 'integer', 'min:0'];
+        }
+
+        $validator = Validator::make($payload, $rules);
 
         if ($validator->fails()) {
             $this->markSkipped("Line {$lineNumber}: ".$validator->errors()->first());
+
             return;
         }
 
@@ -126,6 +149,16 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             ),
             'is_active' => (int) ($validated['is_active'] ?? 1),
         ];
+
+        if ($hasPlanPointColumn) {
+            $payload['current_plan_point_id'] = isset($validated['plan_point_id'])
+                ? (int) $validated['plan_point_id']
+                : null;
+        }
+
+        if ($hasPointsBalanceColumn) {
+            $payload['points_balance'] = (int) ($validated['points_balance'] ?? 0);
+        }
 
         if ($student) {
             $student->update($payload);
@@ -176,7 +209,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
     private function intOrNull(mixed $value): ?int
     {
-        if (!is_string($value) && !is_int($value) && !is_float($value)) {
+        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
             return null;
         }
 
@@ -215,6 +248,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             } catch (Throwable) {
             }
         }
+
         return $raw;
     }
 }

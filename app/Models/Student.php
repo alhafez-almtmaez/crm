@@ -35,6 +35,7 @@ class Student extends Model
         'center_id',
         'group_id',
         'plan_type_id',
+        'current_plan_point_id',
         'admin_id',
         'is_active',
         'deducted_points_count',
@@ -44,6 +45,7 @@ class Student extends Model
     protected $casts = [
         'date_of_birth' => 'date',
         'is_active' => 'int',
+        'current_plan_point_id' => 'int',
         'deducted_points_count' => 'int',
         'points_balance' => 'int',
     ];
@@ -61,6 +63,11 @@ class Student extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class, 'plan_type_id');
+    }
+
+    public function currentPlanPoint(): BelongsTo
+    {
+        return $this->belongsTo(PlanPoint::class, 'current_plan_point_id');
     }
 
     public function admin(): BelongsTo
@@ -126,6 +133,7 @@ class Student extends Model
                 'center_id',
                 'group_id',
                 'plan_type_id',
+                'current_plan_point_id',
                 'admin_id',
                 'is_active',
                 'deducted_points_count',

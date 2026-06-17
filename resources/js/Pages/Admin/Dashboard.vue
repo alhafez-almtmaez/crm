@@ -17,10 +17,10 @@ const props = defineProps({
     },
 });
 
-const { locale, t } = useI18n();
+const { t } = useI18n();
 const dashboardRef = computed(() => props.dashboard ?? {});
 const summary = computed(() => dashboardRef.value.summary ?? {});
-const numberFormatter = computed(() => new Intl.NumberFormat(locale.value === 'ar' ? 'ar-JO' : 'en-US'));
+const numberFormatter = computed(() => new Intl.NumberFormat('en-US'));
 const {
     studentStatusChartData,
     attendanceTrendChartData,

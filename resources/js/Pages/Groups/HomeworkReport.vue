@@ -51,13 +51,14 @@ const summaryCards = computed(() => [
 const rowToneClass = (index) => (index % 2 === 0 ? 'is-odd' : 'is-even');
 
 const currentPointLabel = (row) => row.current_plan_point_name || 'لم يبدأ بعد';
-const pointsBalanceLabel = (row) => Number(row.points_balance ?? 0).toLocaleString('ar-JO');
+const englishNumber = (value) => Number(value ?? 0).toLocaleString('en-US');
+const pointsBalanceLabel = (row) => englishNumber(row.points_balance);
 const rowKey = (row) => String(row.student_id ?? row.number);
 const isTasksExpanded = (row) => expandedTaskRows.value.has(rowKey(row));
 const taskToggleLabel = (row) => (
     isTasksExpanded(row)
         ? 'إخفاء الباقي'
-        : `عرض ${row.hiddenTasks.length.toLocaleString('ar-JO')} واجبات إضافية`
+        : `عرض ${englishNumber(row.hiddenTasks.length)} واجبات إضافية`
 );
 
 const toggleTasks = (row) => {

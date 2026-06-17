@@ -29,6 +29,8 @@ const mapStudents = (rows = []) => rows.map((row) => ({
     group_name: row.group_name ?? null,
     points_balance: Number(row.points_balance ?? 0),
     points_balance_before: Number(row.points_balance_before ?? 0),
+    points_adjustment: Number(row.points_adjustment ?? 0),
+    points_adjustment_original: Number(row.points_adjustment_original ?? row.points_adjustment ?? 0),
     points_balance_after: Number(row.points_balance_after ?? 0),
     current_plan_point_name: row.current_plan_point_name ?? null,
     points: (row.points ?? []).map((point) => ({
