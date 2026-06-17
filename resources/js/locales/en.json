@@ -18,6 +18,7 @@
     "groups": "Groups",
     "students": "Students",
     "evaluations": "Evaluations",
+    "homeworks": "Assignments",
     "absenceRules": "Absence Rules",
     "messageTemplates": "Message Templates",
     "activityLogs": "Activity Logs",
@@ -73,6 +74,7 @@
     "groups": "Groups",
     "students": "Students",
     "evaluations": "Evaluations",
+    "homeworks": "Assignments",
     "absenceRules": "Absence Rules",
     "messageTemplates": "Message Templates",
     "activityLogs": "Activity Logs",
@@ -180,6 +182,7 @@
     "groupName": "Group Name",
     "center": "Center",
     "createdAt": "Created At",
+    "openHomeworkReport": "Open Group Assignments Page",
     "createDescription": "Create a group and assign it to a center.",
     "editDescription": "Update group name or change its center.",
     "deleteConfirm": "Delete group \"{name}\"? This action cannot be undone.",
@@ -290,6 +293,49 @@
     "deleted": "Evaluation deleted successfully.",
     "deleteFailed": "Could not delete evaluation."
   },
+  "homeworks": {
+    "title": "Assignments",
+    "tableTitle": "Assignments Table",
+    "searchHomeworks": "Search Assignments",
+    "createHomework": "Create Assignment",
+    "editHomework": "Edit Assignment",
+    "newHomework": "New Assignment",
+    "createDescription": "Select center and date, then load students and mark completed points.",
+    "editDescription": "Update unawarded points and save this homework.",
+    "center": "Center",
+    "date": "Date",
+    "student": "Student",
+    "studentsList": "Students List",
+    "studentsHint": "Each student shows ten next plan-point slots.",
+    "noStudentsLoaded": "Pick a center and date, then load students.",
+    "loadStudents": "Load Students",
+    "alreadyExists": "A homework already exists for this center and date.",
+    "openExisting": "Open Existing Assignment",
+    "progress": "Progress",
+    "currentPosition": "Last awarded point",
+    "notStarted": "Not started",
+    "nextPoints": "Next Points",
+    "noPlanPoints": "No plan points are available for this student.",
+    "pointValue": "{points} points",
+    "done": "Done",
+    "awarded": "Awarded",
+    "balance": "Balance",
+    "selectedPointsTotal": "Selected points total: {points}",
+    "studentsCount": "Students",
+    "completedPointsCount": "Completed Points",
+    "createdAt": "Created At",
+    "pointsHistory": "Points History",
+    "historyDate": "Date",
+    "planPoint": "Plan Point",
+    "points": "Points",
+    "balanceAfter": "Balance After",
+    "noHistory": "No point history for this student.",
+    "historyFailed": "Could not load points history.",
+    "deleteConfirm": "Delete homework for {center} on {date}?",
+    "deleteHomework": "Delete Assignment",
+    "deleted": "Assignment deleted successfully.",
+    "deleteFailed": "Could not delete assignment."
+  },
   "absenceRules": {
     "title": "Absence Rules",
     "tableTitle": "Absence Rules Table",
@@ -379,13 +425,98 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "subtitle": "Operational snapshot for your admin area.",
-    "overview": "Overview",
-    "description": "Protected with auth:web. Manage system theme from the Settings page.",
-    "orders": "Orders",
-    "products": "Products",
-    "customers": "Customers",
-    "revenue": "Revenue"
+    "eyebrow": "Live overview",
+    "subtitle": "A connected view of students, attendance, assignments, centers, and WhatsApp status.",
+    "empty": "No data yet.",
+    "percentValue": "{value}%",
+    "summaryStrip": {
+      "ariaLabel": "Dashboard summary",
+      "centers": "{count} centers",
+      "groups": "{count} groups",
+      "plans": "{count} plans",
+      "whatsapp": "{connected}/{total} WhatsApp"
+    },
+    "metrics": {
+      "students": "Students",
+      "studentsSubtitle": "{active} active, {frozen} frozen",
+      "attendanceRate": "Attendance rate",
+      "attendanceSubtitle": "{present} present out of {total} in 30 days",
+      "homeworkPoints": "Assignment points",
+      "homeworkSubtitle": "{points} points awarded across {count} assignments this month",
+      "evaluations": "Monthly evaluations",
+      "evaluationsSubtitle": "{centers} centers and {groups} groups"
+    },
+    "charts": {
+      "attendanceTrend": "Attendance Trend",
+      "attendanceTrendSubtitle": "Last 14 days from evaluation records",
+      "studentStatus": "Student Status",
+      "studentStatusSubtitle": "Current student distribution by status",
+      "homeworkProgress": "Assignment Completion",
+      "homeworkProgressSubtitle": "Latest assignments, completed versus pending"
+    },
+    "statuses": {
+      "active": "Active",
+      "frozen": "Frozen",
+      "inactive": "Inactive"
+    },
+    "attendance": {
+      "present": "Present",
+      "absent": "Absent",
+      "excused": "Excused"
+    },
+    "homeworks": {
+      "completed": "Completed",
+      "pending": "Pending"
+    },
+    "alerts": {
+      "title": "Signals",
+      "subtitle": "Operational items that may need follow-up",
+      "studentsWithoutPlan": {
+        "title": "Students without a plan",
+        "description": "{count} students need a plan assignment"
+      },
+      "studentsWithoutGroup": {
+        "title": "Students without a group",
+        "description": "{count} students need a group assignment"
+      },
+      "failedAbsenceMessages": {
+        "title": "Failed absence messages",
+        "description": "{count} messages failed in the last 30 days"
+      },
+      "recentEvaluations": {
+        "title": "Recent evaluations",
+        "description": "{count} evaluations in the last 7 days"
+      },
+      "whatsappDevices": {
+        "title": "WhatsApp devices",
+        "description": "{connected} of {total} devices connected"
+      }
+    },
+    "centerPerformance": {
+      "title": "Center Performance",
+      "subtitle": "Most active centers by student count",
+      "meta": "{active} active of {students} students, {groups} groups",
+      "activityValue": "{evaluations} evals / {homeworks} assignments"
+    },
+    "recentActivity": {
+      "title": "Recent Activity",
+      "subtitle": "Latest evaluations, assignments, and absence alerts"
+    },
+    "activityTypes": {
+      "evaluation": "Evaluation",
+      "homework": "Assignment",
+      "absence": "Absence"
+    },
+    "actions": {
+      "title": "Quick Actions",
+      "subtitle": "Shortcuts for common daily work",
+      "createStudent": "Add Student",
+      "createStudentMeta": "Open a new student form",
+      "createEvaluation": "Add Evaluation",
+      "createEvaluationMeta": "Pick center and date",
+      "createHomework": "Add Assignment",
+      "createHomeworkMeta": "Record student progress"
+    }
   },
   "whatsapp": {
     "title": "WhatsApp",

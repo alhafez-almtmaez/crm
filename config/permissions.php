@@ -41,6 +41,7 @@ return [
         'groups',
         'students',
         'evaluations',
+        'homeworks',
         'absence_rules',
         'message_templates',
     ],

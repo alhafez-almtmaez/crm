@@ -16,7 +16,9 @@ class Student extends Model
     use LogsActivity;
 
     public const STATUS_INACTIVE = 0;
+
     public const STATUS_ACTIVE = 1;
+
     public const STATUS_FROZEN = 2;
 
     protected $fillable = [
@@ -36,12 +38,14 @@ class Student extends Model
         'admin_id',
         'is_active',
         'deducted_points_count',
+        'points_balance',
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
         'is_active' => 'int',
         'deducted_points_count' => 'int',
+        'points_balance' => 'int',
     ];
 
     public function center(): BelongsTo
@@ -84,6 +88,16 @@ class Student extends Model
         return $this->hasMany(AbsenceRuleExecutionLog::class);
     }
 
+    public function homeworkRows(): HasMany
+    {
+        return $this->hasMany(HomeworkStudent::class);
+    }
+
+    public function pointTransactions(): HasMany
+    {
+        return $this->hasMany(StudentPointTransaction::class);
+    }
+
     public function setParentPhoneNumberAttribute(mixed $value): void
     {
         $this->attributes['parent_phone_number'] = PhoneNumberHelper::normalizeForStorage($value);
@@ -115,6 +129,7 @@ class Student extends Model
                 'admin_id',
                 'is_active',
                 'deducted_points_count',
+                'points_balance',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();

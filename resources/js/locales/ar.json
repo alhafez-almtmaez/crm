@@ -18,6 +18,7 @@
     "groups": "المجموعات",
     "students": "الطلاب",
     "evaluations": "التقييمات",
+    "homeworks": "الواجبات",
     "absenceRules": "قواعد الغياب",
     "messageTemplates": "قوالب الرسائل",
     "activityLogs": "سجل النشاط",
@@ -73,6 +74,7 @@
     "groups": "المجموعات",
     "students": "الطلاب",
     "evaluations": "التقييمات",
+    "homeworks": "الواجبات",
     "absenceRules": "قواعد الغياب",
     "messageTemplates": "قوالب الرسائل",
     "activityLogs": "سجل النشاط",
@@ -180,6 +182,7 @@
     "groupName": "اسم المجموعة",
     "center": "المركز",
     "createdAt": "تاريخ الإنشاء",
+    "openHomeworkReport": "فتح صفحة واجبات المجموعة",
     "createDescription": "أنشئ مجموعة وربطها بمركز.",
     "editDescription": "حدّث اسم المجموعة أو غيّر المركز.",
     "deleteConfirm": "حذف المجموعة \"{name}\"؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -290,6 +293,49 @@
     "deleted": "تم حذف التقييم بنجاح.",
     "deleteFailed": "تعذر حذف التقييم."
   },
+  "homeworks": {
+    "title": "الواجبات",
+    "tableTitle": "جدول الواجبات",
+    "searchHomeworks": "بحث الواجبات",
+    "createHomework": "إضافة واجب",
+    "editHomework": "تعديل واجب",
+    "newHomework": "واجب جديد",
+    "createDescription": "اختر المركز والتاريخ ثم حمّل الطلاب وحدد النقاط المكتملة.",
+    "editDescription": "عدّل النقاط غير المحتسبة واحفظ الواجب.",
+    "center": "المركز",
+    "date": "التاريخ",
+    "student": "الطالب",
+    "studentsList": "قائمة الطلاب",
+    "studentsHint": "لكل طالب تظهر عشر خانات من نقاط الخطة التالية له.",
+    "noStudentsLoaded": "اختر مركزًا وتاريخًا ثم حمّل الطلاب.",
+    "loadStudents": "تحميل الطلاب",
+    "alreadyExists": "يوجد واجب مسجل لهذا المركز في نفس التاريخ.",
+    "openExisting": "فتح الواجب الحالي",
+    "progress": "وين موصل",
+    "currentPosition": "آخر نقطة محتسبة",
+    "notStarted": "لم يبدأ بعد",
+    "nextPoints": "النقاط التالية",
+    "noPlanPoints": "لا توجد نقاط متاحة لهذا الطالب.",
+    "pointValue": "{points} نقطة",
+    "done": "تم",
+    "awarded": "محتسبة",
+    "balance": "الرصيد",
+    "selectedPointsTotal": "إجمالي النقاط المحددة: {points}",
+    "studentsCount": "عدد الطلاب",
+    "completedPointsCount": "النقاط المكتملة",
+    "createdAt": "تاريخ الإنشاء",
+    "pointsHistory": "سجل النقاط",
+    "historyDate": "التاريخ",
+    "planPoint": "نقطة الخطة",
+    "points": "النقاط",
+    "balanceAfter": "الرصيد بعد",
+    "noHistory": "لا يوجد سجل نقاط لهذا الطالب.",
+    "historyFailed": "تعذر تحميل سجل النقاط.",
+    "deleteConfirm": "حذف واجب {center} بتاريخ {date}؟",
+    "deleteHomework": "حذف الواجب",
+    "deleted": "تم حذف الواجب بنجاح.",
+    "deleteFailed": "تعذر حذف الواجب."
+  },
   "absenceRules": {
     "title": "قواعد الغياب",
     "tableTitle": "جدول قواعد الغياب",
@@ -379,13 +425,98 @@
   },
   "dashboard": {
     "title": "لوحة التحكم",
-    "subtitle": "نظرة تشغيلية سريعة لمنطقة الإدارة.",
-    "overview": "نظرة عامة",
-    "description": "هذه الصفحة محمية بـ auth:web. يمكنك إدارة مظهر النظام من صفحة الإعدادات.",
-    "orders": "الطلبات",
-    "products": "المنتجات",
-    "customers": "العملاء",
-    "revenue": "الإيرادات"
+    "eyebrow": "نظرة مباشرة",
+    "subtitle": "متابعة مترابطة للطلاب، الحضور، الواجبات، المراكز، وحالة واتساب.",
+    "empty": "لا توجد بيانات بعد.",
+    "percentValue": "{value}٪",
+    "summaryStrip": {
+      "ariaLabel": "ملخص لوحة التحكم",
+      "centers": "{count} مركز",
+      "groups": "{count} مجموعة",
+      "plans": "{count} خطة",
+      "whatsapp": "{connected}/{total} واتساب"
+    },
+    "metrics": {
+      "students": "الطلاب",
+      "studentsSubtitle": "{active} فعال، {frozen} مجمّد",
+      "attendanceRate": "نسبة الحضور",
+      "attendanceSubtitle": "{present} حضور من أصل {total} خلال 30 يوم",
+      "homeworkPoints": "نقاط الواجبات",
+      "homeworkSubtitle": "{points} نقطة ممنوحة عبر {count} واجب هذا الشهر",
+      "evaluations": "تقييمات الشهر",
+      "evaluationsSubtitle": "{centers} مركز و {groups} مجموعة"
+    },
+    "charts": {
+      "attendanceTrend": "اتجاه الحضور",
+      "attendanceTrendSubtitle": "آخر 14 يوم حسب سجلات التقييم",
+      "studentStatus": "حالة الطلاب",
+      "studentStatusSubtitle": "توزيع الطلاب حسب الحالة الحالية",
+      "homeworkProgress": "إنجاز الواجبات",
+      "homeworkProgressSubtitle": "آخر واجبات مسجلة، منجز مقابل متبقّي"
+    },
+    "statuses": {
+      "active": "فعال",
+      "frozen": "مجمّد",
+      "inactive": "غير فعال"
+    },
+    "attendance": {
+      "present": "حضور",
+      "absent": "غياب",
+      "excused": "غياب بعذر"
+    },
+    "homeworks": {
+      "completed": "منجز",
+      "pending": "متبقّي"
+    },
+    "alerts": {
+      "title": "المؤشرات",
+      "subtitle": "نقاط تحتاج متابعة تشغيلية",
+      "studentsWithoutPlan": {
+        "title": "طلاب بدون خطة",
+        "description": "{count} طالب يحتاج ربط خطة"
+      },
+      "studentsWithoutGroup": {
+        "title": "طلاب بدون مجموعة",
+        "description": "{count} طالب يحتاج ربط مجموعة"
+      },
+      "failedAbsenceMessages": {
+        "title": "رسائل غياب فاشلة",
+        "description": "{count} رسالة لم ترسل خلال 30 يوم"
+      },
+      "recentEvaluations": {
+        "title": "تقييمات حديثة",
+        "description": "{count} تقييم خلال آخر 7 أيام"
+      },
+      "whatsappDevices": {
+        "title": "أجهزة واتساب",
+        "description": "{connected} من {total} أجهزة متصلة"
+      }
+    },
+    "centerPerformance": {
+      "title": "أداء المراكز",
+      "subtitle": "أكثر المراكز نشاطاً حسب عدد الطلاب",
+      "meta": "{active} فعال من {students} طالب، {groups} مجموعة",
+      "activityValue": "{evaluations} تقييم / {homeworks} واجب"
+    },
+    "recentActivity": {
+      "title": "آخر النشاط",
+      "subtitle": "أحدث التقييمات والواجبات وتنبيهات الغياب"
+    },
+    "activityTypes": {
+      "evaluation": "تقييم",
+      "homework": "واجب",
+      "absence": "غياب"
+    },
+    "actions": {
+      "title": "إجراءات سريعة",
+      "subtitle": "اختصارات لأكثر العمليات اليومية",
+      "createStudent": "إضافة طالب",
+      "createStudentMeta": "فتح نموذج طالب جديد",
+      "createEvaluation": "إضافة تقييم",
+      "createEvaluationMeta": "اختيار مركز وتاريخ",
+      "createHomework": "إضافة واجب",
+      "createHomeworkMeta": "تسجيل تقدم الطلاب"
+    }
   },
   "whatsapp": {
     "title": "واتساب",

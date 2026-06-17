@@ -15,6 +15,7 @@ class Group extends Model
     use LogsActivity;
 
     protected $fillable = [
+        'ulid',
         'name',
         'center_id',
     ];

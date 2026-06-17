@@ -44,6 +44,17 @@ const columns = computed(() => [
     { field: 'created_at_formatted', header: t('groups.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
 
+const rowActions = computed(() => [
+    {
+        key: 'open-homework-report',
+        icon: 'pi pi-share-alt',
+        severity: 'info',
+        outlined: true,
+        titleKey: 'groups.openHomeworkReport',
+        show: (group) => Boolean(group.homework_report_url),
+    },
+]);
+
 const openCreate = () => {
     router.get('/admin/groups/create');
 };
@@ -93,6 +104,20 @@ const openHistory = (group) => {
     historyVisible.value = true;
 };
 
+const openHomeworkReport = (group) => {
+    if (!group.homework_report_url) {
+        return;
+    }
+
+    window.open(group.homework_report_url, '_blank', 'noopener');
+};
+
+const handleRowAction = ({ action, data: group }) => {
+    if (action === 'open-homework-report') {
+        openHomeworkReport(group);
+    }
+};
+
 onMounted(() => {
     fetchGroups();
 });
@@ -119,11 +144,13 @@ onMounted(() => {
                 :search-label="t('groups.searchGroups')"
                 :table-title="t('groups.tableTitle')"
                 :show-history="true"
+                :row-actions="rowActions"
                 @update:search="search = $event"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @create="openCreate"
                 @history="openHistory"
+                @row-action="handleRowAction"
                 @edit="openEdit"
                 @delete="askDeleteGroup"
             />

@@ -34,6 +34,7 @@ var ar_default = {
 		"groups": "المجموعات",
 		"students": "الطلاب",
 		"evaluations": "التقييمات",
+		"homeworks": "الواجبات",
 		"absenceRules": "قواعد الغياب",
 		"messageTemplates": "قوالب الرسائل",
 		"activityLogs": "سجل النشاط",
@@ -89,6 +90,7 @@ var ar_default = {
 		"groups": "المجموعات",
 		"students": "الطلاب",
 		"evaluations": "التقييمات",
+		"homeworks": "الواجبات",
 		"absenceRules": "قواعد الغياب",
 		"messageTemplates": "قوالب الرسائل",
 		"activityLogs": "سجل النشاط",
@@ -196,6 +198,7 @@ var ar_default = {
 		"groupName": "اسم المجموعة",
 		"center": "المركز",
 		"createdAt": "تاريخ الإنشاء",
+		"openHomeworkReport": "فتح صفحة واجبات المجموعة",
 		"createDescription": "أنشئ مجموعة وربطها بمركز.",
 		"editDescription": "حدّث اسم المجموعة أو غيّر المركز.",
 		"deleteConfirm": "حذف المجموعة \"{name}\"؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -306,6 +309,49 @@ var ar_default = {
 		"deleted": "تم حذف التقييم بنجاح.",
 		"deleteFailed": "تعذر حذف التقييم."
 	},
+	homeworks: {
+		"title": "الواجبات",
+		"tableTitle": "جدول الواجبات",
+		"searchHomeworks": "بحث الواجبات",
+		"createHomework": "إضافة واجب",
+		"editHomework": "تعديل واجب",
+		"newHomework": "واجب جديد",
+		"createDescription": "اختر المركز والتاريخ ثم حمّل الطلاب وحدد النقاط المكتملة.",
+		"editDescription": "عدّل النقاط غير المحتسبة واحفظ الواجب.",
+		"center": "المركز",
+		"date": "التاريخ",
+		"student": "الطالب",
+		"studentsList": "قائمة الطلاب",
+		"studentsHint": "لكل طالب تظهر عشر خانات من نقاط الخطة التالية له.",
+		"noStudentsLoaded": "اختر مركزًا وتاريخًا ثم حمّل الطلاب.",
+		"loadStudents": "تحميل الطلاب",
+		"alreadyExists": "يوجد واجب مسجل لهذا المركز في نفس التاريخ.",
+		"openExisting": "فتح الواجب الحالي",
+		"progress": "وين موصل",
+		"currentPosition": "آخر نقطة محتسبة",
+		"notStarted": "لم يبدأ بعد",
+		"nextPoints": "النقاط التالية",
+		"noPlanPoints": "لا توجد نقاط متاحة لهذا الطالب.",
+		"pointValue": "{points} نقطة",
+		"done": "تم",
+		"awarded": "محتسبة",
+		"balance": "الرصيد",
+		"selectedPointsTotal": "إجمالي النقاط المحددة: {points}",
+		"studentsCount": "عدد الطلاب",
+		"completedPointsCount": "النقاط المكتملة",
+		"createdAt": "تاريخ الإنشاء",
+		"pointsHistory": "سجل النقاط",
+		"historyDate": "التاريخ",
+		"planPoint": "نقطة الخطة",
+		"points": "النقاط",
+		"balanceAfter": "الرصيد بعد",
+		"noHistory": "لا يوجد سجل نقاط لهذا الطالب.",
+		"historyFailed": "تعذر تحميل سجل النقاط.",
+		"deleteConfirm": "حذف واجب {center} بتاريخ {date}؟",
+		"deleteHomework": "حذف الواجب",
+		"deleted": "تم حذف الواجب بنجاح.",
+		"deleteFailed": "تعذر حذف الواجب."
+	},
 	absenceRules: {
 		"title": "قواعد الغياب",
 		"tableTitle": "جدول قواعد الغياب",
@@ -395,13 +441,98 @@ var ar_default = {
 	},
 	dashboard: {
 		"title": "لوحة التحكم",
-		"subtitle": "نظرة تشغيلية سريعة لمنطقة الإدارة.",
-		"overview": "نظرة عامة",
-		"description": "هذه الصفحة محمية بـ auth:web. يمكنك إدارة مظهر النظام من صفحة الإعدادات.",
-		"orders": "الطلبات",
-		"products": "المنتجات",
-		"customers": "العملاء",
-		"revenue": "الإيرادات"
+		"eyebrow": "نظرة مباشرة",
+		"subtitle": "متابعة مترابطة للطلاب، الحضور، الواجبات، المراكز، وحالة واتساب.",
+		"empty": "لا توجد بيانات بعد.",
+		"percentValue": "{value}٪",
+		"summaryStrip": {
+			"ariaLabel": "ملخص لوحة التحكم",
+			"centers": "{count} مركز",
+			"groups": "{count} مجموعة",
+			"plans": "{count} خطة",
+			"whatsapp": "{connected}/{total} واتساب"
+		},
+		"metrics": {
+			"students": "الطلاب",
+			"studentsSubtitle": "{active} فعال، {frozen} مجمّد",
+			"attendanceRate": "نسبة الحضور",
+			"attendanceSubtitle": "{present} حضور من أصل {total} خلال 30 يوم",
+			"homeworkPoints": "نقاط الواجبات",
+			"homeworkSubtitle": "{points} نقطة ممنوحة عبر {count} واجب هذا الشهر",
+			"evaluations": "تقييمات الشهر",
+			"evaluationsSubtitle": "{centers} مركز و {groups} مجموعة"
+		},
+		"charts": {
+			"attendanceTrend": "اتجاه الحضور",
+			"attendanceTrendSubtitle": "آخر 14 يوم حسب سجلات التقييم",
+			"studentStatus": "حالة الطلاب",
+			"studentStatusSubtitle": "توزيع الطلاب حسب الحالة الحالية",
+			"homeworkProgress": "إنجاز الواجبات",
+			"homeworkProgressSubtitle": "آخر واجبات مسجلة، منجز مقابل متبقّي"
+		},
+		"statuses": {
+			"active": "فعال",
+			"frozen": "مجمّد",
+			"inactive": "غير فعال"
+		},
+		"attendance": {
+			"present": "حضور",
+			"absent": "غياب",
+			"excused": "غياب بعذر"
+		},
+		"homeworks": {
+			"completed": "منجز",
+			"pending": "متبقّي"
+		},
+		"alerts": {
+			"title": "المؤشرات",
+			"subtitle": "نقاط تحتاج متابعة تشغيلية",
+			"studentsWithoutPlan": {
+				"title": "طلاب بدون خطة",
+				"description": "{count} طالب يحتاج ربط خطة"
+			},
+			"studentsWithoutGroup": {
+				"title": "طلاب بدون مجموعة",
+				"description": "{count} طالب يحتاج ربط مجموعة"
+			},
+			"failedAbsenceMessages": {
+				"title": "رسائل غياب فاشلة",
+				"description": "{count} رسالة لم ترسل خلال 30 يوم"
+			},
+			"recentEvaluations": {
+				"title": "تقييمات حديثة",
+				"description": "{count} تقييم خلال آخر 7 أيام"
+			},
+			"whatsappDevices": {
+				"title": "أجهزة واتساب",
+				"description": "{connected} من {total} أجهزة متصلة"
+			}
+		},
+		"centerPerformance": {
+			"title": "أداء المراكز",
+			"subtitle": "أكثر المراكز نشاطاً حسب عدد الطلاب",
+			"meta": "{active} فعال من {students} طالب، {groups} مجموعة",
+			"activityValue": "{evaluations} تقييم / {homeworks} واجب"
+		},
+		"recentActivity": {
+			"title": "آخر النشاط",
+			"subtitle": "أحدث التقييمات والواجبات وتنبيهات الغياب"
+		},
+		"activityTypes": {
+			"evaluation": "تقييم",
+			"homework": "واجب",
+			"absence": "غياب"
+		},
+		"actions": {
+			"title": "إجراءات سريعة",
+			"subtitle": "اختصارات لأكثر العمليات اليومية",
+			"createStudent": "إضافة طالب",
+			"createStudentMeta": "فتح نموذج طالب جديد",
+			"createEvaluation": "إضافة تقييم",
+			"createEvaluationMeta": "اختيار مركز وتاريخ",
+			"createHomework": "إضافة واجب",
+			"createHomeworkMeta": "تسجيل تقدم الطلاب"
+		}
 	},
 	whatsapp: {
 		"title": "واتساب",
@@ -570,6 +701,7 @@ var en_default = {
 		"groups": "Groups",
 		"students": "Students",
 		"evaluations": "Evaluations",
+		"homeworks": "Assignments",
 		"absenceRules": "Absence Rules",
 		"messageTemplates": "Message Templates",
 		"activityLogs": "Activity Logs",
@@ -625,6 +757,7 @@ var en_default = {
 		"groups": "Groups",
 		"students": "Students",
 		"evaluations": "Evaluations",
+		"homeworks": "Assignments",
 		"absenceRules": "Absence Rules",
 		"messageTemplates": "Message Templates",
 		"activityLogs": "Activity Logs",
@@ -732,6 +865,7 @@ var en_default = {
 		"groupName": "Group Name",
 		"center": "Center",
 		"createdAt": "Created At",
+		"openHomeworkReport": "Open Group Assignments Page",
 		"createDescription": "Create a group and assign it to a center.",
 		"editDescription": "Update group name or change its center.",
 		"deleteConfirm": "Delete group \"{name}\"? This action cannot be undone.",
@@ -842,6 +976,49 @@ var en_default = {
 		"deleted": "Evaluation deleted successfully.",
 		"deleteFailed": "Could not delete evaluation."
 	},
+	homeworks: {
+		"title": "Assignments",
+		"tableTitle": "Assignments Table",
+		"searchHomeworks": "Search Assignments",
+		"createHomework": "Create Assignment",
+		"editHomework": "Edit Assignment",
+		"newHomework": "New Assignment",
+		"createDescription": "Select center and date, then load students and mark completed points.",
+		"editDescription": "Update unawarded points and save this homework.",
+		"center": "Center",
+		"date": "Date",
+		"student": "Student",
+		"studentsList": "Students List",
+		"studentsHint": "Each student shows ten next plan-point slots.",
+		"noStudentsLoaded": "Pick a center and date, then load students.",
+		"loadStudents": "Load Students",
+		"alreadyExists": "A homework already exists for this center and date.",
+		"openExisting": "Open Existing Assignment",
+		"progress": "Progress",
+		"currentPosition": "Last awarded point",
+		"notStarted": "Not started",
+		"nextPoints": "Next Points",
+		"noPlanPoints": "No plan points are available for this student.",
+		"pointValue": "{points} points",
+		"done": "Done",
+		"awarded": "Awarded",
+		"balance": "Balance",
+		"selectedPointsTotal": "Selected points total: {points}",
+		"studentsCount": "Students",
+		"completedPointsCount": "Completed Points",
+		"createdAt": "Created At",
+		"pointsHistory": "Points History",
+		"historyDate": "Date",
+		"planPoint": "Plan Point",
+		"points": "Points",
+		"balanceAfter": "Balance After",
+		"noHistory": "No point history for this student.",
+		"historyFailed": "Could not load points history.",
+		"deleteConfirm": "Delete homework for {center} on {date}?",
+		"deleteHomework": "Delete Assignment",
+		"deleted": "Assignment deleted successfully.",
+		"deleteFailed": "Could not delete assignment."
+	},
 	absenceRules: {
 		"title": "Absence Rules",
 		"tableTitle": "Absence Rules Table",
@@ -931,13 +1108,98 @@ var en_default = {
 	},
 	dashboard: {
 		"title": "Dashboard",
-		"subtitle": "Operational snapshot for your admin area.",
-		"overview": "Overview",
-		"description": "Protected with auth:web. Manage system theme from the Settings page.",
-		"orders": "Orders",
-		"products": "Products",
-		"customers": "Customers",
-		"revenue": "Revenue"
+		"eyebrow": "Live overview",
+		"subtitle": "A connected view of students, attendance, assignments, centers, and WhatsApp status.",
+		"empty": "No data yet.",
+		"percentValue": "{value}%",
+		"summaryStrip": {
+			"ariaLabel": "Dashboard summary",
+			"centers": "{count} centers",
+			"groups": "{count} groups",
+			"plans": "{count} plans",
+			"whatsapp": "{connected}/{total} WhatsApp"
+		},
+		"metrics": {
+			"students": "Students",
+			"studentsSubtitle": "{active} active, {frozen} frozen",
+			"attendanceRate": "Attendance rate",
+			"attendanceSubtitle": "{present} present out of {total} in 30 days",
+			"homeworkPoints": "Assignment points",
+			"homeworkSubtitle": "{points} points awarded across {count} assignments this month",
+			"evaluations": "Monthly evaluations",
+			"evaluationsSubtitle": "{centers} centers and {groups} groups"
+		},
+		"charts": {
+			"attendanceTrend": "Attendance Trend",
+			"attendanceTrendSubtitle": "Last 14 days from evaluation records",
+			"studentStatus": "Student Status",
+			"studentStatusSubtitle": "Current student distribution by status",
+			"homeworkProgress": "Assignment Completion",
+			"homeworkProgressSubtitle": "Latest assignments, completed versus pending"
+		},
+		"statuses": {
+			"active": "Active",
+			"frozen": "Frozen",
+			"inactive": "Inactive"
+		},
+		"attendance": {
+			"present": "Present",
+			"absent": "Absent",
+			"excused": "Excused"
+		},
+		"homeworks": {
+			"completed": "Completed",
+			"pending": "Pending"
+		},
+		"alerts": {
+			"title": "Signals",
+			"subtitle": "Operational items that may need follow-up",
+			"studentsWithoutPlan": {
+				"title": "Students without a plan",
+				"description": "{count} students need a plan assignment"
+			},
+			"studentsWithoutGroup": {
+				"title": "Students without a group",
+				"description": "{count} students need a group assignment"
+			},
+			"failedAbsenceMessages": {
+				"title": "Failed absence messages",
+				"description": "{count} messages failed in the last 30 days"
+			},
+			"recentEvaluations": {
+				"title": "Recent evaluations",
+				"description": "{count} evaluations in the last 7 days"
+			},
+			"whatsappDevices": {
+				"title": "WhatsApp devices",
+				"description": "{connected} of {total} devices connected"
+			}
+		},
+		"centerPerformance": {
+			"title": "Center Performance",
+			"subtitle": "Most active centers by student count",
+			"meta": "{active} active of {students} students, {groups} groups",
+			"activityValue": "{evaluations} evals / {homeworks} assignments"
+		},
+		"recentActivity": {
+			"title": "Recent Activity",
+			"subtitle": "Latest evaluations, assignments, and absence alerts"
+		},
+		"activityTypes": {
+			"evaluation": "Evaluation",
+			"homework": "Assignment",
+			"absence": "Absence"
+		},
+		"actions": {
+			"title": "Quick Actions",
+			"subtitle": "Shortcuts for common daily work",
+			"createStudent": "Add Student",
+			"createStudentMeta": "Open a new student form",
+			"createEvaluation": "Add Evaluation",
+			"createEvaluationMeta": "Pick center and date",
+			"createHomework": "Add Assignment",
+			"createHomeworkMeta": "Record student progress"
+		}
 	},
 	whatsapp: {
 		"title": "WhatsApp",
@@ -1114,41 +1376,45 @@ createServer((page) => createInertiaApp({
 	render: renderToString,
 	title: (title) => title ? `${title} | Vita` : "Vita",
 	resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, /* #__PURE__ */ Object.assign({
-		"./Pages/Admin/AbsenceRules/Create.vue": () => import("./assets/Create-CJpnuChw.js"),
-		"./Pages/Admin/AbsenceRules/Edit.vue": () => import("./assets/Edit-CdLJRBG3.js"),
-		"./Pages/Admin/AbsenceRules.vue": () => import("./assets/AbsenceRules-Dv0FF5lp.js"),
-		"./Pages/Admin/ActivityLogs.vue": () => import("./assets/ActivityLogs-DXxe2Oup.js"),
-		"./Pages/Admin/Centers/Create.vue": () => import("./assets/Create-D6m8ifkg.js"),
-		"./Pages/Admin/Centers/Edit.vue": () => import("./assets/Edit-Bjgm7oCT.js"),
-		"./Pages/Admin/Centers.vue": () => import("./assets/Centers-DX6VCfQz.js"),
-		"./Pages/Admin/Dashboard.vue": () => import("./assets/Dashboard-DhZdjUPx.js"),
-		"./Pages/Admin/Evaluations/Create.vue": () => import("./assets/Create-DKhVrvr-.js"),
-		"./Pages/Admin/Evaluations/Edit.vue": () => import("./assets/Edit-l_9uCoNv.js"),
-		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-BYb34PqK.js"),
-		"./Pages/Admin/Groups/Create.vue": () => import("./assets/Create-Cw5Z4GMk.js"),
-		"./Pages/Admin/Groups/Edit.vue": () => import("./assets/Edit-B0Ae8YBg.js"),
-		"./Pages/Admin/Groups.vue": () => import("./assets/Groups-U2EgsqmK.js"),
-		"./Pages/Admin/MessageTemplates/Create.vue": () => import("./assets/Create-DqeKu-vJ.js"),
-		"./Pages/Admin/MessageTemplates/Edit.vue": () => import("./assets/Edit-4avURyKY.js"),
-		"./Pages/Admin/MessageTemplates.vue": () => import("./assets/MessageTemplates-Be2VQlT8.js"),
-		"./Pages/Admin/Plans/Create.vue": () => import("./assets/Create-BKVzywA4.js"),
-		"./Pages/Admin/Plans/Edit.vue": () => import("./assets/Edit-DB_w41ht.js"),
-		"./Pages/Admin/Plans.vue": () => import("./assets/Plans-DUFTYpXy.js"),
-		"./Pages/Admin/Profile/Password.vue": () => import("./assets/Password-9i0LNVvB.js"),
-		"./Pages/Admin/Roles/Create.vue": () => import("./assets/Create-D6DZ81tK.js"),
-		"./Pages/Admin/Roles/Edit.vue": () => import("./assets/Edit-DUEe0AT7.js"),
-		"./Pages/Admin/Roles.vue": () => import("./assets/Roles-BOhcRgAN.js"),
-		"./Pages/Admin/Settings.vue": () => import("./assets/Settings-BI4gr_-P.js"),
-		"./Pages/Admin/Students/Create.vue": () => import("./assets/Create-DbKukh9E.js"),
-		"./Pages/Admin/Students/Edit.vue": () => import("./assets/Edit-Bj-xRvNv.js"),
-		"./Pages/Admin/Students.vue": () => import("./assets/Students-COICjSQc.js"),
-		"./Pages/Admin/Users/Create.vue": () => import("./assets/Create-DDwyH_f92.js"),
-		"./Pages/Admin/Users/Edit.vue": () => import("./assets/Edit-DyHr5iei2.js"),
-		"./Pages/Admin/Users.vue": () => import("./assets/Users-CAkKaQyV.js"),
-		"./Pages/Admin/WhatsApp.vue": () => import("./assets/WhatsApp-DJOBipia.js"),
+		"./Pages/Admin/AbsenceRules/Create.vue": () => import("./assets/Create-D83jvXA_.js"),
+		"./Pages/Admin/AbsenceRules/Edit.vue": () => import("./assets/Edit-DrHZpQIc.js"),
+		"./Pages/Admin/AbsenceRules.vue": () => import("./assets/AbsenceRules-CQsFJjYy.js"),
+		"./Pages/Admin/ActivityLogs.vue": () => import("./assets/ActivityLogs-j_NpOiyC.js"),
+		"./Pages/Admin/Centers/Create.vue": () => import("./assets/Create-7BcM4iix.js"),
+		"./Pages/Admin/Centers/Edit.vue": () => import("./assets/Edit-B-yt7fnu.js"),
+		"./Pages/Admin/Centers.vue": () => import("./assets/Centers--lz-S_9_.js"),
+		"./Pages/Admin/Dashboard.vue": () => import("./assets/Dashboard-D3QDC7g4.js"),
+		"./Pages/Admin/Evaluations/Create.vue": () => import("./assets/Create-Gggp8wy1.js"),
+		"./Pages/Admin/Evaluations/Edit.vue": () => import("./assets/Edit-CxOHLL44.js"),
+		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-CNmgsTbz.js"),
+		"./Pages/Admin/Groups/Create.vue": () => import("./assets/Create-DfQ8Fs3O.js"),
+		"./Pages/Admin/Groups/Edit.vue": () => import("./assets/Edit-CEYTjaHU.js"),
+		"./Pages/Admin/Groups.vue": () => import("./assets/Groups-CIiXYAOw.js"),
+		"./Pages/Admin/Homeworks/Create.vue": () => import("./assets/Create-C-VG3vtY.js"),
+		"./Pages/Admin/Homeworks/Edit.vue": () => import("./assets/Edit-Czr4XlVL.js"),
+		"./Pages/Admin/Homeworks.vue": () => import("./assets/Homeworks-DDoYLJj-.js"),
+		"./Pages/Admin/MessageTemplates/Create.vue": () => import("./assets/Create-BqvoCEyO.js"),
+		"./Pages/Admin/MessageTemplates/Edit.vue": () => import("./assets/Edit-BSAbvDiy.js"),
+		"./Pages/Admin/MessageTemplates.vue": () => import("./assets/MessageTemplates-BbP0Hhaq.js"),
+		"./Pages/Admin/Plans/Create.vue": () => import("./assets/Create-_uXpCdKW.js"),
+		"./Pages/Admin/Plans/Edit.vue": () => import("./assets/Edit-BLqaOTv7.js"),
+		"./Pages/Admin/Plans.vue": () => import("./assets/Plans-CgQXAjvl.js"),
+		"./Pages/Admin/Profile/Password.vue": () => import("./assets/Password-BWWHDiiw.js"),
+		"./Pages/Admin/Roles/Create.vue": () => import("./assets/Create-Crb-VDY7.js"),
+		"./Pages/Admin/Roles/Edit.vue": () => import("./assets/Edit-C6yQE1qa.js"),
+		"./Pages/Admin/Roles.vue": () => import("./assets/Roles-TWaqSPv4.js"),
+		"./Pages/Admin/Settings.vue": () => import("./assets/Settings-BTN6zCrM.js"),
+		"./Pages/Admin/Students/Create.vue": () => import("./assets/Create-BjLfafnJ2.js"),
+		"./Pages/Admin/Students/Edit.vue": () => import("./assets/Edit-BTF_6m0k2.js"),
+		"./Pages/Admin/Students.vue": () => import("./assets/Students-C7xsBdvb.js"),
+		"./Pages/Admin/Users/Create.vue": () => import("./assets/Create-BlmJILNh2.js"),
+		"./Pages/Admin/Users/Edit.vue": () => import("./assets/Edit-BuqyisGK2.js"),
+		"./Pages/Admin/Users.vue": () => import("./assets/Users-DB0dTQhb.js"),
+		"./Pages/Admin/WhatsApp.vue": () => import("./assets/WhatsApp-Bxq6xALJ.js"),
 		"./Pages/Auth/Login.vue": () => import("./assets/Login-CbLSJO-7.js"),
 		"./Pages/Error.vue": () => import("./assets/Error-DG2VQrdd.js"),
-		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-CS1yMpaE.js")
+		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-Co3iBZMA.js"),
+		"./Pages/Groups/HomeworkReport.vue": () => import("./assets/HomeworkReport-C5xnAXGK.js")
 	})),
 	setup({ App, props, plugin }) {
 		const i18n = createAppI18n(props.initialPage?.props?.systemSettings?.language ?? "en");

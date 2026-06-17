@@ -22,9 +22,7 @@ class GroupController extends Controller implements HasMiddleware
     public function __construct(
         private readonly GroupService $groupService,
         private readonly ActivityLogService $activityLogService,
-    )
-    {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -40,6 +38,26 @@ class GroupController extends Controller implements HasMiddleware
     public function index(): Response
     {
         return Inertia::render('Admin/Groups');
+    }
+
+    public function homeworkReport(string $publicId): Response
+    {
+        $report = $this->groupService->homeworkReportPayload($publicId);
+        $title = 'واجبات المجموعة | مشروع الحافظ المتميز';
+        $description = trim(($report['center_name'] ?? '').' / '.($report['group_name'] ?? ''));
+        $imageUrl = asset('media/logos/logo.png');
+
+        return Inertia::render('Groups/HomeworkReport', [
+            'report' => $report,
+        ])->withViewData([
+            'pageMeta' => [
+                'title' => $title,
+                'description' => $description,
+                'url' => url()->current(),
+                'image' => $imageUrl,
+                'type' => 'website',
+            ],
+        ]);
     }
 
     public function create(): Response

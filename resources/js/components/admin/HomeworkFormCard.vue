@@ -1,0 +1,309 @@
+<script setup>
+import axios from 'axios';
+import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
+import DatePicker from 'primevue/datepicker';
+import Dialog from 'primevue/dialog';
+import FloatLabel from 'primevue/floatlabel';
+import Select from 'primevue/select';
+import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { useAppToast } from '../../composables/useAppToast';
+import FormFieldLabel from '../form/FormFieldLabel.vue';
+
+const props = defineProps({
+    description: {
+        type: String,
+        default: '',
+    },
+    form: {
+        type: Object,
+        required: true,
+    },
+    centers: {
+        type: Array,
+        default: () => [],
+    },
+    lockCenterAndDate: {
+        type: Boolean,
+        default: false,
+    },
+    submitLabel: {
+        type: String,
+        default: 'Save',
+    },
+    title: {
+        type: String,
+        default: '',
+    },
+});
+
+const emit = defineEmits(['cancel', 'reload', 'submit']);
+const { t } = useI18n();
+const appToast = useAppToast();
+const historyVisible = ref(false);
+const historyLoading = ref(false);
+const historyRows = ref([]);
+const historyStudent = ref(null);
+
+const dateValue = computed({
+    get: () => {
+        const value = props.form.date;
+        if (typeof value !== 'string' || value === '') {
+            return null;
+        }
+
+        const parts = value.split('-').map((segment) => Number(segment));
+        if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+            return null;
+        }
+
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    },
+    set: (value) => {
+        if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            props.form.date = '';
+            return;
+        }
+
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        props.form.date = `${year}-${month}-${day}`;
+    },
+});
+
+const totalDonePoints = computed(() => props.form.items.reduce((total, item) => (
+    total + (item.points ?? []).reduce((sum, point) => (
+        point.is_done ? sum + Number(point.points ?? 0) : sum
+    ), 0)
+), 0));
+
+const openHistory = async (item) => {
+    historyStudent.value = item;
+    historyRows.value = [];
+    historyVisible.value = true;
+    historyLoading.value = true;
+
+    try {
+        const { data } = await axios.get(`/admin/homeworks/students/${item.student_id}/point-history`);
+        historyRows.value = data?.data ?? [];
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.requestFailedTitle'),
+            fallback: t('homeworks.historyFailed'),
+        });
+    } finally {
+        historyLoading.value = false;
+    }
+};
+
+const togglePoint = (point, value) => {
+    if (point?.is_locked) {
+        point.is_done = true;
+        return;
+    }
+
+    point.is_done = Boolean(value);
+};
+</script>
+
+<template>
+    <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-6 text-(--card-foreground) shadow-(--shadow-sm) sm:p-8">
+        <h2 v-if="title" class="text-2xl font-semibold">{{ title }}</h2>
+        <p v-if="description" class="mt-3 text-lg text-(--muted-foreground)">{{ description }}</p>
+
+        <form class="mt-6 grid gap-4" @submit.prevent="emit('submit')">
+            <div class="grid gap-4 md:grid-cols-2">
+                <div class="flex flex-col gap-1">
+                    <FloatLabel variant="on">
+                        <Select
+                            input-id="homework-center"
+                            v-model="form.center_id"
+                            :options="centers"
+                            option-label="name"
+                            option-value="id"
+                            filter
+                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            :disabled="lockCenterAndDate"
+                        />
+                        <FormFieldLabel for-id="homework-center" :text="t('homeworks.center')" />
+                    </FloatLabel>
+                    <small v-if="form.errors.center_id" class="text-sm text-red-600">{{ form.errors.center_id }}</small>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <FloatLabel variant="on">
+                        <DatePicker
+                            input-id="homework-date"
+                            v-model="dateValue"
+                            show-icon
+                            icon-display="input"
+                            date-format="yy-mm-dd"
+                            :manual-input="false"
+                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            :disabled="lockCenterAndDate"
+                        />
+                        <FormFieldLabel for-id="homework-date" :text="t('homeworks.date')" />
+                    </FloatLabel>
+                    <small v-if="form.errors.date" class="text-sm text-red-600">{{ form.errors.date }}</small>
+                </div>
+            </div>
+
+            <div v-if="!lockCenterAndDate" class="flex justify-end">
+                <Button
+                    type="button"
+                    icon="pi pi-refresh"
+                    :label="t('homeworks.loadStudents')"
+                    severity="secondary"
+                    :disabled="!form.center_id || !form.date"
+                    @click="emit('reload')"
+                />
+            </div>
+
+            <div class="rounded-md border border-(--border)">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-(--border) bg-(--muted)/35 px-4 py-3">
+                    <div>
+                        <h3 class="text-lg font-semibold">{{ t('homeworks.studentsList') }}</h3>
+                        <p class="text-sm text-(--muted-foreground)">{{ t('homeworks.studentsHint') }}</p>
+                    </div>
+                    <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
+                        {{ t('homeworks.selectedPointsTotal', { points: totalDonePoints }) }}
+                    </div>
+                </div>
+
+                <div v-if="form.items.length === 0" class="px-4 py-6 text-sm text-(--muted-foreground)">
+                    {{ t('homeworks.noStudentsLoaded') }}
+                </div>
+
+                <div v-else class="divide-y divide-(--border)">
+                    <section
+                        v-for="(item, itemIndex) in form.items"
+                        :key="item.student_id"
+                        class="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,18rem)_minmax(11rem,13rem)_1fr]"
+                    >
+                        <div class="min-w-0">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate font-semibold">{{ item.full_name }}</p>
+                                    <p class="mt-1 text-xs text-(--muted-foreground)">
+                                        {{ item.plan_name || t('common.na') }}
+                                        <span v-if="item.group_name">/ {{ item.group_name }}</span>
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    icon="pi pi-history"
+                                    severity="secondary"
+                                    text
+                                    rounded
+                                    size="small"
+                                    :aria-label="t('common.history')"
+                                    @click="openHistory(item)"
+                                />
+                            </div>
+
+                            <div class="mt-3 inline-flex rounded-md border border-(--border) bg-(--muted)/45 px-2 py-1 text-xs font-medium text-(--muted-foreground)">
+                                {{ t('homeworks.balance') }}: {{ item.points_balance ?? 0 }}
+                            </div>
+
+                            <small
+                                v-if="form.errors[`items.${itemIndex}.student_id`]"
+                                class="mt-2 block text-xs text-red-600"
+                            >
+                                {{ form.errors[`items.${itemIndex}.student_id`] }}
+                            </small>
+                        </div>
+
+                        <div class="rounded-md border border-(--border) bg-(--background) p-2.5 text-sm">
+                            <p class="text-xs font-medium text-(--muted-foreground)">{{ t('homeworks.progress') }}</p>
+                            <p class="mt-2 line-clamp-3 font-semibold">
+                                {{ item.current_plan_point_name || t('homeworks.notStarted') }}
+                            </p>
+                        </div>
+
+                        <div class="min-w-0">
+                            <div v-if="!item.points?.length" class="rounded-md border border-dashed border-(--border) px-4 py-5 text-sm text-(--muted-foreground)">
+                                {{ t('homeworks.noPlanPoints') }}
+                            </div>
+
+                            <div v-else class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-10">
+                                <label
+                                    v-for="(point, pointIndex) in item.points"
+                                    :key="point.plan_point_id"
+                                    class="flex min-h-24 cursor-pointer flex-col justify-between rounded-md border border-(--border) bg-(--background) p-2 text-sm transition-colors"
+                                    :class="[
+                                        point.is_done ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100' : 'hover:border-(--primary)',
+                                        point.is_locked ? 'cursor-default opacity-80' : '',
+                                    ]"
+                                >
+                                    <span class="line-clamp-2 font-medium leading-5">{{ point.name }}</span>
+                                    <span class="mt-1 text-xs text-(--muted-foreground)">
+                                        {{ t('homeworks.pointValue', { points: point.points ?? 0 }) }}
+                                    </span>
+                                    <span class="mt-2 flex items-center justify-between gap-2">
+                                        <span class="text-xs font-medium">
+                                            {{ point.is_locked ? t('homeworks.awarded') : t('homeworks.done') }}
+                                        </span>
+                                        <Checkbox
+                                            :model-value="Boolean(point.is_done)"
+                                            binary
+                                            :input-id="`homework-${item.student_id}-${point.plan_point_id}`"
+                                            :disabled="Boolean(point.is_locked)"
+                                            @update:model-value="togglePoint(point, $event)"
+                                        />
+                                    </span>
+                                    <small
+                                        v-if="form.errors[`items.${itemIndex}.points.${pointIndex}.plan_point_id`]"
+                                        class="mt-2 text-xs text-red-600"
+                                    >
+                                        {{ form.errors[`items.${itemIndex}.points.${pointIndex}.plan_point_id`] }}
+                                    </small>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div class="mt-2 flex justify-end gap-2">
+                <Button type="button" :label="t('common.cancel')" severity="secondary" text @click="emit('cancel')" />
+                <Button type="submit" :label="submitLabel" :loading="form.processing" />
+            </div>
+        </form>
+
+        <Dialog
+            v-model:visible="historyVisible"
+            modal
+            :header="historyStudent ? `${t('homeworks.pointsHistory')} - ${historyStudent.full_name}` : t('homeworks.pointsHistory')"
+            class="w-[min(920px,95vw)]"
+        >
+            <div v-if="historyLoading" class="py-6 text-sm text-(--muted-foreground)">
+                {{ t('common.loading') }}
+            </div>
+            <div v-else-if="historyRows.length === 0" class="py-6 text-sm text-(--muted-foreground)">
+                {{ t('homeworks.noHistory') }}
+            </div>
+            <div v-else class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-(--border)">
+                    <thead>
+                        <tr class="text-sm">
+                            <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.historyDate') }}</th>
+                            <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.planPoint') }}</th>
+                            <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.points') }}</th>
+                            <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.balanceAfter') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-(--border)">
+                        <tr v-for="row in historyRows" :key="row.id" class="text-sm">
+                            <td class="px-3 py-2">{{ row.date }}</td>
+                            <td class="px-3 py-2">{{ row.plan_point_name || t('common.na') }}</td>
+                            <td class="px-3 py-2">{{ row.points }}</td>
+                            <td class="px-3 py-2">{{ row.balance_after }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </Dialog>
+    </article>
+</template>

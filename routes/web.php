@@ -3,8 +3,10 @@
 use App\Http\Controllers\Admin\AbsenceRuleController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\CenterController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EvaluationController;
 use App\Http\Controllers\Admin\GroupController;
+use App\Http\Controllers\Admin\HomeworkController;
 use App\Http\Controllers\Admin\MessageTemplateController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\RoleController;
@@ -22,6 +24,9 @@ Route::redirect('/', '/admin');
 Route::get('evaluations/report/{publicId}', [EvaluationController::class, 'report'])
     ->name('evaluations.report');
 
+Route::get('groups/homeworks/{publicId}', [GroupController::class, 'homeworkReport'])
+    ->name('groups.homeworks.report');
+
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::middleware('guest')->group(function (): void {
         Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -34,7 +39,8 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
 
     Route::middleware(['auth:web'])->group(function (): void {
         Route::redirect('/', '/admin/dashboard')->name('index');
-        Route::get('dashboard', fn () => Inertia::render('Admin/Dashboard'))
+        Route::get('dashboard', DashboardController::class)
+            ->middleware('role:admin')
             ->name('dashboard');
 
         Route::prefix('whatsapp')
@@ -83,6 +89,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('evaluations/records', [EvaluationController::class, 'records'])->name('evaluations.records');
         Route::post('evaluations/{evaluation}/absence-alerts', [EvaluationController::class, 'sendAbsenceAlerts'])->name('evaluations.absence-alerts');
         Route::resource('evaluations', EvaluationController::class)->except(['show']);
+
+        Route::get('homeworks/records', [HomeworkController::class, 'records'])->name('homeworks.records');
+        Route::get('homeworks/students/{student}/point-history', [HomeworkController::class, 'pointHistory'])->name('homeworks.students.point-history');
+        Route::resource('homeworks', HomeworkController::class)->except(['show']);
 
         Route::get('absence-rules/records', [AbsenceRuleController::class, 'records'])->name('absence-rules.records');
         Route::resource('absence-rules', AbsenceRuleController::class)->except(['show']);
