@@ -5,14 +5,14 @@ namespace App\Exports;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
+use Maatwebsite\Excel\Events\AfterSheet;
 
-class StudentsExport implements FromCollection, ShouldAutoSize, WithHeadings, WithStrictNullComparison
+class StudentsExport implements FromCollection, ShouldAutoSize, WithEvents, WithHeadings, WithStrictNullComparison
 {
-    public function __construct(private readonly Collection $rows)
-    {
-    }
+    public function __construct(private readonly Collection $rows) {}
 
     public function collection(): Collection
     {
@@ -66,6 +66,18 @@ class StudentsExport implements FromCollection, ShouldAutoSize, WithHeadings, Wi
             'admin_name',
             'admin_id',
             'is_active',
+        ];
+    }
+
+    /**
+     * @return array<class-string, callable>
+     */
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => static function (AfterSheet $event): void {
+                $event->sheet->getDelegate()->setRightToLeft(true);
+            },
         ];
     }
 }

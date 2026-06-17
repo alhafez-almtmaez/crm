@@ -24,6 +24,11 @@ class Plan extends Model
         return $this->hasMany(Student::class, 'plan_type_id');
     }
 
+    public function points(): HasMany
+    {
+        return $this->hasMany(PlanPoint::class, 'plan_id');
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

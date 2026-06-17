@@ -1,16 +1,16 @@
 <?php
 
-use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\Admin\RoleController;
-use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\AbsenceRuleController;
-use App\Http\Controllers\Admin\MessageTemplateController;
-use App\Http\Controllers\Admin\CenterController;
-use App\Http\Controllers\Admin\GroupController;
-use App\Http\Controllers\Admin\StudentController;
-use App\Http\Controllers\Admin\EvaluationController;
-use App\Http\Controllers\Admin\SystemSettingsController;
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\CenterController;
+use App\Http\Controllers\Admin\EvaluationController;
+use App\Http\Controllers\Admin\GroupController;
+use App\Http\Controllers\Admin\MessageTemplateController;
+use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\SystemSettingsController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WhatsAppController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordController;
@@ -57,6 +57,8 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::resource('roles', RoleController::class)->except(['show']);
 
         Route::get('plans/records', [PlanController::class, 'records'])->name('plans.records');
+        Route::get('plans/{plan}/points/export', [PlanController::class, 'exportPoints'])->name('plans.points.export');
+        Route::post('plans/{plan}/points/import', [PlanController::class, 'importPoints'])->name('plans.points.import');
         Route::get('plans/{plan}/activity-logs', [PlanController::class, 'activityLogs'])->name('plans.activity-logs');
         Route::resource('plans', PlanController::class)->except(['show']);
 

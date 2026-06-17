@@ -2,18 +2,20 @@
 
 namespace App\Services\Admin;
 
+use App\Imports\PlanPointsImport;
 use App\Models\Plan;
 use App\Services\System\DateTimeFormatterService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\Facades\Excel;
 
 class PlanService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -28,6 +30,7 @@ class PlanService
 
         $query = Plan::query()
             ->select(['id', 'name', 'created_at'])
+            ->withCount('points')
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where('name', 'like', "%{$search}%");
             })
@@ -46,7 +49,7 @@ class PlanService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): Plan
     {
@@ -56,7 +59,7 @@ class PlanService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(Plan $plan, array $data): Plan
     {
@@ -70,5 +73,39 @@ class PlanService
     public function delete(Plan $plan): void
     {
         $plan->delete();
+    }
+
+    public function pointRows(Plan $plan): Collection
+    {
+        return $plan->points()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'name',
+                'points',
+                'requires_certificate',
+                'surah_name',
+                'part_name',
+                'three_parts',
+            ]);
+    }
+
+    /**
+     * @return array{imported: int, skipped: int, errors: array<int, string>}
+     */
+    public function importPointFile(Plan $plan, UploadedFile $file): array
+    {
+        $import = new PlanPointsImport($plan);
+        $previousErrorReporting = error_reporting();
+
+        try {
+            error_reporting($previousErrorReporting & ~E_DEPRECATED);
+            Excel::import($import, $file);
+        } finally {
+            error_reporting($previousErrorReporting);
+        }
+
+        return $import->result();
     }
 }
