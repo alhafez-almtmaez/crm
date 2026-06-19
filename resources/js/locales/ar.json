@@ -320,6 +320,7 @@
     "done": "تم",
     "awarded": "محتسبة",
     "nextHomework": "للمرة القادمة",
+    "previousNextHomework": "مطلوب سابقًا",
     "balance": "الرصيد",
     "pointsAdjustment": "تعديل الرصيد",
     "pointsAdjustmentHint": "اكتب رقمًا موجبًا للزيادة أو سالبًا للنقصان.",

@@ -136,7 +136,7 @@ class HomeworkService
         return [
             'selected_center_id' => $resolvedCenterId,
             'selected_date' => $resolvedDate,
-            'students' => $existingHomeworkId === null ? $this->studentRowsForCreate($resolvedCenterId) : [],
+            'students' => $existingHomeworkId === null ? $this->studentRowsForCreate($resolvedCenterId, $resolvedDate) : [],
             'existing_homework_id' => $existingHomeworkId !== null ? (int) $existingHomeworkId : null,
         ];
     }
@@ -238,7 +238,7 @@ class HomeworkService
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function studentRowsForCreate(int $centerId): array
+    private function studentRowsForCreate(int $centerId, string $date): array
     {
         $students = Student::query()
             ->with(['plan:id,name', 'group:id,name'])
@@ -256,17 +256,24 @@ class HomeworkService
             ]);
 
         return $students
-            ->map(fn (Student $student): array => $this->studentRowDataForCreate($student))
+            ->map(fn (Student $student): array => $this->studentRowDataForCreate($student, $date))
             ->all();
     }
 
-    private function studentRowDataForCreate(Student $student): array
+    private function studentRowDataForCreate(Student $student, string $date): array
     {
         $planId = $student->plan_type_id !== null ? (int) $student->plan_type_id : null;
         $currentPlanPoint = $planId !== null ? $this->latestCompletedPlanPoint($student, $planId) : null;
+        $previousNextHomeworkAssignments = $planId !== null
+            ? $this->previousNextHomeworkAssignments($student, $planId, $date)
+            : [];
         $points = $planId !== null
             ? $this->nextPlanPoints($student, $planId, $currentPlanPoint)
             : collect();
+
+        if ($planId !== null && $previousNextHomeworkAssignments !== []) {
+            $points = $this->includePreviousNextHomeworkPoints($points, $planId, $previousNextHomeworkAssignments);
+        }
 
         return [
             'student_id' => (int) $student->id,
@@ -278,7 +285,12 @@ class HomeworkService
             'points_adjustment' => 0,
             'points_adjustment_original' => 0,
             'current_plan_point_name' => $currentPlanPoint?->name,
-            'points' => $points->map(fn (PlanPoint $point): array => $this->pointPayload($point))->all(),
+            'points' => $points
+                ->map(fn (PlanPoint $point): array => $this->pointPayload(
+                    $point,
+                    $previousNextHomeworkAssignments[(int) $point->id] ?? null,
+                ))
+                ->all(),
         ];
     }
 
@@ -311,6 +323,9 @@ class HomeworkService
                         'points' => (int) ($planPoint?->points ?? $point->awarded_points),
                         'is_done' => (bool) $point->is_done,
                         'is_next_homework' => (bool) $point->is_next_homework,
+                        'is_previous_next_homework' => false,
+                        'previous_next_homework_date' => null,
+                        'previous_next_homework_date_formatted' => null,
                         'is_locked' => $point->awarded_at !== null,
                     ];
                 })
@@ -639,9 +654,86 @@ class HomeworkService
     }
 
     /**
+     * @param  EloquentCollection<int, PlanPoint>  $points
+     * @param  array<int, array<string, mixed>>  $previousNextHomeworkAssignments
+     */
+    private function includePreviousNextHomeworkPoints(
+        EloquentCollection $points,
+        int $planId,
+        array $previousNextHomeworkAssignments,
+    ) {
+        $loadedIds = $points
+            ->pluck('id')
+            ->map(static fn ($value): int => (int) $value)
+            ->all();
+        $missingIds = array_values(array_diff(array_keys($previousNextHomeworkAssignments), $loadedIds));
+
+        if ($missingIds === []) {
+            return $points;
+        }
+
+        $previousPoints = PlanPoint::query()
+            ->where('plan_id', $planId)
+            ->whereIn('id', $missingIds)
+            ->get();
+
+        return $points
+            ->merge($previousPoints)
+            ->sortBy(static fn (PlanPoint $point): string => sprintf(
+                '%010d-%010d',
+                (int) $point->sort_order,
+                (int) $point->id,
+            ))
+            ->values();
+    }
+
+    /**
+     * @return array<int, array{homework_id: int, date: string, date_formatted: string}>
+     */
+    private function previousNextHomeworkAssignments(Student $student, int $planId, string $beforeDate): array
+    {
+        return HomeworkStudentPoint::query()
+            ->join('homeworks', 'homework_student_points.homework_id', '=', 'homeworks.id')
+            ->join('plan_points', 'homework_student_points.plan_point_id', '=', 'plan_points.id')
+            ->where('homework_student_points.student_id', $student->id)
+            ->where('homework_student_points.is_next_homework', true)
+            ->where('plan_points.plan_id', $planId)
+            ->whereDate('homeworks.date', '<', $beforeDate)
+            ->whereNotExists(function ($query): void {
+                $query
+                    ->select(DB::raw(1))
+                    ->from('student_point_transactions')
+                    ->whereColumn('student_point_transactions.student_id', 'homework_student_points.student_id')
+                    ->whereColumn('student_point_transactions.plan_point_id', 'homework_student_points.plan_point_id')
+                    ->where('student_point_transactions.type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED);
+            })
+            ->orderByDesc('homeworks.date')
+            ->orderByDesc('homeworks.id')
+            ->orderBy('homework_student_points.sort_order')
+            ->get([
+                'homework_student_points.plan_point_id',
+                'homework_student_points.homework_id',
+                'homeworks.date as homework_date',
+            ])
+            ->unique('plan_point_id')
+            ->mapWithKeys(function ($row): array {
+                $date = Carbon::parse((string) $row->homework_date);
+
+                return [
+                    (int) $row->plan_point_id => [
+                        'homework_id' => (int) $row->homework_id,
+                        'date' => $date->toDateString(),
+                        'date_formatted' => $date->locale(app()->getLocale())->translatedFormat('l ، j F ، Y'),
+                    ],
+                ];
+            })
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function pointPayload(PlanPoint $point): array
+    private function pointPayload(PlanPoint $point, ?array $previousNextHomeworkAssignment = null): array
     {
         return [
             'plan_point_id' => (int) $point->id,
@@ -649,6 +741,9 @@ class HomeworkService
             'points' => (int) ($point->points ?? 0),
             'is_done' => false,
             'is_next_homework' => false,
+            'is_previous_next_homework' => $previousNextHomeworkAssignment !== null,
+            'previous_next_homework_date' => $previousNextHomeworkAssignment['date'] ?? null,
+            'previous_next_homework_date_formatted' => $previousNextHomeworkAssignment['date_formatted'] ?? null,
             'is_locked' => false,
         ];
     }

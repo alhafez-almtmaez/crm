@@ -320,6 +320,7 @@
     "done": "Done",
     "awarded": "Awarded",
     "nextHomework": "Next time",
+    "previousNextHomework": "Previously required",
     "balance": "Balance",
     "pointsAdjustment": "Balance Adjustment",
     "pointsAdjustmentHint": "Use a positive number to add points or a negative number to deduct points.",

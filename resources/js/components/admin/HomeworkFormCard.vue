@@ -174,6 +174,27 @@ const toggleNextHomework = (point, value) => {
         point.is_done = false;
     }
 };
+
+const pointCardClass = (point) => {
+    if (point?.is_done) {
+        return [
+            'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100',
+            point?.is_locked ? 'cursor-default opacity-80' : '',
+        ];
+    }
+
+    if (point?.is_previous_next_homework) {
+        return [
+            'border-amber-300 bg-amber-50/70 text-amber-950 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100',
+            point?.is_locked ? 'cursor-default opacity-80' : 'hover:border-amber-500',
+        ];
+    }
+
+    return [
+        'hover:border-(--primary)',
+        point?.is_locked ? 'cursor-default opacity-80' : '',
+    ];
+};
 </script>
 
 <template>
@@ -339,12 +360,18 @@ const toggleNextHomework = (point, value) => {
                                     v-for="(point, pointIndex) in item.points"
                                     :key="point.plan_point_id"
                                     class="flex min-h-20 cursor-pointer flex-col justify-between rounded-md border border-(--border) bg-(--background) p-2 text-xs transition-colors"
-                                    :class="[
-                                        point.is_done ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100' : 'hover:border-(--primary)',
-                                        point.is_locked ? 'cursor-default opacity-80' : '',
-                                    ]"
+                                    :class="pointCardClass(point)"
                                 >
                                     <span class="line-clamp-2 font-medium leading-4">{{ point.name }}</span>
+                                    <span
+                                        v-if="point.is_previous_next_homework"
+                                        class="mt-1 inline-flex w-fit max-w-full items-center rounded-md border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-100"
+                                    >
+                                        {{ t('homeworks.previousNextHomework') }}
+                                        <span v-if="point.previous_next_homework_date_formatted" class="ms-1 font-medium">
+                                            {{ point.previous_next_homework_date_formatted }}
+                                        </span>
+                                    </span>
                                     <span class="mt-1 text-xs text-(--muted-foreground)">
                                         {{ t('homeworks.pointValue', { points: point.points ?? 0 }) }}
                                     </span>

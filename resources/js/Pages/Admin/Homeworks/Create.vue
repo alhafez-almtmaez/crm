@@ -46,6 +46,9 @@ const mapStudents = (rows = []) => rows.map((row) => ({
         points: Number(point.points ?? 0),
         is_done: Boolean(point.is_done ?? false),
         is_next_homework: Boolean(point.is_next_homework ?? false),
+        is_previous_next_homework: Boolean(point.is_previous_next_homework ?? false),
+        previous_next_homework_date: point.previous_next_homework_date ?? null,
+        previous_next_homework_date_formatted: point.previous_next_homework_date_formatted ?? null,
         is_locked: Boolean(point.is_locked ?? false),
     })),
 }));
