@@ -43,7 +43,7 @@ class GroupController extends Controller implements HasMiddleware
     public function homeworkReport(string $publicId): Response
     {
         $report = $this->groupService->homeworkReportPayload($publicId);
-        $title = 'واجبات المجموعة | مشروع الحافظ المتميز';
+        $title = 'واجبات المرة القادمة | مشروع الحافظ المتميز';
         $description = trim(($report['center_name'] ?? '').' / '.($report['group_name'] ?? ''));
         $imageUrl = asset('media/logos/logo.png');
 

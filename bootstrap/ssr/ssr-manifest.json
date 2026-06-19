@@ -54,10 +54,10 @@
     "/build/assets/Homeworks-DDoYLJj-.js"
   ],
   "resources/js/Pages/Admin/Homeworks/Create.vue": [
-    "/build/assets/Create-DvoeK9ol.js"
+    "/build/assets/Create-DoIZUpXo.js"
   ],
   "resources/js/Pages/Admin/Homeworks/Edit.vue": [
-    "/build/assets/Edit-Cvf3SCj7.js"
+    "/build/assets/Edit-MKcseGKN.js"
   ],
   "resources/js/Pages/Admin/MessageTemplates.vue": [
     "/build/assets/MessageTemplates-BbP0Hhaq.js"
@@ -128,12 +128,12 @@
     "/build/assets/Report-CcH8u5Xm.css"
   ],
   "resources/js/Pages/Groups/HomeworkReport.vue": [
-    "/build/assets/HomeworkReport-CMeMonD4.js",
-    "/build/assets/HomeworkReport-C4oATmp4.css"
+    "/build/assets/HomeworkReport-CO23BY9M.js",
+    "/build/assets/HomeworkReport-DAOL3aCc.css"
   ],
-  "resources/js/Pages/Groups/HomeworkReport.vue?vue&type=style&index=0&scoped=cc5088f2&lang.css": [
-    "/build/assets/HomeworkReport-CMeMonD4.js",
-    "/build/assets/HomeworkReport-C4oATmp4.css"
+  "resources/js/Pages/Groups/HomeworkReport.vue?vue&type=style&index=0&scoped=3b814ffb&lang.css": [
+    "/build/assets/HomeworkReport-CO23BY9M.js",
+    "/build/assets/HomeworkReport-DAOL3aCc.css"
   ],
   "resources/js/admin/navItems.js": [
     "/build/assets/AdminBreadcrumbs-HyORiAQe.js"
@@ -169,7 +169,7 @@
     "/build/assets/GroupFormCard-DrXz0_MB.js"
   ],
   "resources/js/components/admin/HomeworkFormCard.vue": [
-    "/build/assets/HomeworkFormCard-83ty9yQQ.js"
+    "/build/assets/HomeworkFormCard-CPDU-jjD.js"
   ],
   "resources/js/components/admin/MessageTemplateFormCard.vue": [
     "/build/assets/MessageTemplateFormCard-DfQg9fL7.js"

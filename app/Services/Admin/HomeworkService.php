@@ -310,6 +310,7 @@ class HomeworkService
                         'name' => (string) ($planPoint?->name ?? ''),
                         'points' => (int) ($planPoint?->points ?? $point->awarded_points),
                         'is_done' => (bool) $point->is_done,
+                        'is_next_homework' => (bool) $point->is_next_homework,
                         'is_locked' => $point->awarded_at !== null,
                     ];
                 })
@@ -434,6 +435,9 @@ class HomeworkService
 
             /** @var HomeworkStudentPoint|null $homeworkPoint */
             $homeworkPoint = $existingPoints->get($planPointId);
+            $isDone = filter_var($pointPayload['is_done'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $isNextHomework = filter_var($pointPayload['is_next_homework'] ?? false, FILTER_VALIDATE_BOOLEAN) && ! $isDone;
+
             if ($homeworkPoint === null) {
                 $homeworkPoint = HomeworkStudentPoint::query()->create([
                     'homework_student_id' => $homeworkStudent->id,
@@ -442,13 +446,27 @@ class HomeworkService
                     'plan_point_id' => $planPointId,
                     'sort_order' => $sortOrder,
                     'is_done' => false,
+                    'is_next_homework' => $isNextHomework,
                     'awarded_points' => 0,
                 ]);
-            } elseif ($homeworkPoint->sort_order !== $sortOrder) {
-                $homeworkPoint->update(['sort_order' => $sortOrder]);
+            } else {
+                $updates = [];
+                if ($homeworkPoint->sort_order !== $sortOrder) {
+                    $updates['sort_order'] = $sortOrder;
+                }
+
+                $nextHomeworkValue = $homeworkPoint->awarded_at === null ? $isNextHomework : false;
+                if ((bool) $homeworkPoint->is_next_homework !== $nextHomeworkValue) {
+                    $updates['is_next_homework'] = $nextHomeworkValue;
+                }
+
+                if ($updates !== []) {
+                    $homeworkPoint->update($updates);
+                    $homeworkPoint->refresh();
+                }
             }
 
-            if (filter_var($pointPayload['is_done'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            if ($isDone) {
                 $this->awardHomeworkPoint($homeworkPoint, $student, $planPoint);
             }
 
@@ -630,6 +648,7 @@ class HomeworkService
             'name' => (string) $point->name,
             'points' => (int) ($point->points ?? 0),
             'is_done' => false,
+            'is_next_homework' => false,
             'is_locked' => false,
         ];
     }

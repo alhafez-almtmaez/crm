@@ -35,6 +35,7 @@ class HomeworkStoreRequest extends FormRequest
             'items.*.points' => ['array'],
             'items.*.points.*.plan_point_id' => ['required', Rule::exists('plan_points', 'id')],
             'items.*.points.*.is_done' => ['boolean'],
+            'items.*.points.*.is_next_homework' => ['boolean'],
         ];
     }
 
@@ -64,6 +65,7 @@ class HomeworkStoreRequest extends FormRequest
                 'points' => array_map(static fn ($point): array => [
                     'plan_point_id' => isset($point['plan_point_id']) ? (int) $point['plan_point_id'] : null,
                     'is_done' => filter_var($point['is_done'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    'is_next_homework' => filter_var($point['is_next_homework'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ], array_filter($points, static fn ($point): bool => is_array($point))),
             ];
         }, $items);

@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\Center;
 use App\Models\Group;
+use App\Models\HomeworkStudentPoint;
 use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentPointTransaction;
@@ -117,7 +118,7 @@ class GroupService
             ->all();
 
         return [
-            'title' => 'واجبات المجموعة',
+            'title' => 'واجبات المرة القادمة',
             'group_name' => $group->name,
             'center_name' => $group->center?->name ?? '-',
             'generated_at' => Carbon::now()->locale('ar')->translatedFormat('l ، j F ، Y'),
@@ -148,9 +149,7 @@ class GroupService
     {
         $planId = $student->plan_type_id !== null ? (int) $student->plan_type_id : null;
         $currentPlanPoint = $planId !== null ? $this->latestCompletedPlanPoint($student, $planId) : null;
-        $tasks = $planId !== null
-            ? $this->nextPlanPoints($student, $planId, $currentPlanPoint)
-            : collect();
+        $tasks = $planId !== null ? $this->latestAssignedNextHomeworkPoints($student, $planId) : collect();
 
         return [
             'number' => $index + 1,
@@ -170,6 +169,38 @@ class GroupService
                 ])
                 ->all(),
         ];
+    }
+
+    /**
+     * @return EloquentCollection<int, PlanPoint>
+     */
+    private function latestAssignedNextHomeworkPoints(Student $student, int $planId): EloquentCollection
+    {
+        $latestHomeworkId = HomeworkStudentPoint::query()
+            ->join('plan_points', 'homework_student_points.plan_point_id', '=', 'plan_points.id')
+            ->join('homeworks', 'homework_student_points.homework_id', '=', 'homeworks.id')
+            ->where('homework_student_points.student_id', $student->id)
+            ->where('homework_student_points.is_next_homework', true)
+            ->where('plan_points.plan_id', $planId)
+            ->orderByDesc('homeworks.date')
+            ->orderByDesc('homeworks.id')
+            ->value('homework_student_points.homework_id');
+
+        if ($latestHomeworkId === null) {
+            return new EloquentCollection;
+        }
+
+        return PlanPoint::query()
+            ->join('homework_student_points', 'plan_points.id', '=', 'homework_student_points.plan_point_id')
+            ->where('homework_student_points.homework_id', $latestHomeworkId)
+            ->where('homework_student_points.student_id', $student->id)
+            ->where('homework_student_points.is_next_homework', true)
+            ->where('plan_points.plan_id', $planId)
+            ->orderBy('homework_student_points.sort_order')
+            ->orderBy('plan_points.sort_order')
+            ->orderBy('plan_points.id')
+            ->select('plan_points.*')
+            ->get();
     }
 
     private function latestCompletedPlanPoint(Student $student, int $planId): ?PlanPoint

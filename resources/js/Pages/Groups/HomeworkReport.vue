@@ -36,7 +36,7 @@ const summaryCards = computed(() => [
     },
     {
         key: 'tasks',
-        label: 'المهام المطلوبة',
+        label: 'واجبات المرة القادمة',
         value: totalTasks.value,
         icon: 'pi pi-list-check',
     },
@@ -113,7 +113,7 @@ const copyReportLink = async () => {
                     <img class="report-logo" :src="logoUrl" alt="Logo">
                     <div>
                         <p class="report-kicker">مشروع الحافظ المتميز</p>
-                        <h1>واجبات المجموعة</h1>
+                        <h1>واجبات المرة القادمة</h1>
                     </div>
                 </div>
 
@@ -149,7 +149,7 @@ const copyReportLink = async () => {
                 </div>
             </section>
 
-            <section class="summary-grid" aria-label="ملخص واجبات المجموعة">
+            <section class="summary-grid" aria-label="ملخص واجبات المرة القادمة">
                 <article
                     v-for="card in summaryCards"
                     :key="card.key"
@@ -164,12 +164,12 @@ const copyReportLink = async () => {
             <div class="section-heading">
                 <div>
                     <p>متابعة الطلاب</p>
-                    <h2>المهام المطلوبة لكل طالب</h2>
+                    <h2>المطلوب للمرة القادمة لكل طالب</h2>
                 </div>
                 <span>{{ rows.length }} طالب</span>
             </div>
 
-            <section class="desktop-table" aria-label="جدول واجبات المجموعة">
+            <section class="desktop-table" aria-label="جدول واجبات المرة القادمة">
                 <table class="report-table">
                     <colgroup>
                         <col class="number-col">
@@ -184,7 +184,7 @@ const copyReportLink = async () => {
                             <th scope="col">اسم الطالب</th>
                             <th scope="col">الخطة</th>
                             <th scope="col">آخر إنجاز</th>
-                            <th scope="col">الواجبات المطلوبة</th>
+                            <th scope="col">واجبات المرة القادمة</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -237,14 +237,14 @@ const copyReportLink = async () => {
                                         </article>
                                     </div>
                                 </div>
-                                <span v-else class="empty-tasks">لا توجد مهام تالية</span>
+                                <span v-else class="empty-tasks">لم يتم تحديد واجب للمرة القادمة</span>
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </section>
 
-            <section class="mobile-list" aria-label="قائمة واجبات المجموعة">
+            <section class="mobile-list" aria-label="قائمة واجبات المرة القادمة">
                 <p v-if="rows.length === 0" class="mobile-empty">لا يوجد طلاب فعالين في هذه المجموعة</p>
 
                 <article
@@ -273,7 +273,7 @@ const copyReportLink = async () => {
                     </div>
 
                     <div class="mobile-tasks">
-                        <span class="mobile-section-label">الواجبات المطلوبة</span>
+                        <span class="mobile-section-label">واجبات المرة القادمة</span>
                         <div v-if="row.tasks.length" class="tasks-stack">
                             <div class="tasks-strip">
                                 <article v-for="task in row.previewTasks" :key="task.id" class="task-chip">
@@ -298,7 +298,7 @@ const copyReportLink = async () => {
                                 </article>
                             </div>
                         </div>
-                        <span v-else class="empty-tasks">لا توجد مهام تالية</span>
+                        <span v-else class="empty-tasks">لم يتم تحديد واجب للمرة القادمة</span>
                     </div>
                 </article>
             </section>

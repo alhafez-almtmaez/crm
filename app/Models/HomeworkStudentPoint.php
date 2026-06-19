@@ -17,6 +17,7 @@ class HomeworkStudentPoint extends Model
         'plan_point_id',
         'sort_order',
         'is_done',
+        'is_next_homework',
         'awarded_points',
         'awarded_at',
     ];
@@ -28,6 +29,7 @@ class HomeworkStudentPoint extends Model
         'plan_point_id' => 'int',
         'sort_order' => 'int',
         'is_done' => 'bool',
+        'is_next_homework' => 'bool',
         'awarded_points' => 'int',
         'awarded_at' => 'datetime',
     ];

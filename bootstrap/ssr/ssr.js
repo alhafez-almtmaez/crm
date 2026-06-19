@@ -335,6 +335,7 @@ var ar_default = {
 		"pointValue": "{points} نقطة",
 		"done": "تم",
 		"awarded": "محتسبة",
+		"nextHomework": "للمرة القادمة",
 		"balance": "الرصيد",
 		"pointsAdjustment": "تعديل الرصيد",
 		"pointsAdjustmentHint": "اكتب رقمًا موجبًا للزيادة أو سالبًا للنقصان.",
@@ -1006,6 +1007,7 @@ var en_default = {
 		"pointValue": "{points} points",
 		"done": "Done",
 		"awarded": "Awarded",
+		"nextHomework": "Next time",
 		"balance": "Balance",
 		"pointsAdjustment": "Balance Adjustment",
 		"pointsAdjustmentHint": "Use a positive number to add points or a negative number to deduct points.",
@@ -1398,8 +1400,8 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/Groups/Create.vue": () => import("./assets/Create-DfQ8Fs3O.js"),
 		"./Pages/Admin/Groups/Edit.vue": () => import("./assets/Edit-CEYTjaHU.js"),
 		"./Pages/Admin/Groups.vue": () => import("./assets/Groups-CIiXYAOw.js"),
-		"./Pages/Admin/Homeworks/Create.vue": () => import("./assets/Create-DvoeK9ol.js"),
-		"./Pages/Admin/Homeworks/Edit.vue": () => import("./assets/Edit-Cvf3SCj7.js"),
+		"./Pages/Admin/Homeworks/Create.vue": () => import("./assets/Create-DoIZUpXo.js"),
+		"./Pages/Admin/Homeworks/Edit.vue": () => import("./assets/Edit-MKcseGKN.js"),
 		"./Pages/Admin/Homeworks.vue": () => import("./assets/Homeworks-DDoYLJj-.js"),
 		"./Pages/Admin/MessageTemplates/Create.vue": () => import("./assets/Create-BqvoCEyO.js"),
 		"./Pages/Admin/MessageTemplates/Edit.vue": () => import("./assets/Edit-BSAbvDiy.js"),
@@ -1422,7 +1424,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Auth/Login.vue": () => import("./assets/Login-CbLSJO-7.js"),
 		"./Pages/Error.vue": () => import("./assets/Error-DG2VQrdd.js"),
 		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-Co3iBZMA.js"),
-		"./Pages/Groups/HomeworkReport.vue": () => import("./assets/HomeworkReport-CMeMonD4.js")
+		"./Pages/Groups/HomeworkReport.vue": () => import("./assets/HomeworkReport-CO23BY9M.js")
 	})),
 	setup({ App, props, plugin }) {
 		const i18n = createAppI18n(props.initialPage?.props?.systemSettings?.language ?? "en");

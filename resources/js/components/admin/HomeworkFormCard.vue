@@ -153,10 +153,26 @@ const openHistory = async (item) => {
 const togglePoint = (point, value) => {
     if (point?.is_locked) {
         point.is_done = true;
+        point.is_next_homework = false;
         return;
     }
 
     point.is_done = Boolean(value);
+    if (point.is_done) {
+        point.is_next_homework = false;
+    }
+};
+
+const toggleNextHomework = (point, value) => {
+    if (point?.is_locked) {
+        point.is_next_homework = false;
+        return;
+    }
+
+    point.is_next_homework = Boolean(value);
+    if (point.is_next_homework) {
+        point.is_done = false;
+    }
 };
 </script>
 
@@ -342,6 +358,18 @@ const togglePoint = (point, value) => {
                                             :input-id="`homework-${item.student_id}-${point.plan_point_id}`"
                                             :disabled="Boolean(point.is_locked)"
                                             @update:model-value="togglePoint(point, $event)"
+                                        />
+                                    </span>
+                                    <span class="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-(--border) px-2 py-1">
+                                        <span class="text-xs font-medium text-(--muted-foreground)">
+                                            {{ t('homeworks.nextHomework') }}
+                                        </span>
+                                        <Checkbox
+                                            :model-value="Boolean(point.is_next_homework)"
+                                            binary
+                                            :input-id="`homework-next-${item.student_id}-${point.plan_point_id}`"
+                                            :disabled="Boolean(point.is_locked)"
+                                            @update:model-value="toggleNextHomework(point, $event)"
                                         />
                                     </span>
                                     <small

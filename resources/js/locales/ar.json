@@ -319,6 +319,7 @@
     "pointValue": "{points} نقطة",
     "done": "تم",
     "awarded": "محتسبة",
+    "nextHomework": "للمرة القادمة",
     "balance": "الرصيد",
     "pointsAdjustment": "تعديل الرصيد",
     "pointsAdjustmentHint": "اكتب رقمًا موجبًا للزيادة أو سالبًا للنقصان.",
