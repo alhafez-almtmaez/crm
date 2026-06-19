@@ -9,13 +9,30 @@ const props = defineProps({
 });
 
 const copied = ref(false);
-const rows = computed(() => props.report.rows ?? []);
+const searchTerm = ref('');
+const attendanceValue = (row) => Number(row.attendance ?? 1);
+const rows = computed(() => (props.report.rows ?? []).filter((row) => attendanceValue(row) !== 5));
 const logoUrl = computed(() => '/media/logos/logo.png');
 const scoreLabel = computed(() => props.report.primary_score_label || 'الحفظ');
 
-const attendanceValue = (row) => Number(row.attendance ?? 1);
 const hasScore = (value) => value !== null && value !== undefined && value !== '';
 const scoreValue = (value) => (hasScore(value) ? value : '-');
+const normalizeSearchText = (value) => String(value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+const normalizedSearchTerm = computed(() => normalizeSearchText(searchTerm.value));
+const visibleRows = computed(() => {
+    if (!normalizedSearchTerm.value) {
+        return rows.value;
+    }
+
+    return rows.value.filter((row) => normalizeSearchText(row.full_name).includes(normalizedSearchTerm.value));
+});
+const emptyRowsMessage = computed(() => (rows.value.length === 0 ? 'لا توجد بيانات لهذا التقييم' : 'لا توجد نتائج مطابقة للاسم'));
 
 const summary = computed(() => {
     const totals = {
@@ -24,7 +41,6 @@ const summary = computed(() => {
         excused: 0,
         absent: 0,
         frozen: 0,
-        exempt: 0,
         perfect: 0,
         scorePercent: null,
     };
@@ -41,8 +57,6 @@ const summary = computed(() => {
             totals.absent += 1;
         } else if (attendance === 4) {
             totals.frozen += 1;
-        } else if (attendance === 5) {
-            totals.exempt += 1;
         } else {
             totals.present += 1;
         }
@@ -71,7 +85,6 @@ const summaryCards = computed(() => [
     { key: 'absent', label: 'غياب', value: summary.value.absent, icon: 'pi pi-times-circle', tone: 'red' },
     { key: 'excused', label: 'بعذر', value: summary.value.excused, icon: 'pi pi-info-circle', tone: 'amber' },
     { key: 'frozen', label: 'مجمد', value: summary.value.frozen, icon: 'pi pi-lock', tone: 'cyan' },
-    { key: 'exempt', label: 'معفى', value: summary.value.exempt, icon: 'pi pi-minus-circle', tone: 'neutral' },
     { key: 'score', label: 'متوسط الدرجات', value: summary.value.scorePercent === null ? '-' : `${summary.value.scorePercent}%`, icon: 'pi pi-chart-line', tone: 'blue' },
 ]);
 
@@ -113,10 +126,6 @@ const rowToneClass = (row, index) => {
         return 'is-frozen';
     }
 
-    if (attendance === 5) {
-        return 'is-exempt';
-    }
-
     return index % 2 === 0 ? 'is-odd' : 'is-even';
 };
 
@@ -147,10 +156,6 @@ const statusClass = (row) => {
         return 'status-pill--frozen';
     }
 
-    if (attendance === 5) {
-        return 'status-pill--exempt';
-    }
-
     return 'status-pill--present';
 };
 
@@ -169,10 +174,6 @@ const statusLabel = (row) => {
         return 'مجمد';
     }
 
-    if (attendance === 5) {
-        return 'معفى';
-    }
-
     return row.is_perfect ? 'ممتاز' : 'حاضر';
 };
 
@@ -189,10 +190,6 @@ const stateMessage = (row) => {
 
     if (attendance === 4) {
         return `مجمد من ${row.freeze_from ?? '-'} إلى ${row.freeze_to ?? '-'}`;
-    }
-
-    if (attendance === 5) {
-        return 'معفى من الحضور';
     }
 
     return '';
@@ -306,7 +303,6 @@ const copyReportLink = async () => {
                 <span><i class="legend-dot legend-dot--excused" />غائب بعذر</span>
                 <span><i class="legend-dot legend-dot--absent" />غائب</span>
                 <span><i class="legend-dot legend-dot--frozen" />مجمد</span>
-                <span><i class="legend-dot legend-dot--exempt" />معفى</span>
             </div>
 
             <div class="section-heading">
@@ -314,7 +310,20 @@ const copyReportLink = async () => {
                     <p>النتائج التفصيلية</p>
                     <h2>كشف تقييم الطلاب</h2>
                 </div>
-                <span>{{ rows.length }} طالب</span>
+                <div class="section-tools">
+                    <label class="search-field print-hidden" for="report-student-search">
+                        <i class="pi pi-search" aria-hidden="true" />
+                        <input
+                            id="report-student-search"
+                            v-model="searchTerm"
+                            type="search"
+                            autocomplete="off"
+                            placeholder="بحث بالاسم"
+                            aria-label="بحث بالاسم"
+                        >
+                    </label>
+                    <span>{{ visibleRows.length }} طالب</span>
+                </div>
             </div>
 
             <section class="desktop-table" aria-label="جدول تقييمات الطلاب">
@@ -332,12 +341,12 @@ const copyReportLink = async () => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-if="rows.length === 0">
-                            <td colspan="8" class="report-empty">لا توجد بيانات لهذا التقييم</td>
+                        <tr v-if="visibleRows.length === 0">
+                            <td colspan="8" class="report-empty">{{ emptyRowsMessage }}</td>
                         </tr>
 
                         <tr
-                            v-for="(row, index) in rows"
+                            v-for="(row, index) in visibleRows"
                             :key="row.item_id"
                             class="report-row"
                             :class="rowToneClass(row, index)"
@@ -346,7 +355,6 @@ const copyReportLink = async () => {
                                 <span>{{ row.number }}</span>
                                 <i v-if="row.is_perfect" class="pi pi-trophy report-icon" aria-hidden="true" />
                                 <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock report-icon" aria-hidden="true" />
-                                <i v-else-if="attendanceValue(row) === 5" class="pi pi-minus-circle report-icon" aria-hidden="true" />
                             </td>
                             <td class="report-name">{{ row.full_name }}</td>
                             <td>
@@ -358,11 +366,10 @@ const copyReportLink = async () => {
                                 <span class="status-pill" :class="statusClass(row)">
                                     <i v-if="row.is_perfect" class="pi pi-trophy" aria-hidden="true" />
                                     <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock" aria-hidden="true" />
-                                    <i v-else-if="attendanceValue(row) === 5" class="pi pi-minus-circle" aria-hidden="true" />
                                     {{ statusLabel(row) }}
                                 </span>
                             </td>
-                            <template v-if="[2, 3, 4, 5].includes(attendanceValue(row))">
+                            <template v-if="[2, 3, 4].includes(attendanceValue(row))">
                                 <td colspan="3" class="report-state">{{ stateMessage(row) }}</td>
                             </template>
                             <template v-else>
@@ -386,10 +393,10 @@ const copyReportLink = async () => {
             </section>
 
             <section class="mobile-list" aria-label="قائمة تقييمات الطلاب">
-                <p v-if="rows.length === 0" class="mobile-empty">لا توجد بيانات لهذا التقييم</p>
+                <p v-if="visibleRows.length === 0" class="mobile-empty">{{ emptyRowsMessage }}</p>
 
                 <article
-                    v-for="(row, index) in rows"
+                    v-for="(row, index) in visibleRows"
                     :key="`mobile-${row.item_id}`"
                     class="student-card"
                     :class="rowToneClass(row, index)"
@@ -403,7 +410,6 @@ const copyReportLink = async () => {
                                     <span class="status-pill" :class="statusClass(row)">
                                         <i v-if="row.is_perfect" class="pi pi-trophy" aria-hidden="true" />
                                         <i v-else-if="attendanceValue(row) === 4" class="pi pi-lock" aria-hidden="true" />
-                                        <i v-else-if="attendanceValue(row) === 5" class="pi pi-minus-circle" aria-hidden="true" />
                                         {{ statusLabel(row) }}
                                     </span>
                                     <span class="plan-badge" :class="planBadgeClass(row)">
@@ -414,7 +420,7 @@ const copyReportLink = async () => {
                         </div>
                     </div>
 
-                    <div v-if="[2, 3, 4, 5].includes(attendanceValue(row))" class="state-band">
+                    <div v-if="[2, 3, 4].includes(attendanceValue(row))" class="state-band">
                         {{ stateMessage(row) }}
                     </div>
                     <div v-else class="scores-grid">
@@ -742,10 +748,6 @@ const copyReportLink = async () => {
     background: #06b6d4;
 }
 
-.legend-dot--exempt {
-    background: #64748b;
-}
-
 .section-heading {
     display: flex;
     align-items: end;
@@ -771,7 +773,50 @@ const copyReportLink = async () => {
     font-weight: 900;
 }
 
-.section-heading > span {
+.section-tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.search-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: min(320px, 48vw);
+    min-height: 42px;
+    border: 1px solid #dbe5ef;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #64748b;
+    padding: 0 12px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.search-field:focus-within {
+    border-color: #016e3d;
+    box-shadow: 0 0 0 3px rgba(1, 110, 61, 0.12);
+}
+
+.search-field input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #172033;
+    font: inherit;
+    font-size: 0.92rem;
+    font-weight: 800;
+}
+
+.search-field input::placeholder {
+    color: #94a3b8;
+}
+
+.section-tools > span {
     border: 1px solid #dbe5ef;
     border-radius: 8px;
     background: #ffffff;
@@ -839,10 +884,6 @@ const copyReportLink = async () => {
 
 .report-row.is-frozen {
     background: #cffafe;
-}
-
-.report-row.is-exempt {
-    background: #e2e8f0;
 }
 
 .report-index {
@@ -966,10 +1007,6 @@ const copyReportLink = async () => {
     background: #06b6d4;
 }
 
-.student-card.is-exempt::before {
-    background: #64748b;
-}
-
 .student-card__header {
     display: block;
 }
@@ -1061,11 +1098,6 @@ const copyReportLink = async () => {
 .status-pill--frozen {
     background: #cffafe;
     color: #155e75;
-}
-
-.status-pill--exempt {
-    background: #e2e8f0;
-    color: #334155;
 }
 
 .scores-grid {
@@ -1214,8 +1246,12 @@ const copyReportLink = async () => {
         display: grid;
     }
 
-    .section-heading > span {
-        justify-self: start;
+    .section-tools {
+        justify-content: flex-start;
+    }
+
+    .search-field {
+        width: 100%;
     }
 
     .desktop-table {
