@@ -37,6 +37,8 @@ return [
         'users',
         'roles',
         'plans',
+        'plan_weight_rules',
+        'monthly_plans',
         'centers',
         'groups',
         'students',

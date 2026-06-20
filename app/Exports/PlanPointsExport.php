@@ -18,8 +18,11 @@ class PlanPointsExport implements FromCollection, ShouldAutoSize, WithEvents, Wi
     {
         return $this->rows->map(static fn ($row): array => [
             $row->id,
+            $row->sort_order,
             $row->name,
             $row->points,
+            $row->weight,
+            (bool) $row->is_standalone ? 1 : null,
             (bool) $row->requires_certificate ? 1 : null,
             $row->surah_name,
             $row->part_name,
@@ -34,8 +37,11 @@ class PlanPointsExport implements FromCollection, ShouldAutoSize, WithEvents, Wi
     {
         return [
             'id',
+            'sort_order',
             'خطة التسميع',
             'النقاط',
+            'الوزن',
+            'منفرد',
             'أخذ الشهادة',
             'اسم السورة',
             'اسم الجزء',

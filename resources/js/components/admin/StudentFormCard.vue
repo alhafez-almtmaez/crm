@@ -429,6 +429,17 @@ watch(
                     <small v-if="form.errors.admin_id" class="text-sm text-red-600">{{ form.errors.admin_id }}</small>
                 </div>
 
+                <PrimeFloatField
+                    id="student-max-daily-weight"
+                    v-model="form.max_daily_weight"
+                    :label="t('students.maxDailyWeight')"
+                    input-type="number"
+                    :input-props="{ min: '0.01', step: '0.25' }"
+                    required
+                    :invalid="Boolean(form.errors.max_daily_weight)"
+                    :error="form.errors.max_daily_weight"
+                />
+
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
                         <Select

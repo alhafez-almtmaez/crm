@@ -36,6 +36,8 @@ class Student extends Model
         'group_id',
         'plan_type_id',
         'current_plan_point_id',
+        'max_daily_weight',
+        'monthly_plan_cursor_point_id',
         'admin_id',
         'is_active',
         'deducted_points_count',
@@ -46,6 +48,8 @@ class Student extends Model
         'date_of_birth' => 'date',
         'is_active' => 'int',
         'current_plan_point_id' => 'int',
+        'max_daily_weight' => 'decimal:2',
+        'monthly_plan_cursor_point_id' => 'int',
         'deducted_points_count' => 'int',
         'points_balance' => 'int',
     ];
@@ -68,6 +72,11 @@ class Student extends Model
     public function currentPlanPoint(): BelongsTo
     {
         return $this->belongsTo(PlanPoint::class, 'current_plan_point_id');
+    }
+
+    public function monthlyPlanCursorPoint(): BelongsTo
+    {
+        return $this->belongsTo(PlanPoint::class, 'monthly_plan_cursor_point_id');
     }
 
     public function admin(): BelongsTo
@@ -105,6 +114,11 @@ class Student extends Model
         return $this->hasMany(StudentPointTransaction::class);
     }
 
+    public function monthlyPlans(): HasMany
+    {
+        return $this->hasMany(StudentMonthlyPlan::class);
+    }
+
     public function setParentPhoneNumberAttribute(mixed $value): void
     {
         $this->attributes['parent_phone_number'] = PhoneNumberHelper::normalizeForStorage($value);
@@ -134,6 +148,8 @@ class Student extends Model
                 'group_id',
                 'plan_type_id',
                 'current_plan_point_id',
+                'max_daily_weight',
+                'monthly_plan_cursor_point_id',
                 'admin_id',
                 'is_active',
                 'deducted_points_count',

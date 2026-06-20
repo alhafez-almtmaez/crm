@@ -188,6 +188,7 @@ class StudentService
                 'current_plan_points.name as plan_point_name',
                 'students.current_plan_point_id as plan_point_id',
                 'students.points_balance',
+                'students.max_daily_weight',
                 'admins.name as admin_name',
                 'students.admin_id',
                 'students.is_active',
@@ -229,6 +230,7 @@ class StudentService
             'center_id' => isset($data['center_id']) ? (int) $data['center_id'] : null,
             'group_id' => isset($data['group_id']) ? (int) $data['group_id'] : null,
             'plan_type_id' => isset($data['plan_type_id']) ? (int) $data['plan_type_id'] : null,
+            'max_daily_weight' => isset($data['max_daily_weight']) ? (float) $data['max_daily_weight'] : 2,
             'admin_id' => $this->resolveAdminId($data),
             'is_active' => (int) ($data['is_active'] ?? 1),
         ];

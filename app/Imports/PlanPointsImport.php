@@ -23,6 +23,10 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
 
     private ?bool $usesIdColumn = null;
 
+    private ?bool $usesSortOrderColumn = null;
+
+    private ?bool $usesWeightColumns = null;
+
     public function __construct(private readonly Plan $plan) {}
 
     public function collection(Collection $rows): void
@@ -36,23 +40,33 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
 
             if ($this->isHeadingRow($values)) {
                 $this->usesIdColumn ??= $this->headingHasIdColumn($values);
+                $this->usesSortOrderColumn ??= $this->headingHasSortOrderColumn($values, $this->usesIdColumn());
+                $this->usesWeightColumns ??= $this->headingHasWeightColumns($values, $this->nameOffset());
 
                 continue;
             }
 
-            $usesIdColumn = $this->usesIdColumn();
-            $offset = $usesIdColumn ? 1 : 0;
+            $nameOffset = $this->nameOffset();
+            $usesWeightColumns = $this->usesWeightColumns();
+            $certificateOffset = $usesWeightColumns ? $nameOffset + 4 : $nameOffset + 2;
+            $surahOffset = $usesWeightColumns ? $nameOffset + 5 : $nameOffset + 3;
+            $partOffset = $usesWeightColumns ? $nameOffset + 6 : $nameOffset + 4;
+            $threePartsOffset = $usesWeightColumns ? $nameOffset + 7 : $nameOffset + 5;
+            $importedWeight = $usesWeightColumns ? $this->floatOrNull($values[$nameOffset + 2] ?? null) : null;
 
             $payload = [
-                'id' => $usesIdColumn ? $this->intOrNull($values[0] ?? null) : null,
+                'id' => $this->usesIdColumn() ? $this->intOrNull($values[0] ?? null) : null,
                 'plan_id' => $this->plan->id,
-                'sort_order' => $sortOrder,
-                'name' => $this->nullIfEmpty($values[$offset] ?? null),
-                'points' => $this->intOrNull($values[$offset + 1] ?? null),
-                'requires_certificate' => $this->boolValue($values[$offset + 2] ?? null),
-                'surah_name' => $this->nullIfEmpty($values[$offset + 3] ?? null),
-                'part_name' => $this->nullIfEmpty($values[$offset + 4] ?? null),
-                'three_parts' => $this->nullIfEmpty($values[$offset + 5] ?? null),
+                'sort_order' => $this->usesSortOrderColumn() ? ($this->intOrNull($values[$this->usesIdColumn() ? 1 : 0] ?? null) ?? $sortOrder) : $sortOrder,
+                'name' => $this->nullIfEmpty($values[$nameOffset] ?? null),
+                'points' => $this->intOrNull($values[$nameOffset + 1] ?? null),
+                'weight' => $importedWeight ?? 1,
+                'is_standalone' => $usesWeightColumns ? $this->boolValue($values[$nameOffset + 3] ?? null) : false,
+                'plan_weight_rule_id' => null,
+                'requires_certificate' => $this->boolValue($values[$certificateOffset] ?? null),
+                'surah_name' => $this->nullIfEmpty($values[$surahOffset] ?? null),
+                'part_name' => $this->nullIfEmpty($values[$partOffset] ?? null),
+                'three_parts' => $this->nullIfEmpty($values[$threePartsOffset] ?? null),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -69,6 +83,9 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
                 'sort_order' => ['required', 'integer', 'min:1'],
                 'name' => ['required', 'string', 'max:255'],
                 'points' => ['nullable', 'integer', 'min:0', 'max:999999'],
+                'weight' => ['required', 'numeric', 'min:0', 'max:99'],
+                'is_standalone' => ['boolean'],
+                'plan_weight_rule_id' => ['nullable', 'integer'],
                 'requires_certificate' => ['boolean'],
                 'surah_name' => ['nullable', 'string', 'max:255'],
                 'part_name' => ['nullable', 'string', 'max:255'],
@@ -145,7 +162,7 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
 
     public function endColumn(): string
     {
-        return 'G';
+        return 'J';
     }
 
     public function limit(): int
@@ -191,6 +208,42 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
         return $this->usesIdColumn ??= false;
     }
 
+    private function usesSortOrderColumn(): bool
+    {
+        return $this->usesSortOrderColumn ??= false;
+    }
+
+    private function usesWeightColumns(): bool
+    {
+        return $this->usesWeightColumns ??= false;
+    }
+
+    private function nameOffset(): int
+    {
+        return ($this->usesIdColumn() ? 1 : 0) + ($this->usesSortOrderColumn() ? 1 : 0);
+    }
+
+    /**
+     * @param  array<int, mixed>  $values
+     */
+    private function headingHasSortOrderColumn(array $values, bool $usesIdColumn): bool
+    {
+        $offset = $usesIdColumn ? 1 : 0;
+        $heading = $this->normalizeHeader((string) ($values[$offset] ?? ''));
+
+        return in_array($heading, ['sort_order', 'الترتيب', 'ترتيب'], true);
+    }
+
+    /**
+     * @param  array<int, mixed>  $values
+     */
+    private function headingHasWeightColumns(array $values, int $nameOffset): bool
+    {
+        $heading = $this->normalizeHeader((string) ($values[$nameOffset + 2] ?? ''));
+
+        return in_array($heading, ['weight', 'الوزن'], true);
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
@@ -229,6 +282,16 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
         }
 
         return (int) $raw;
+    }
+
+    private function floatOrNull(mixed $value): ?float
+    {
+        $raw = $this->nullIfEmpty($value);
+        if ($raw === null) {
+            return null;
+        }
+
+        return (float) $raw;
     }
 
     private function boolValue(mixed $value): bool

@@ -55,6 +55,22 @@ export const adminNavItems = [
     {
         groupId: 'lists',
         groupKey: 'nav.lists',
+        labelKey: 'nav.planWeightRules',
+        href: '/admin/plan-weight-rules',
+        icon: 'pi pi-sliders-h',
+        permissions: ['plan_weight_rules.view'],
+    },
+    {
+        groupId: 'student-tools',
+        groupKey: 'nav.studentTools',
+        labelKey: 'nav.monthlyPlans',
+        href: '/admin/monthly-plans',
+        icon: 'pi pi-calendar-clock',
+        permissions: ['monthly_plans.view'],
+    },
+    {
+        groupId: 'lists',
+        groupKey: 'nav.lists',
         labelKey: 'nav.centers',
         href: '/admin/centers',
         icon: 'pi pi-building',

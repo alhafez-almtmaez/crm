@@ -86,6 +86,7 @@ class StudentController extends Controller implements HasMiddleware
                 'center_id' => $student->center_id,
                 'group_id' => $student->group_id,
                 'plan_type_id' => $student->plan_type_id,
+                'max_daily_weight' => $student->max_daily_weight,
                 'admin_id' => $student->admin_id,
                 'is_active' => $student->is_active,
             ],

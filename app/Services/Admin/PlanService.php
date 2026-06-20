@@ -12,7 +12,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class PlanService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly PlanPointWeightClassifier $weightClassifier,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -82,8 +85,11 @@ class PlanService
             ->orderBy('id')
             ->get([
                 'id',
+                'sort_order',
                 'name',
                 'points',
+                'weight',
+                'is_standalone',
                 'requires_certificate',
                 'surah_name',
                 'part_name',
@@ -105,6 +111,12 @@ class PlanService
         } finally {
             error_reporting($previousErrorReporting);
         }
+
+        $plan->points()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->each(fn ($point) => $this->weightClassifier->classifyAndPersist($point));
 
         return $import->result();
     }

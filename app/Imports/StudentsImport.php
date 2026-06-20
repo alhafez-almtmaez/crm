@@ -37,6 +37,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         $studentId = $this->intOrNull(Arr::get($rowData, 'student_id', Arr::get($rowData, 'id')));
         $hasPlanPointColumn = array_key_exists('plan_point_id', $rowData) || array_key_exists('current_plan_point_id', $rowData);
         $hasPointsBalanceColumn = array_key_exists('points_balance', $rowData);
+        $hasMaxDailyWeightColumn = array_key_exists('max_daily_weight', $rowData);
 
         $student = null;
         if ($studentId !== null) {
@@ -66,6 +67,10 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
         if ($hasPointsBalanceColumn) {
             $payload['points_balance'] = $this->intOrNull(Arr::get($rowData, 'points_balance'));
+        }
+
+        if ($hasMaxDailyWeightColumn) {
+            $payload['max_daily_weight'] = $this->floatOrNull(Arr::get($rowData, 'max_daily_weight'));
         }
 
         $rules = [
@@ -111,7 +116,11 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         if ($hasPointsBalanceColumn) {
-            $rules['points_balance'] = ['nullable', 'integer', 'min:0'];
+            $rules['points_balance'] = ['nullable', 'integer'];
+        }
+
+        if ($hasMaxDailyWeightColumn) {
+            $rules['max_daily_weight'] = ['nullable', 'numeric', 'min:0.01', 'max:99'];
         }
 
         $validator = Validator::make($payload, $rules);
@@ -158,6 +167,10 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
         if ($hasPointsBalanceColumn) {
             $payload['points_balance'] = (int) ($validated['points_balance'] ?? 0);
+        }
+
+        if ($hasMaxDailyWeightColumn) {
+            $payload['max_daily_weight'] = (float) ($validated['max_daily_weight'] ?? 2);
         }
 
         if ($student) {
@@ -219,6 +232,20 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         return (int) $trimmed;
+    }
+
+    private function floatOrNull(mixed $value): ?float
+    {
+        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
+            return null;
+        }
+
+        $trimmed = trim((string) $value);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return (float) $trimmed;
     }
 
     private function normalizeDateValue(mixed $value): ?string

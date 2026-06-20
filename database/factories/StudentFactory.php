@@ -43,6 +43,7 @@ class StudentFactory extends Factory
             'center_id' => Center::factory(),
             'group_id' => Group::factory(),
             'plan_type_id' => Plan::factory(),
+            'max_daily_weight' => 2,
             'admin_id' => User::factory(),
             'is_active' => fake()->randomElement([
                 Student::STATUS_ACTIVE,
@@ -71,4 +72,3 @@ class StudentFactory extends Factory
         return $this->state(fn (): array => ['is_active' => Student::STATUS_FROZEN]);
     }
 }
-

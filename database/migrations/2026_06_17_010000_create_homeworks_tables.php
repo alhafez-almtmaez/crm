@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('students', static function (Blueprint $table): void {
             if (! Schema::hasColumn('students', 'points_balance')) {
-                $table->unsignedInteger('points_balance')->default(0)->after('deducted_points_count');
+                $table->integer('points_balance')->default(0)->after('deducted_points_count');
             }
         });
 
@@ -30,8 +30,8 @@ return new class extends Migration
             $table->foreignId('student_id')->nullable()->constrained('students')->nullOnDelete();
             $table->foreignId('plan_id')->nullable()->constrained('plan_types')->nullOnDelete();
             $table->foreignId('current_plan_point_id')->nullable()->constrained('plan_points')->nullOnDelete();
-            $table->unsignedInteger('points_balance_before')->default(0);
-            $table->unsignedInteger('points_balance_after')->default(0);
+            $table->integer('points_balance_before')->default(0);
+            $table->integer('points_balance_after')->default(0);
             $table->timestamps();
 
             $table->unique(['homework_id', 'student_id']);
@@ -61,9 +61,9 @@ return new class extends Migration
             $table->foreignId('homework_student_point_id')->nullable()->constrained('homework_student_points')->nullOnDelete();
             $table->foreignId('plan_point_id')->nullable()->constrained('plan_points')->nullOnDelete();
             $table->string('type', 50)->default('homework_completed')->index();
-            $table->unsignedInteger('points')->default(0);
-            $table->unsignedInteger('balance_before')->default(0);
-            $table->unsignedInteger('balance_after')->default(0);
+            $table->integer('points')->default(0);
+            $table->integer('balance_before')->default(0);
+            $table->integer('balance_after')->default(0);
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 

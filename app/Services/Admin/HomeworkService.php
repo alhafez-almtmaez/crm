@@ -511,12 +511,6 @@ class HomeworkService
         $balanceBefore = (int) $lockedStudent->points_balance;
         $balanceAfter = $balanceBefore + $delta;
 
-        if ($balanceAfter < 0) {
-            throw ValidationException::withMessages([
-                'items' => __('homeworks.points_adjustment_insufficient_balance'),
-            ]);
-        }
-
         $lockedStudent->update(['points_balance' => $balanceAfter]);
         $homeworkStudent->update(['points_adjustment' => $newAdjustment]);
 

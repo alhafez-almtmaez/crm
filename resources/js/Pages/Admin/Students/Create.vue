@@ -38,6 +38,7 @@ const form = useForm({
     center_id: null,
     group_id: null,
     plan_type_id: null,
+    max_daily_weight: 2,
     admin_id: null,
     is_active: 1,
 });

@@ -47,6 +47,7 @@ class StudentStoreRequest extends FormRequest
                 Rule::exists('groups', 'id')->where('center_id', (int) $this->input('center_id')),
             ],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
+            'max_daily_weight' => ['required', 'numeric', 'min:0.01', 'max:99'],
             'admin_id' => [
                 Rule::requiredIf((bool) $this->user()?->hasRole('admin')),
                 'nullable',
@@ -66,6 +67,7 @@ class StudentStoreRequest extends FormRequest
             'date_of_birth' => $this->emptyToNull($this->input('date_of_birth')),
             'group_id' => $this->emptyToNull($this->input('group_id')),
             'admin_id' => $this->emptyToNull($this->input('admin_id')),
+            'max_daily_weight' => $this->input('max_daily_weight', 2),
             'is_active' => $this->input('is_active', 1),
         ]);
     }

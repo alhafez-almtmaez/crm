@@ -20,6 +20,8 @@ const labelKeyBySegment = {
     users: 'breadcrumbs.users',
     roles: 'breadcrumbs.roles',
     plans: 'breadcrumbs.plans',
+    'plan-weight-rules': 'breadcrumbs.planWeightRules',
+    'monthly-plans': 'breadcrumbs.monthlyPlans',
     centers: 'breadcrumbs.centers',
     groups: 'breadcrumbs.groups',
     students: 'breadcrumbs.students',
