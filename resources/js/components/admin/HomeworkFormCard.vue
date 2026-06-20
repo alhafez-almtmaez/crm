@@ -174,6 +174,20 @@ const expectedBalanceAfterAdjustment = (item) => (
     - Number(item.points_adjustment_original ?? 0)
 );
 
+const shortPreviousHomeworkDate = (point) => {
+    const value = point?.previous_next_homework_date;
+    if (typeof value !== 'string' || value === '') {
+        return point?.previous_next_homework_date_formatted ?? '';
+    }
+
+    const [year, month, day] = value.split('-').map((segment) => Number(segment));
+    if (!year || !month || !day) {
+        return point?.previous_next_homework_date_formatted ?? '';
+    }
+
+    return `${day}/${month}`;
+};
+
 const studentNameToneClass = (index) => {
     const accents = [
         'text-cyan-700 dark:text-cyan-300',
@@ -454,11 +468,15 @@ const pointCardClass = (point) => {
                                     <span class="line-clamp-2 font-medium leading-4">{{ point.name }}</span>
                                     <span
                                         v-if="point.is_previous_next_homework"
-                                        class="mt-1 inline-flex w-fit max-w-full items-center rounded-md border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-100"
+                                        class="mt-1 inline-flex w-fit max-w-full items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+                                        :title="point.previous_next_homework_date_formatted"
                                     >
                                         {{ t('homeworks.previousNextHomework') }}
-                                        <span v-if="point.previous_next_homework_date_formatted" class="ms-1 font-medium">
-                                            {{ point.previous_next_homework_date_formatted }}
+                                        <span
+                                            v-if="shortPreviousHomeworkDate(point)"
+                                            class="rounded-sm bg-amber-200/80 px-1 font-bold tabular-nums text-amber-950 dark:bg-amber-800/70 dark:text-amber-50"
+                                        >
+                                            {{ shortPreviousHomeworkDate(point) }}
                                         </span>
                                     </span>
                                     <span class="mt-1 text-xs text-(--muted-foreground)">
