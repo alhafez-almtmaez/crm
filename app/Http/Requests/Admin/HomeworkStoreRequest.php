@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Center;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class HomeworkStoreRequest extends FormRequest
 {
@@ -39,6 +42,22 @@ class HomeworkStoreRequest extends FormRequest
         ];
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->has('center_id') || $validator->errors()->has('date')) {
+                return;
+            }
+
+            $center = Center::query()->find((int) $this->input('center_id'));
+            if ($center === null || $this->dateMatchesCenterWorkingDays($center, (string) $this->input('date'))) {
+                return;
+            }
+
+            $validator->errors()->add('date', __('homeworks.date_not_in_center_working_days'));
+        });
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -69,5 +88,27 @@ class HomeworkStoreRequest extends FormRequest
                 ], array_filter($points, static fn ($point): bool => is_array($point))),
             ];
         }, $items);
+    }
+
+    private function dateMatchesCenterWorkingDays(Center $center, string $date): bool
+    {
+        $workingDays = is_array($center->working_days) ? $center->working_days : [];
+        if ($workingDays === []) {
+            return true;
+        }
+
+        $lookup = array_fill_keys(array_map(
+            static fn (string $day): string => strtolower($day),
+            array_filter($workingDays, static fn ($day): bool => is_string($day) && trim($day) !== ''),
+        ), true);
+
+        if ($lookup === []) {
+            return true;
+        }
+
+        $dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        $dayName = $dayNames[Carbon::parse($date)->dayOfWeek] ?? '';
+
+        return isset($lookup[$dayName]);
     }
 }

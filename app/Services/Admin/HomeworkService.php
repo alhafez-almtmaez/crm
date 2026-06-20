@@ -97,16 +97,17 @@ class HomeworkService
     }
 
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, working_days: array<int, string>}>
      */
     public function centerOptions(): array
     {
         return Center::query()
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'working_days'])
             ->map(static fn (Center $center): array => [
                 'id' => $center->id,
                 'name' => $center->name,
+                'working_days' => is_array($center->working_days) ? $center->working_days : [],
             ])
             ->all();
     }
@@ -118,6 +119,13 @@ class HomeworkService
     {
         $resolvedDate = $this->resolveDate($date);
         $resolvedCenterId = $centerId !== null && $centerId > 0 ? $centerId : null;
+        $center = $resolvedCenterId !== null
+            ? Center::query()->find($resolvedCenterId)
+            : null;
+
+        if ($center !== null) {
+            $resolvedDate = $this->resolveWorkingDate($center, $resolvedDate);
+        }
 
         if ($resolvedCenterId === null) {
             return [
@@ -168,6 +176,13 @@ class HomeworkService
     {
         $centerId = (int) $data['center_id'];
         $date = $this->resolveDate((string) $data['date']);
+        $center = Center::query()->find($centerId);
+
+        if ($center !== null && ! $this->isWorkingDate($center, $date)) {
+            throw ValidationException::withMessages([
+                'date' => __('homeworks.date_not_in_center_working_days'),
+            ]);
+        }
 
         $exists = Homework::query()
             ->where('center_id', $centerId)
@@ -749,5 +764,58 @@ class HomeworkService
         }
 
         return Carbon::parse($date)->toDateString();
+    }
+
+    private function resolveWorkingDate(Center $center, string $date): string
+    {
+        if ($this->isWorkingDate($center, $date)) {
+            return $date;
+        }
+
+        $workingDays = $this->workingDayLookup($center);
+        if ($workingDays === []) {
+            return $date;
+        }
+
+        $cursor = Carbon::parse($date);
+        for ($index = 0; $index < 14; $index++) {
+            if (isset($workingDays[$this->dayName($cursor)])) {
+                return $cursor->toDateString();
+            }
+
+            $cursor = $cursor->addDay();
+        }
+
+        return $date;
+    }
+
+    private function isWorkingDate(Center $center, string $date): bool
+    {
+        $workingDays = $this->workingDayLookup($center);
+        if ($workingDays === []) {
+            return true;
+        }
+
+        return isset($workingDays[$this->dayName(Carbon::parse($date))]);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function workingDayLookup(Center $center): array
+    {
+        $workingDays = is_array($center->working_days) ? $center->working_days : [];
+
+        return array_fill_keys(array_map(
+            static fn (string $day): string => strtolower($day),
+            array_filter($workingDays, static fn ($day): bool => is_string($day) && trim($day) !== ''),
+        ), true);
+    }
+
+    private function dayName(Carbon $date): string
+    {
+        $dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+        return $dayNames[$date->dayOfWeek] ?? '';
     }
 }

@@ -6,7 +6,7 @@ import DatePicker from 'primevue/datepicker';
 import Dialog from 'primevue/dialog';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAppToast } from '../../composables/useAppToast';
 import FormFieldLabel from '../form/FormFieldLabel.vue';
@@ -45,6 +45,16 @@ const historyVisible = ref(false);
 const historyLoading = ref(false);
 const historyRows = ref([]);
 const historyStudent = ref(null);
+const dayOptions = [
+    { value: 'sunday', dayIndex: 0, labelKey: 'days.sunday' },
+    { value: 'monday', dayIndex: 1, labelKey: 'days.monday' },
+    { value: 'tuesday', dayIndex: 2, labelKey: 'days.tuesday' },
+    { value: 'wednesday', dayIndex: 3, labelKey: 'days.wednesday' },
+    { value: 'thursday', dayIndex: 4, labelKey: 'days.thursday' },
+    { value: 'friday', dayIndex: 5, labelKey: 'days.friday' },
+    { value: 'saturday', dayIndex: 6, labelKey: 'days.saturday' },
+];
+const dayIndexByName = Object.fromEntries(dayOptions.map((day) => [day.value, day.dayIndex]));
 
 const dateValue = computed({
     get: () => {
@@ -72,6 +82,81 @@ const dateValue = computed({
         props.form.date = `${year}-${month}-${day}`;
     },
 });
+
+const selectedCenter = computed(() => props.centers.find((center) => Number(center.id) === Number(props.form.center_id)) ?? null);
+
+const selectedCenterWorkingDays = computed(() => {
+    const workingDays = selectedCenter.value?.working_days;
+
+    return Array.isArray(workingDays) ? workingDays : [];
+});
+
+const workingDayIndexes = computed(() => selectedCenterWorkingDays.value
+    .map((day) => dayIndexByName[String(day).toLowerCase()])
+    .filter((dayIndex) => Number.isInteger(dayIndex)));
+
+const disabledWeekDays = computed(() => {
+    if (!selectedCenter.value || workingDayIndexes.value.length === 0) {
+        return [];
+    }
+
+    return dayOptions
+        .map((day) => day.dayIndex)
+        .filter((dayIndex) => !workingDayIndexes.value.includes(dayIndex));
+});
+
+const workingDaysLabel = computed(() => {
+    if (!selectedCenter.value || selectedCenterWorkingDays.value.length === 0) {
+        return '';
+    }
+
+    return selectedCenterWorkingDays.value
+        .map((day) => dayOptions.find((option) => option.value === String(day).toLowerCase())?.labelKey)
+        .filter(Boolean)
+        .map((labelKey) => t(labelKey))
+        .join('، ');
+});
+
+const isAllowedDate = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+        return true;
+    }
+
+    return disabledWeekDays.value.length === 0 || !disabledWeekDays.value.includes(value.getDay());
+};
+
+const nextAllowedDate = (value) => {
+    const cursor = value instanceof Date && !Number.isNaN(value.getTime())
+        ? new Date(value)
+        : new Date();
+
+    for (let index = 0; index < 14; index += 1) {
+        if (isAllowedDate(cursor)) {
+            return cursor;
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return value;
+};
+
+watch(
+    () => [props.form.center_id, props.form.date, disabledWeekDays.value.join(',')],
+    () => {
+        if (props.lockCenterAndDate || !props.form.center_id || disabledWeekDays.value.length === 0) {
+            return;
+        }
+
+        const currentDate = dateValue.value ?? new Date();
+        if (isAllowedDate(currentDate)) {
+            return;
+        }
+
+        dateValue.value = nextAllowedDate(currentDate);
+    },
+    { immediate: true },
+);
 
 const totalDonePoints = computed(() => props.form.items.reduce((total, item) => (
     total + (item.points ?? []).reduce((sum, point) => (
@@ -230,12 +315,16 @@ const pointCardClass = (point) => {
                             icon-display="input"
                             date-format="yy-mm-dd"
                             :manual-input="false"
+                            :disabled-days="disabledWeekDays"
                             class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
                             :disabled="lockCenterAndDate"
                         />
                         <FormFieldLabel for-id="homework-date" :text="t('homeworks.date')" />
                     </FloatLabel>
                     <small v-if="form.errors.date" class="text-sm text-red-600">{{ form.errors.date }}</small>
+                    <small v-else-if="workingDaysLabel" class="text-xs text-(--muted-foreground)">
+                        {{ t('homeworks.centerWorkingDaysHint', { days: workingDaysLabel }) }}
+                    </small>
                 </div>
             </div>
 

@@ -368,6 +368,7 @@
     "studentsHint": "Each student shows twenty next plan-point slots.",
     "noStudentsLoaded": "Pick a center and date, then load students.",
     "loadStudents": "Load Students",
+    "centerWorkingDaysHint": "Allowed days by center schedule: {days}",
     "alreadyExists": "A homework already exists for this center and date.",
     "openExisting": "Open Existing Assignment",
     "progress": "Student's latest reached point",

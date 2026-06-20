@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
+use Illuminate\Validation\Validator;
+
 class HomeworkUpdateRequest extends HomeworkStoreRequest
 {
     /**
@@ -13,5 +15,10 @@ class HomeworkUpdateRequest extends HomeworkStoreRequest
         unset($rules['center_id'], $rules['date']);
 
         return $rules;
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        //
     }
 }
