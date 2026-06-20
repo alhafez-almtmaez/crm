@@ -13,22 +13,14 @@ class PlanWeightRule extends Model
     protected $fillable = [
         'name',
         'pattern',
-        'keyword',
         'weight',
         'is_standalone',
-        'min_pages',
-        'max_pages',
-        'priority',
         'is_active',
-        'classification',
     ];
 
     protected $casts = [
         'weight' => 'decimal:2',
         'is_standalone' => 'bool',
-        'min_pages' => 'int',
-        'max_pages' => 'int',
-        'priority' => 'int',
         'is_active' => 'bool',
     ];
 

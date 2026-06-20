@@ -20,7 +20,7 @@ class PlanPointWeightClassifier
         $text = $this->searchText($point);
 
         foreach ($this->rules() as $rule) {
-            if (! $this->ruleMatches($rule, $text, $estimatedPages)) {
+            if (! $this->ruleMatches($rule, $text)) {
                 continue;
             }
 
@@ -32,12 +32,7 @@ class PlanPointWeightClassifier
             ];
         }
 
-        return [
-            'weight' => (float) ($point->weight ?? 1),
-            'is_standalone' => (bool) ($point->is_standalone ?? false),
-            'rule_id' => null,
-            'estimated_pages' => $estimatedPages,
-        ];
+        return $this->defaultClassification($point, $text, $estimatedPages);
     }
 
     public function classifyAndPersist(PlanPoint $point): PlanPoint
@@ -64,49 +59,18 @@ class PlanPointWeightClassifier
 
         return $this->rules = PlanWeightRule::query()
             ->where('is_active', true)
-            ->orderByDesc('priority')
             ->orderBy('id')
             ->get();
     }
 
-    private function ruleMatches(PlanWeightRule $rule, string $text, ?int $estimatedPages): bool
+    private function ruleMatches(PlanWeightRule $rule, string $text): bool
     {
-        if (! $this->pagesMatch($rule, $estimatedPages)) {
-            return false;
-        }
-
-        $keyword = $this->normalize((string) ($rule->keyword ?? ''));
-        if ($keyword !== '' && ! str_contains($text, $keyword)) {
-            return false;
-        }
-
         $pattern = trim((string) ($rule->pattern ?? ''));
         if ($pattern === '') {
-            return $keyword !== '' || $rule->min_pages !== null || $rule->max_pages !== null;
+            return false;
         }
 
         return $this->patternMatches($pattern, $text);
-    }
-
-    private function pagesMatch(PlanWeightRule $rule, ?int $estimatedPages): bool
-    {
-        if ($rule->min_pages === null && $rule->max_pages === null) {
-            return true;
-        }
-
-        if ($estimatedPages === null) {
-            return false;
-        }
-
-        if ($rule->min_pages !== null && $estimatedPages < (int) $rule->min_pages) {
-            return false;
-        }
-
-        if ($rule->max_pages !== null && $estimatedPages > (int) $rule->max_pages) {
-            return false;
-        }
-
-        return true;
     }
 
     private function patternMatches(string $pattern, string $text): bool
@@ -117,6 +81,37 @@ class PlanPointWeightClassifier
         $matches = @preg_match($regex, $text);
 
         return $matches === 1 || ($matches === false && str_contains($text, $normalizedPattern));
+    }
+
+    /**
+     * @return array{weight: float, is_standalone: bool, rule_id: ?int, estimated_pages: ?int}
+     */
+    private function defaultClassification(PlanPoint $point, string $text, ?int $estimatedPages): array
+    {
+        $weight = (float) ($point->weight ?? 1);
+        $isStandalone = (bool) ($point->is_standalone ?? false);
+
+        if ($this->isLargeSurah($point) || ($estimatedPages !== null && $estimatedPages > 15 && ! str_contains($text, 'اسم الجزء'))) {
+            $weight = max($weight, 3);
+            $isStandalone = true;
+        } elseif ($estimatedPages !== null) {
+            if ($estimatedPages >= 13) {
+                $weight = max($weight, 2);
+            } elseif ($estimatedPages >= 4) {
+                $weight = max($weight, 1);
+            } elseif ($estimatedPages >= 2) {
+                $weight = 0;
+            } elseif ($estimatedPages === 1) {
+                $weight = max($weight, 1);
+            }
+        }
+
+        return [
+            'weight' => $weight,
+            'is_standalone' => $isStandalone,
+            'rule_id' => null,
+            'estimated_pages' => $estimatedPages,
+        ];
     }
 
     private function searchText(PlanPoint $point): string
@@ -146,17 +141,7 @@ class PlanPointWeightClassifier
     private function estimatedPages(PlanPoint $point): ?int
     {
         $surahName = $this->normalize((string) ($point->surah_name ?: $point->name));
-        $largeSurahPages = [
-            'البقره' => 48,
-            'ال عمران' => 27,
-            'النساء' => 29,
-            'المائده' => 22,
-            'الانعام' => 23,
-            'الاعراف' => 26,
-            'التوبه' => 21,
-        ];
-
-        foreach ($largeSurahPages as $surah => $pages) {
+        foreach ($this->largeSurahPages() as $surah => $pages) {
             if (str_contains($surahName, $surah)) {
                 return $pages;
             }
@@ -192,5 +177,34 @@ class PlanPointWeightClassifier
         }
 
         return null;
+    }
+
+    private function isLargeSurah(PlanPoint $point): bool
+    {
+        $surahName = $this->normalize((string) ($point->surah_name ?: $point->name));
+
+        foreach (array_keys($this->largeSurahPages()) as $surah) {
+            if (str_contains($surahName, $surah)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function largeSurahPages(): array
+    {
+        return [
+            'البقره' => 48,
+            'ال عمران' => 27,
+            'النساء' => 29,
+            'المائده' => 22,
+            'الانعام' => 23,
+            'الاعراف' => 26,
+            'التوبه' => 21,
+        ];
     }
 }

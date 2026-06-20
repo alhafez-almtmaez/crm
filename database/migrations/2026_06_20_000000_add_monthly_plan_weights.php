@@ -13,14 +13,9 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('pattern')->nullable();
-            $table->string('keyword')->nullable();
             $table->decimal('weight', 5, 2)->default(1);
             $table->boolean('is_standalone')->default(false)->index();
-            $table->unsignedInteger('min_pages')->nullable();
-            $table->unsignedInteger('max_pages')->nullable();
-            $table->unsignedInteger('priority')->default(0)->index();
             $table->boolean('is_active')->default(true)->index();
-            $table->string('classification')->nullable();
             $table->timestamps();
         });
 
@@ -158,98 +153,45 @@ return new class extends Migration
             [
                 'name' => 'السور الكبيرة',
                 'pattern' => 'البقرة|آل عمران|ال عمران|النساء|المائدة|الأنعام|الانعام|الأعراف|الاعراف|التوبة',
-                'keyword' => null,
                 'weight' => 3,
                 'is_standalone' => true,
-                'min_pages' => 16,
-                'max_pages' => null,
-                'priority' => 1000,
                 'is_active' => true,
-                'classification' => 'سورة كبيرة',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             [
                 'name' => 'واجب منفرد ثقيل',
                 'pattern' => 'ثلاثة أجزاء|ثلاث اجزاء|ثلاث أجزاء|جزئين|جزءين|جزء عم.*تبارك|تبارك.*قد سمع|جزء ونصف',
-                'keyword' => null,
                 'weight' => 3,
                 'is_standalone' => true,
-                'min_pages' => null,
-                'max_pages' => null,
-                'priority' => 900,
                 'is_active' => true,
-                'classification' => 'عنصر منفرد',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             [
                 'name' => 'عنصر مجاني',
                 'pattern' => 'دوري|مراجعة|من مراجعة',
-                'keyword' => null,
                 'weight' => 0,
                 'is_standalone' => false,
-                'min_pages' => null,
-                'max_pages' => null,
-                'priority' => 800,
                 'is_active' => true,
-                'classification' => 'عنصر مجاني',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-            [
-                'name' => 'مدى صغير',
-                'pattern' => null,
-                'keyword' => null,
-                'weight' => 0,
-                'is_standalone' => false,
-                'min_pages' => 2,
-                'max_pages' => 3,
-                'priority' => 700,
-                'is_active' => true,
-                'classification' => 'مدى صغير',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             [
                 'name' => 'عنصر متوسط',
                 'pattern' => 'جزء تراكمي|تراكمي|تسميع جزء|اسم الجزء',
-                'keyword' => null,
                 'weight' => 2,
                 'is_standalone' => false,
-                'min_pages' => null,
-                'max_pages' => null,
-                'priority' => 600,
                 'is_active' => true,
-                'classification' => 'عنصر متوسط',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-            [
-                'name' => 'مدى كبير',
-                'pattern' => null,
-                'keyword' => null,
-                'weight' => 2,
-                'is_standalone' => false,
-                'min_pages' => 13,
-                'max_pages' => 15,
-                'priority' => 500,
-                'is_active' => true,
-                'classification' => 'مدى كبير',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             [
                 'name' => 'صفحة عادية',
-                'pattern' => null,
-                'keyword' => null,
+                'pattern' => 'صفحة|صفحه',
                 'weight' => 1,
                 'is_standalone' => false,
-                'min_pages' => 1,
-                'max_pages' => 12,
-                'priority' => 100,
                 'is_active' => true,
-                'classification' => 'صفحة عادية',
                 'created_at' => $now,
                 'updated_at' => $now,
             ],

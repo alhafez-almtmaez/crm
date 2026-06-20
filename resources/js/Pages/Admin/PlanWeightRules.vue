@@ -33,8 +33,8 @@ const {
     onSortChange,
 } = useServerTable({
     endpoint: '/admin/plan-weight-rules/records',
-    defaultSortBy: 'priority',
-    defaultSortDir: 'desc',
+    defaultSortBy: 'id',
+    defaultSortDir: 'asc',
 });
 
 const dialogVisible = ref(false);
@@ -44,21 +44,14 @@ const errors = ref({});
 const form = ref({
     name: '',
     pattern: '',
-    keyword: '',
     weight: 1,
     is_standalone: false,
-    min_pages: '',
-    max_pages: '',
-    priority: 0,
     is_active: true,
-    classification: '',
 });
 
 const columns = computed(() => [
     { field: 'name', header: t('planWeightRules.name'), sortable: true },
     { field: 'weight', header: t('planWeightRules.weight'), sortable: true },
-    { field: 'classification', header: t('planWeightRules.classification') },
-    { field: 'priority', header: t('planWeightRules.priority'), sortable: true },
     { field: 'is_standalone_label', header: t('planWeightRules.isStandalone'), sortable: true, sortField: 'is_standalone' },
     { field: 'is_active_label', header: t('planWeightRules.isActive'), sortable: true, sortField: 'is_active' },
 ]);
@@ -73,14 +66,9 @@ const resetForm = () => {
     form.value = {
         name: '',
         pattern: '',
-        keyword: '',
         weight: 1,
         is_standalone: false,
-        min_pages: '',
-        max_pages: '',
-        priority: 0,
         is_active: true,
-        classification: '',
     };
     errors.value = {};
 };
@@ -96,14 +84,9 @@ const openEdit = (rule) => {
     form.value = {
         name: rule.name ?? '',
         pattern: rule.pattern ?? '',
-        keyword: rule.keyword ?? '',
         weight: Number(rule.weight ?? 1),
         is_standalone: Boolean(rule.is_standalone),
-        min_pages: rule.min_pages ?? '',
-        max_pages: rule.max_pages ?? '',
-        priority: Number(rule.priority ?? 0),
         is_active: Boolean(rule.is_active),
-        classification: rule.classification ?? '',
     };
     errors.value = {};
     dialogVisible.value = true;
@@ -111,10 +94,7 @@ const openEdit = (rule) => {
 
 const payload = () => ({
     ...form.value,
-    min_pages: form.value.min_pages === '' ? null : Number(form.value.min_pages),
-    max_pages: form.value.max_pages === '' ? null : Number(form.value.max_pages),
     weight: Number(form.value.weight ?? 0),
-    priority: Number(form.value.priority ?? 0),
 });
 
 const saveRule = async () => {
@@ -221,22 +201,10 @@ onMounted(() => {
                             :error="errors.name?.[0]"
                         />
                         <PrimeFloatField
-                            id="weight-rule-classification"
-                            v-model="form.classification"
-                            :label="t('planWeightRules.classification')"
-                            :error="errors.classification?.[0]"
-                        />
-                        <PrimeFloatField
                             id="weight-rule-pattern"
                             v-model="form.pattern"
                             :label="t('planWeightRules.pattern')"
                             :error="errors.pattern?.[0]"
-                        />
-                        <PrimeFloatField
-                            id="weight-rule-keyword"
-                            v-model="form.keyword"
-                            :label="t('planWeightRules.keyword')"
-                            :error="errors.keyword?.[0]"
                         />
                         <PrimeFloatField
                             id="weight-rule-weight"
@@ -246,31 +214,6 @@ onMounted(() => {
                             :input-props="{ min: '0', step: '0.25' }"
                             required
                             :error="errors.weight?.[0]"
-                        />
-                        <PrimeFloatField
-                            id="weight-rule-priority"
-                            v-model="form.priority"
-                            :label="t('planWeightRules.priority')"
-                            input-type="number"
-                            :input-props="{ min: '0', step: '1' }"
-                            required
-                            :error="errors.priority?.[0]"
-                        />
-                        <PrimeFloatField
-                            id="weight-rule-min-pages"
-                            v-model="form.min_pages"
-                            :label="t('planWeightRules.minPages')"
-                            input-type="number"
-                            :input-props="{ min: '1', step: '1' }"
-                            :error="errors.min_pages?.[0]"
-                        />
-                        <PrimeFloatField
-                            id="weight-rule-max-pages"
-                            v-model="form.max_pages"
-                            :label="t('planWeightRules.maxPages')"
-                            input-type="number"
-                            :input-props="{ min: '1', step: '1' }"
-                            :error="errors.max_pages?.[0]"
                         />
                     </div>
 

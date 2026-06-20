@@ -35,17 +35,15 @@ class PlanWeightRuleController extends Controller implements HasMiddleware
         $filters = $request->validated();
         $search = trim((string) ($filters['search'] ?? ''));
         $perPage = (int) ($filters['per_page'] ?? 25);
-        $sortBy = (string) ($filters['sort_by'] ?? 'priority');
-        $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $sortBy = (string) ($filters['sort_by'] ?? 'id');
+        $sortDir = (string) ($filters['sort_dir'] ?? 'asc');
 
         $rules = PlanWeightRule::query()
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
                         ->where('name', 'like', "%{$search}%")
-                        ->orWhere('pattern', 'like', "%{$search}%")
-                        ->orWhere('keyword', 'like', "%{$search}%")
-                        ->orWhere('classification', 'like', "%{$search}%");
+                        ->orWhere('pattern', 'like', "%{$search}%");
                 });
             })
             ->orderBy($sortBy, $sortDir)
