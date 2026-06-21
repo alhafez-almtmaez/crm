@@ -5,20 +5,22 @@ namespace App\Services\Admin;
 use App\Models\Center;
 use App\Models\Group;
 use App\Models\StudentMonthlyPlan;
+use Carbon\CarbonImmutable;
 
 class StudentMonthlyPlanService
 {
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, working_days: array<int, string>}>
      */
     public function centerOptions(): array
     {
         return Center::query()
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'working_days'])
             ->map(static fn (Center $center): array => [
                 'id' => (int) $center->id,
                 'name' => (string) $center->name,
+                'working_days' => is_array($center->working_days) ? $center->working_days : [],
             ])
             ->all();
     }
@@ -42,7 +44,7 @@ class StudentMonthlyPlanService
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array<int, array<string, mixed>>
+     * @return array{center: ?array<string, mixed>, dates: array<int, array<string, mixed>>, plans: array<int, array<string, mixed>>}
      */
     public function list(array $filters): array
     {
@@ -50,8 +52,17 @@ class StudentMonthlyPlanService
         $year = (int) $filters['year'];
         $centerId = isset($filters['center_id']) ? (int) $filters['center_id'] : null;
         $groupId = isset($filters['group_id']) ? (int) $filters['group_id'] : null;
+        $center = $centerId !== null ? Center::query()->find($centerId) : null;
 
-        return StudentMonthlyPlan::query()
+        if ($center === null) {
+            return [
+                'center' => null,
+                'dates' => [],
+                'plans' => [],
+            ];
+        }
+
+        $plans = StudentMonthlyPlan::query()
             ->with([
                 'student:id,full_name,max_daily_weight',
                 'center:id,name',
@@ -67,7 +78,7 @@ class StudentMonthlyPlanService
             ])
             ->where('month', $month)
             ->where('year', $year)
-            ->when($centerId !== null, fn ($query) => $query->where('center_id', $centerId))
+            ->where('center_id', $centerId)
             ->when($groupId !== null, fn ($query) => $query->where('group_id', $groupId))
             ->orderBy('group_id')
             ->orderBy('student_id')
@@ -111,5 +122,46 @@ class StudentMonthlyPlanService
                 ])->all(),
             ])
             ->all();
+
+        return [
+            'center' => [
+                'id' => (int) $center->id,
+                'name' => (string) $center->name,
+            ],
+            'dates' => $this->workingDatesForMonth($center, $month, $year),
+            'plans' => $plans,
+        ];
+    }
+
+    /**
+     * @return array<int, array{date: string, day_number: int, day_label: string}>
+     */
+    private function workingDatesForMonth(Center $center, int $month, int $year): array
+    {
+        $workingDays = is_array($center->working_days) ? $center->working_days : [];
+        if ($workingDays === []) {
+            $workingDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        }
+
+        $workingDayLookup = array_fill_keys(array_map(static fn (string $day): string => strtolower($day), $workingDays), true);
+        $dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        $start = CarbonImmutable::create($year, $month, 1)->startOfDay();
+        $end = $start->endOfMonth();
+        $dates = [];
+
+        for ($date = $start; $date->lte($end); $date = $date->addDay()) {
+            $dayName = $dayNames[$date->dayOfWeek];
+            if (! isset($workingDayLookup[$dayName])) {
+                continue;
+            }
+
+            $dates[] = [
+                'date' => $date->toDateString(),
+                'day_number' => $date->day,
+                'day_label' => __('days.'.$dayName),
+            ];
+        }
+
+        return $dates;
     }
 }

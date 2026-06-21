@@ -9,7 +9,6 @@ use App\Http\Controllers\Admin\GroupController;
 use App\Http\Controllers\Admin\HomeworkController;
 use App\Http\Controllers\Admin\MessageTemplateController;
 use App\Http\Controllers\Admin\PlanController;
-use App\Http\Controllers\Admin\PlanWeightRuleController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\StudentMonthlyPlanController;
@@ -69,9 +68,6 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::post('plans/{plan}/points/import', [PlanController::class, 'importPoints'])->name('plans.points.import');
         Route::get('plans/{plan}/activity-logs', [PlanController::class, 'activityLogs'])->name('plans.activity-logs');
         Route::resource('plans', PlanController::class)->except(['show']);
-
-        Route::get('plan-weight-rules/records', [PlanWeightRuleController::class, 'records'])->name('plan-weight-rules.records');
-        Route::resource('plan-weight-rules', PlanWeightRuleController::class)->except(['create', 'edit', 'show']);
 
         Route::get('monthly-plans/records', [StudentMonthlyPlanController::class, 'records'])->name('monthly-plans.records');
         Route::post('monthly-plans/generate', [StudentMonthlyPlanController::class, 'generate'])->name('monthly-plans.generate');

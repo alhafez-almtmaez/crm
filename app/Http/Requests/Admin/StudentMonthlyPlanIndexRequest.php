@@ -27,9 +27,17 @@ class StudentMonthlyPlanIndexRequest extends FormRequest
      */
     public function rules(): array
     {
+        $groupRule = Rule::exists('groups', 'id');
+        if ($this->filled('center_id')) {
+            $groupRule->where('center_id', (int) $this->input('center_id'));
+        }
+
         return [
             'center_id' => ['nullable', Rule::exists('centers', 'id')],
-            'group_id' => ['nullable', Rule::exists('groups', 'id')],
+            'group_id' => [
+                'nullable',
+                $groupRule,
+            ],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
             'year' => ['required', 'integer', 'min:2020', 'max:2100'],
         ];

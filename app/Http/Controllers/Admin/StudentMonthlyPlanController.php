@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StudentMonthlyPlanGenerateRequest;
 use App\Http\Requests\Admin\StudentMonthlyPlanIndexRequest;
-use App\Models\Group;
+use App\Models\Center;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
 use Illuminate\Http\JsonResponse;
@@ -49,8 +49,13 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
     public function generate(StudentMonthlyPlanGenerateRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $group = Group::query()->findOrFail((int) $data['group_id']);
-        $result = $this->generator->generateForGroup($group, (int) $data['month'], (int) $data['year']);
+        $center = Center::query()->findOrFail((int) $data['center_id']);
+        $result = $this->generator->generateForCenter(
+            $center,
+            (int) $data['month'],
+            (int) $data['year'],
+            isset($data['group_id']) ? (int) $data['group_id'] : null,
+        );
 
         return response()->json([
             'message' => __('monthly_plans.generated_successfully', [

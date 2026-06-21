@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin;
 
+use App\Models\Center;
 use App\Models\Group;
 use App\Models\PlanPoint;
 use App\Models\Student;
@@ -15,7 +16,22 @@ use Illuminate\Support\Facades\DB;
 
 class StudentMonthlyPlanGenerator
 {
-    public function __construct(private readonly PlanPointWeightClassifier $classifier) {}
+    /**
+     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>}
+     */
+    public function generateForCenter(Center $center, int $month, int $year, ?int $groupId = null): array
+    {
+        $students = Student::query()
+            ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
+            ->where('center_id', $center->id)
+            ->when($groupId !== null, fn ($query) => $query->where('group_id', $groupId))
+            ->where('is_active', Student::STATUS_ACTIVE)
+            ->whereNotNull('plan_type_id')
+            ->orderBy('full_name')
+            ->get();
+
+        return $this->generateForStudents($students, $month, $year);
+    }
 
     /**
      * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>}
@@ -30,6 +46,15 @@ class StudentMonthlyPlanGenerator
             ->orderBy('full_name')
             ->get();
 
+        return $this->generateForStudents($students, $month, $year);
+    }
+
+    /**
+     * @param  EloquentCollection<int, Student>  $students
+     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>}
+     */
+    private function generateForStudents(EloquentCollection $students, int $month, int $year): array
+    {
         $planIds = [];
         $skipped = 0;
 
@@ -68,7 +93,6 @@ class StudentMonthlyPlanGenerator
                 ->where('year', $year)
                 ->where('month', $month)
                 ->first();
-            $startPoint = $this->startPoint($student, $existingPlan);
 
             if ($existingPlan !== null) {
                 $existingPlan->delete();
@@ -79,6 +103,7 @@ class StudentMonthlyPlanGenerator
                 ->whereKey($student->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $startPoint = $this->startPoint($lockedStudent);
 
             $plan = StudentMonthlyPlan::query()->create([
                 'student_id' => $lockedStudent->id,
@@ -105,15 +130,6 @@ class StudentMonthlyPlanGenerator
                     : StudentMonthlyPlan::STATUS_EXHAUSTED,
             ]);
 
-            if ($result['last_plan_point_id'] !== null) {
-                $lockedStudent->update([
-                    'monthly_plan_cursor_point_id' => $this->furthestPlanPointId(
-                        $lockedStudent->monthly_plan_cursor_point_id,
-                        $result['last_plan_point_id'],
-                    ),
-                ]);
-            }
-
             return $plan->refresh()->load(['days.items.planPoint', 'student', 'plan']);
         });
     }
@@ -132,26 +148,27 @@ class StudentMonthlyPlanGenerator
         $dateIndex = 0;
         $sortOrder = 1;
         $generatedCount = 0;
-        $skippedCount = 0;
         $lastPlanPointId = null;
         $currentDay = null;
+        $lastGeneratedDay = null;
         $currentWeight = 0.0;
         $pendingZeroPoints = [];
         $maxDailyWeight = max(0.01, (float) $plan->max_daily_weight);
 
         foreach ($points as $point) {
-            $classification = $this->classifier->classify($point);
-            $weight = max(0, (float) $classification['weight']);
-            $isStandalone = (bool) $classification['is_standalone'];
-
-            $point->forceFill([
-                'weight' => $weight,
-                'is_standalone' => $isStandalone,
-                'plan_weight_rule_id' => $classification['rule_id'],
-            ])->save();
+            $weightData = $this->weightDataForPoint($point);
+            $weight = max(0, (float) $weightData['weight']);
+            $isStandalone = (bool) $weightData['is_standalone'];
 
             if ($weight <= 0) {
-                $pendingZeroPoints[] = [$point, $classification];
+                if ($lastGeneratedDay !== null) {
+                    $this->createItem($plan, $lastGeneratedDay, $student, $point, $weightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
+                    $generatedCount++;
+                    $lastPlanPointId = (int) $point->id;
+                    continue;
+                }
+
+                $pendingZeroPoints[] = [$point, $weightData];
                 continue;
             }
 
@@ -164,13 +181,11 @@ class StudentMonthlyPlanGenerator
 
                 $day = $this->dayAt($plan, $dates, $dateIndex);
                 if ($day === null) {
-                    $this->createSkippedItem($plan, $student, $point, $classification, $sortOrder++);
-                    $skippedCount++;
-                    continue;
+                    break;
                 }
 
-                foreach ($pendingZeroPoints as [$zeroPoint, $zeroClassification]) {
-                    $this->createItem($plan, $day, $student, $zeroPoint, $zeroClassification, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
+                foreach ($pendingZeroPoints as [$zeroPoint, $zeroWeightData]) {
+                    $this->createItem($plan, $day, $student, $zeroPoint, $zeroWeightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
                     $generatedCount++;
                     $lastPlanPointId = (int) $zeroPoint->id;
                 }
@@ -181,13 +196,14 @@ class StudentMonthlyPlanGenerator
                     $day,
                     $student,
                     $point,
-                    $classification,
+                    $weightData,
                     $sortOrder++,
                     $weight > $maxDailyWeight ? StudentMonthlyPlanItem::STATUS_SPECIAL : StudentMonthlyPlanItem::STATUS_GENERATED,
                 );
                 $day->update(['total_weight' => $weight]);
                 $generatedCount++;
                 $lastPlanPointId = (int) $point->id;
+                $lastGeneratedDay = $day;
                 $dateIndex++;
                 $currentDay = null;
                 $currentWeight = 0.0;
@@ -201,9 +217,7 @@ class StudentMonthlyPlanGenerator
             }
 
             if ($currentDay === null) {
-                $this->createSkippedItem($plan, $student, $point, $classification, $sortOrder++);
-                $skippedCount++;
-                continue;
+                break;
             }
 
             if ($currentWeight > 0 && $currentWeight + $weight > $maxDailyWeight) {
@@ -213,48 +227,40 @@ class StudentMonthlyPlanGenerator
             }
 
             if ($currentDay === null) {
-                $this->createSkippedItem($plan, $student, $point, $classification, $sortOrder++);
-                $skippedCount++;
-                continue;
+                break;
             }
 
-            foreach ($pendingZeroPoints as [$zeroPoint, $zeroClassification]) {
-                $this->createItem($plan, $currentDay, $student, $zeroPoint, $zeroClassification, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
+            foreach ($pendingZeroPoints as [$zeroPoint, $zeroWeightData]) {
+                $this->createItem($plan, $currentDay, $student, $zeroPoint, $zeroWeightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
                 $generatedCount++;
                 $lastPlanPointId = (int) $zeroPoint->id;
+                $lastGeneratedDay = $currentDay;
             }
             $pendingZeroPoints = [];
 
-            $this->createItem($plan, $currentDay, $student, $point, $classification, $sortOrder++, StudentMonthlyPlanItem::STATUS_GENERATED);
+            $this->createItem($plan, $currentDay, $student, $point, $weightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_GENERATED);
             $currentWeight += $weight;
             $currentDay->update(['total_weight' => $currentWeight]);
             $generatedCount++;
             $lastPlanPointId = (int) $point->id;
-        }
-
-        if ($pendingZeroPoints !== []) {
-            if ($currentDay === null) {
-                $currentDay = $this->dayAt($plan, $dates, max(0, min($dateIndex, $dates->count() - 1)));
-            }
-
-            if ($currentDay !== null && $generatedCount > 0) {
-                foreach ($pendingZeroPoints as [$zeroPoint, $zeroClassification]) {
-                    $this->createItem($plan, $currentDay, $student, $zeroPoint, $zeroClassification, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
-                    $generatedCount++;
-                    $lastPlanPointId = (int) $zeroPoint->id;
-                }
-            } else {
-                foreach ($pendingZeroPoints as [$zeroPoint, $zeroClassification]) {
-                    $this->createSkippedItem($plan, $student, $zeroPoint, $zeroClassification, $sortOrder++);
-                    $skippedCount++;
-                }
-            }
+            $lastGeneratedDay = $currentDay;
         }
 
         return [
             'last_plan_point_id' => $lastPlanPointId,
             'generated_items_count' => $generatedCount,
-            'skipped_items_count' => $skippedCount,
+            'skipped_items_count' => 0,
+        ];
+    }
+
+    /**
+     * @return array{weight: float, is_standalone: bool}
+     */
+    private function weightDataForPoint(PlanPoint $point): array
+    {
+        return [
+            'weight' => max(0, (float) ($point->weight ?? 1)),
+            'is_standalone' => (bool) ($point->is_standalone ?? false),
         ];
     }
 
@@ -279,14 +285,14 @@ class StudentMonthlyPlanGenerator
     }
 
     /**
-     * @param array{weight: float, is_standalone: bool, rule_id: ?int, estimated_pages: ?int} $classification
+     * @param array{weight: float, is_standalone: bool} $weightData
      */
     private function createItem(
         StudentMonthlyPlan $plan,
         StudentMonthlyPlanDay $day,
         Student $student,
         PlanPoint $point,
-        array $classification,
+        array $weightData,
         int $sortOrder,
         string $status,
     ): void {
@@ -296,50 +302,20 @@ class StudentMonthlyPlanGenerator
             'student_id' => $student->id,
             'plan_point_id' => $point->id,
             'sort_order' => $sortOrder,
-            'weight' => max(0, (float) $classification['weight']),
-            'is_standalone' => (bool) $classification['is_standalone'],
+            'weight' => max(0, (float) $weightData['weight']),
+            'is_standalone' => (bool) $weightData['is_standalone'],
             'status' => $status,
         ]);
     }
 
-    /**
-     * @param array{weight: float, is_standalone: bool, rule_id: ?int, estimated_pages: ?int} $classification
-     */
-    private function createSkippedItem(
-        StudentMonthlyPlan $plan,
-        Student $student,
-        PlanPoint $point,
-        array $classification,
-        int $sortOrder,
-    ): void {
-        StudentMonthlyPlanItem::query()->create([
-            'student_monthly_plan_id' => $plan->id,
-            'student_monthly_plan_day_id' => null,
-            'student_id' => $student->id,
-            'plan_point_id' => $point->id,
-            'sort_order' => $sortOrder,
-            'weight' => max(0, (float) $classification['weight']),
-            'is_standalone' => (bool) $classification['is_standalone'],
-            'status' => StudentMonthlyPlanItem::STATUS_SKIPPED,
-        ]);
-    }
-
-    private function startPoint(Student $student, ?StudentMonthlyPlan $existingPlan): ?PlanPoint
+    private function startPoint(Student $student): ?PlanPoint
     {
-        if ($existingPlan?->starts_after_plan_point_id !== null) {
-            return PlanPoint::query()
-                ->whereKey($existingPlan->starts_after_plan_point_id)
-                ->where('plan_id', $student->plan_type_id)
-                ->first();
-        }
-
-        $cursorId = $student->monthly_plan_cursor_point_id ?? $student->current_plan_point_id;
-        if ($cursorId === null) {
+        if ($student->current_plan_point_id === null) {
             return null;
         }
 
         return PlanPoint::query()
-            ->whereKey($cursorId)
+            ->whereKey($student->current_plan_point_id)
             ->where('plan_id', $student->plan_type_id)
             ->first();
     }
@@ -390,31 +366,4 @@ class StudentMonthlyPlanGenerator
         return $dates;
     }
 
-    private function furthestPlanPointId(?int $currentId, int $candidateId): int
-    {
-        if ($currentId === null) {
-            return $candidateId;
-        }
-
-        $points = PlanPoint::query()
-            ->whereIn('id', [$currentId, $candidateId])
-            ->get()
-            ->keyBy('id');
-        $current = $points->get($currentId);
-        $candidate = $points->get($candidateId);
-
-        if ($current === null || $candidate === null || $current->plan_id !== $candidate->plan_id) {
-            return $candidateId;
-        }
-
-        if ($candidate->sort_order > $current->sort_order) {
-            return $candidateId;
-        }
-
-        if ($candidate->sort_order === $current->sort_order && $candidate->id > $current->id) {
-            return $candidateId;
-        }
-
-        return $currentId;
-    }
 }

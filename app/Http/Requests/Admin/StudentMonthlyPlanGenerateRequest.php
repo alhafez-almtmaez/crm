@@ -15,7 +15,8 @@ class StudentMonthlyPlanGenerateRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'group_id' => (int) $this->input('group_id'),
+            'center_id' => (int) $this->input('center_id'),
+            'group_id' => $this->filled('group_id') ? (int) $this->input('group_id') : null,
             'month' => (int) $this->input('month', now()->month),
             'year' => (int) $this->input('year', now()->year),
         ]);
@@ -27,7 +28,12 @@ class StudentMonthlyPlanGenerateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'group_id' => ['required', Rule::exists('groups', 'id')],
+            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'group_id' => [
+                'nullable',
+                Rule::exists('groups', 'id')
+                    ->where('center_id', (int) $this->input('center_id')),
+            ],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
             'year' => ['required', 'integer', 'min:2020', 'max:2100'],
         ];

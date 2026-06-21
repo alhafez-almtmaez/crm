@@ -14,7 +14,6 @@ class PlanService
 {
     public function __construct(
         private readonly DateTimeFormatterService $dateTimeFormatter,
-        private readonly PlanPointWeightClassifier $weightClassifier,
     ) {}
 
     /**
@@ -111,12 +110,6 @@ class PlanService
         } finally {
             error_reporting($previousErrorReporting);
         }
-
-        $plan->points()
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->each(fn ($point) => $this->weightClassifier->classifyAndPersist($point));
 
         return $import->result();
     }

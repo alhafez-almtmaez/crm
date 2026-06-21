@@ -9,18 +9,6 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('plan_weight_rules', static function (Blueprint $table): void {
-            $table->id();
-            $table->string('name');
-            $table->string('pattern')->nullable();
-            $table->decimal('weight', 5, 2)->default(1);
-            $table->boolean('is_standalone')->default(false)->index();
-            $table->boolean('is_active')->default(true)->index();
-            $table->timestamps();
-        });
-
-        DB::table('plan_weight_rules')->insert($this->defaultWeightRules());
-
         Schema::table('plan_points', static function (Blueprint $table): void {
             if (! Schema::hasColumn('plan_points', 'weight')) {
                 $table->decimal('weight', 5, 2)->default(1)->after('points');
@@ -28,14 +16,6 @@ return new class extends Migration
 
             if (! Schema::hasColumn('plan_points', 'is_standalone')) {
                 $table->boolean('is_standalone')->default(false)->after('weight');
-            }
-
-            if (! Schema::hasColumn('plan_points', 'plan_weight_rule_id')) {
-                $table->foreignId('plan_weight_rule_id')
-                    ->nullable()
-                    ->after('is_standalone')
-                    ->constrained('plan_weight_rules')
-                    ->nullOnDelete();
             }
         });
 
@@ -128,74 +108,12 @@ return new class extends Migration
         });
 
         Schema::table('plan_points', static function (Blueprint $table): void {
-            if (Schema::hasColumn('plan_points', 'plan_weight_rule_id')) {
-                $table->dropConstrainedForeignId('plan_weight_rule_id');
-            }
-
             foreach (['weight', 'is_standalone'] as $column) {
                 if (Schema::hasColumn('plan_points', $column)) {
                     $table->dropColumn($column);
                 }
             }
         });
-
-        Schema::dropIfExists('plan_weight_rules');
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function defaultWeightRules(): array
-    {
-        $now = now();
-
-        return [
-            [
-                'name' => 'السور الكبيرة',
-                'pattern' => 'البقرة|آل عمران|ال عمران|النساء|المائدة|الأنعام|الانعام|الأعراف|الاعراف|التوبة',
-                'weight' => 3,
-                'is_standalone' => true,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-            [
-                'name' => 'واجب منفرد ثقيل',
-                'pattern' => 'ثلاثة أجزاء|ثلاث اجزاء|ثلاث أجزاء|جزئين|جزءين|جزء عم.*تبارك|تبارك.*قد سمع|جزء ونصف',
-                'weight' => 3,
-                'is_standalone' => true,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-            [
-                'name' => 'عنصر مجاني',
-                'pattern' => 'دوري|مراجعة|من مراجعة',
-                'weight' => 0,
-                'is_standalone' => false,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-            [
-                'name' => 'عنصر متوسط',
-                'pattern' => 'جزء تراكمي|تراكمي|تسميع جزء|اسم الجزء',
-                'weight' => 2,
-                'is_standalone' => false,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-            [
-                'name' => 'صفحة عادية',
-                'pattern' => 'صفحة|صفحه',
-                'weight' => 1,
-                'is_standalone' => false,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        ];
     }
 
     private function syncPermissions(): void
@@ -206,10 +124,6 @@ return new class extends Migration
 
         $now = now();
         $permissions = [
-            'plan_weight_rules.view',
-            'plan_weight_rules.create',
-            'plan_weight_rules.update',
-            'plan_weight_rules.delete',
             'monthly_plans.view',
             'monthly_plans.create',
             'monthly_plans.update',

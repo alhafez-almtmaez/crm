@@ -17,7 +17,6 @@ class PlanPoint extends Model
         'points',
         'weight',
         'is_standalone',
-        'plan_weight_rule_id',
         'requires_certificate',
         'surah_name',
         'part_name',
@@ -30,17 +29,11 @@ class PlanPoint extends Model
         'points' => 'int',
         'weight' => 'decimal:2',
         'is_standalone' => 'bool',
-        'plan_weight_rule_id' => 'int',
         'requires_certificate' => 'bool',
     ];
 
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class, 'plan_id');
-    }
-
-    public function weightRule(): BelongsTo
-    {
-        return $this->belongsTo(PlanWeightRule::class, 'plan_weight_rule_id');
     }
 }

@@ -34,6 +34,8 @@ const appToast = useAppToast();
 const loading = ref(false);
 const generating = ref(false);
 const plans = ref([]);
+const dates = ref([]);
+const selectedCenterPayload = ref(null);
 const filters = ref({
     center_id: null,
     group_id: null,
@@ -63,13 +65,31 @@ const groupOptions = computed(() => {
 });
 
 const selectedGroup = computed(() => groupOptions.value.find((group) => Number(group.id) === Number(filters.value.group_id)) ?? null);
+const selectedCenter = computed(() => props.centers.find((center) => Number(center.id) === Number(filters.value.center_id)) ?? null);
+
+const planRows = computed(() => plans.value.map((plan) => ({
+    ...plan,
+    dayMap: Object.fromEntries((plan.days ?? []).map((day) => [day.date, day])),
+})));
+
+const cellItems = (plan, date) => plan.dayMap?.[date]?.items ?? [];
+const cellTotalWeight = (plan, date) => plan.dayMap?.[date]?.total_weight ?? 0;
+
+const shortDate = (date) => {
+    const [, month, day] = String(date).split('-').map((segment) => Number(segment));
+
+    return month && day ? `${day}/${month}` : date;
+};
 
 const fetchPlans = async () => {
     loading.value = true;
 
     try {
         const { data } = await axios.get('/admin/monthly-plans/records', { params: filters.value });
-        plans.value = data?.data ?? [];
+        const payload = data?.data ?? {};
+        plans.value = payload.plans ?? [];
+        dates.value = payload.dates ?? [];
+        selectedCenterPayload.value = payload.center ?? null;
     } catch (error) {
         appToast.fromAxiosError(error, {
             summary: t('notifications.requestFailedTitle'),
@@ -81,8 +101,8 @@ const fetchPlans = async () => {
 };
 
 const generatePlans = async () => {
-    if (!filters.value.group_id) {
-        appToast.error(t('monthlyPlans.groupRequired'));
+    if (!filters.value.center_id) {
+        appToast.error(t('monthlyPlans.centerRequired'));
         return;
     }
 
@@ -90,6 +110,7 @@ const generatePlans = async () => {
 
     try {
         const { data } = await axios.post('/admin/monthly-plans/generate', {
+            center_id: filters.value.center_id,
             group_id: filters.value.group_id,
             month: filters.value.month,
             year: filters.value.year,
@@ -110,6 +131,9 @@ const onCenterChange = () => {
     if (!groupOptions.value.some((group) => Number(group.id) === Number(filters.value.group_id))) {
         filters.value.group_id = null;
     }
+    dates.value = [];
+    plans.value = [];
+    selectedCenterPayload.value = null;
 };
 
 onMounted(() => {
@@ -154,8 +178,9 @@ onMounted(() => {
                         <Button type="button" icon="pi pi-calendar-plus" :label="t('monthlyPlans.generate')" :loading="generating" @click="generatePlans" />
                     </div>
                 </div>
-                <p v-if="selectedGroup" class="mt-3 text-sm text-(--muted-foreground)">
-                    {{ t('monthlyPlans.generateHint', { group: selectedGroup.name }) }}
+                <p v-if="selectedCenter" class="mt-3 text-sm text-(--muted-foreground)">
+                    {{ t('monthlyPlans.generateHint', { center: selectedCenter.name }) }}
+                    <span v-if="selectedGroup"> / {{ selectedGroup.name }}</span>
                 </p>
             </article>
 
@@ -167,37 +192,93 @@ onMounted(() => {
                 {{ t('monthlyPlans.noPlans') }}
             </div>
 
-            <div v-else class="grid gap-5">
-                <article
-                    v-for="plan in plans"
-                    :key="plan.id"
-                    class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 shadow-(--shadow-sm)"
-                >
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <h2 class="text-xl font-semibold">{{ plan.student_name }}</h2>
-                            <p class="mt-1 text-sm text-(--muted-foreground)">
-                                {{ plan.plan_name || t('common.na') }} / {{ plan.group_name || t('common.na') }}
-                            </p>
-                        </div>
-                        <div class="flex flex-wrap gap-2 text-sm">
-                            <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
-                                {{ t('monthlyPlans.maxDailyWeight') }}: {{ plan.max_daily_weight }}
-                            </span>
-                            <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
-                                {{ t('monthlyPlans.itemsCount') }}: {{ plan.generated_items_count }}
-                            </span>
-                            <span v-if="plan.skipped_items_count" class="rounded-md border border-amber-300 px-3 py-1 font-semibold text-amber-800">
-                                {{ t('monthlyPlans.skippedItems') }}: {{ plan.skipped_items_count }}
-                            </span>
-                        </div>
+            <article v-else class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 shadow-(--shadow-sm)">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">{{ selectedCenterPayload?.name ?? selectedCenter?.name ?? t('monthlyPlans.title') }}</h2>
+                        <p class="mt-1 text-sm text-(--muted-foreground)">
+                            {{ t('monthlyPlans.monthlyGridHint') }}
+                        </p>
                     </div>
+                    <div class="flex flex-wrap gap-2 text-sm">
+                        <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
+                            {{ t('monthlyPlans.studentsCount') }}: {{ plans.length }}
+                        </span>
+                        <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
+                            {{ t('monthlyPlans.workingDaysCount') }}: {{ dates.length }}
+                        </span>
+                    </div>
+                </div>
 
+                <div class="mt-4 overflow-x-auto">
+                    <table dir="rtl" class="min-w-full border-separate border-spacing-0 text-sm">
+                        <thead>
+                            <tr>
+                                <th class="sticky right-0 z-20 min-w-56 border-b border-(--border) bg-(--card) px-3 py-3 text-start font-semibold">
+                                    {{ t('monthlyPlans.student') }}
+                                </th>
+                                <th
+                                    v-for="date in dates"
+                                    :key="date.date"
+                                    class="border-b border-(--border) px-2 py-2 text-start align-top font-semibold"
+                                >
+                                    <span class="block">{{ shortDate(date.date) }}</span>
+                                    <span class="mt-1 block text-xs font-medium text-(--muted-foreground)">{{ date.day_label }}</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="plan in planRows" :key="plan.id" class="align-top">
+                                <th class="sticky right-0 z-10 min-w-56 border-b border-(--border) bg-(--card) px-3 py-3 text-start">
+                                    <span class="block font-semibold">{{ plan.student_name }}</span>
+                                    <span class="mt-1 block text-xs font-medium text-(--muted-foreground)">
+                                        {{ plan.plan_name || t('common.na') }}
+                                    </span>
+                                    <span class="mt-1 block text-xs text-(--muted-foreground)">
+                                        {{ t('monthlyPlans.maxDailyWeight') }}: {{ plan.max_daily_weight }}
+                                    </span>
+                                </th>
+                                <td
+                                    v-for="date in dates"
+                                    :key="`${plan.id}-${date.date}`"
+                                    class="border-b border-(--border) px-1.5 py-1.5 align-top"
+                                >
+                                    <div v-if="cellItems(plan, date.date).length" class="grid gap-1">
+                                        <div
+                                            v-for="item in cellItems(plan, date.date)"
+                                            :key="item.id"
+                                            class="rounded-sm border border-(--border) bg-(--background) px-1.5 py-1"
+                                        >
+                                            <div class="line-clamp-1 text-xs font-semibold leading-4">{{ item.name }}</div>
+                                            <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                                                <span class="rounded-sm bg-(--muted) px-1.5 py-0.5 text-[11px] font-semibold">
+                                                    {{ item.weight }}
+                                                </span>
+                                                <span v-if="item.is_standalone" class="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                                                    {{ t('monthlyPlans.standalone') }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="text-[11px] font-semibold text-(--muted-foreground)">
+                                            {{ t('monthlyPlans.totalWeight') }}: {{ cellTotalWeight(plan, date.date) }}
+                                        </div>
+                                    </div>
+                                    <div v-else />
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-5 grid gap-3">
                     <div
-                        v-if="plan.skipped_items?.length"
-                        class="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+                        v-for="plan in planRows.filter((row) => row.skipped_items?.length)"
+                        :key="`skipped-${plan.id}`"
+                        class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
                     >
-                        <p class="font-semibold">{{ t('monthlyPlans.skippedItems') }}</p>
+                        <div>
+                            <p class="font-semibold">{{ plan.student_name }} / {{ t('monthlyPlans.skippedItems') }}</p>
+                        </div>
                         <div class="mt-2 flex flex-wrap gap-2">
                             <span
                                 v-for="item in plan.skipped_items"
@@ -208,48 +289,8 @@ onMounted(() => {
                             </span>
                         </div>
                     </div>
-
-                    <div class="mt-4 overflow-x-auto">
-                        <table class="min-w-full divide-y divide-(--border) text-sm">
-                            <thead>
-                                <tr>
-                                    <th class="px-3 py-2 text-start font-semibold">{{ t('monthlyPlans.date') }}</th>
-                                    <th class="px-3 py-2 text-start font-semibold">{{ t('monthlyPlans.totalWeight') }}</th>
-                                    <th class="px-3 py-2 text-start font-semibold">{{ t('monthlyPlans.items') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-(--border)">
-                                <tr v-for="day in plan.days" :key="day.id">
-                                    <td class="whitespace-nowrap px-3 py-3 font-semibold">{{ day.date }}</td>
-                                    <td class="px-3 py-3">{{ day.total_weight }}</td>
-                                    <td class="px-3 py-3">
-                                        <div class="grid gap-2">
-                                            <div
-                                                v-for="item in day.items"
-                                                :key="item.id"
-                                                class="rounded-md border border-(--border) bg-(--background) p-2"
-                                            >
-                                                <div class="flex flex-wrap items-center gap-2">
-                                                    <strong>{{ item.name }}</strong>
-                                                    <span class="rounded-md bg-(--muted) px-2 py-0.5 text-xs font-semibold">
-                                                        {{ t('monthlyPlans.weight') }}: {{ item.weight }}
-                                                    </span>
-                                                    <span v-if="item.is_standalone" class="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-                                                        {{ t('monthlyPlans.standalone') }}
-                                                    </span>
-                                                    <span class="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900">
-                                                        {{ item.status }}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
-            </div>
+                </div>
+            </article>
         </section>
     </AdminLayout>
 </template>
