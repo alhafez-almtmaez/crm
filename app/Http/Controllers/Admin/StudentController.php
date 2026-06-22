@@ -212,6 +212,7 @@ class StudentController extends Controller implements HasMiddleware
                 'errors' => [
                     'file' => $result['errors'],
                 ],
+                'meta' => $result,
             ], 422);
         }
 

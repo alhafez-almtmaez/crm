@@ -24,6 +24,9 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
     /** @var array<int, string> */
     private array $errors = [];
 
+    /** @var array<int, array{line: int, student: string, reason: string}> */
+    private array $skippedRows = [];
+
     public function __construct(
         private readonly ?int $currentUserId,
         private readonly bool $canAssignAdmin,
@@ -34,6 +37,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         /** @var array<string, mixed> $rowData */
         $rowData = $row->toArray();
         $lineNumber = $row->getIndex();
+        $studentLabel = $this->studentLabel($rowData);
         $studentId = $this->intOrNull(Arr::get($rowData, 'student_id', Arr::get($rowData, 'id')));
         $hasPlanPointColumn = array_key_exists('plan_point_id', $rowData) || array_key_exists('current_plan_point_id', $rowData);
         $hasPointsBalanceColumn = array_key_exists('points_balance', $rowData);
@@ -126,7 +130,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         $validator = Validator::make($payload, $rules);
 
         if ($validator->fails()) {
-            $this->markSkipped("Line {$lineNumber}: ".$validator->errors()->first());
+            $this->markSkipped($lineNumber, $studentLabel, (string) $validator->errors()->first());
 
             return;
         }
@@ -183,7 +187,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
     }
 
     /**
-     * @return array{updated: int, skipped: int, errors: array<int, string>}
+     * @return array{updated: int, skipped: int, errors: array<int, string>, skipped_rows: array<int, array{line: int, student: string, reason: string}>}
      */
     public function result(): array
     {
@@ -191,6 +195,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'updated' => $this->updated,
             'skipped' => $this->skipped,
             'errors' => $this->errors,
+            'skipped_rows' => $this->skippedRows,
         ];
     }
 
@@ -203,10 +208,52 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         return $currentStudentAdminId ?? $this->currentUserId;
     }
 
-    private function markSkipped(string $message): void
+    private function markSkipped(int $lineNumber, string $studentLabel, string $reason): void
     {
         $this->skipped++;
+        $message = "Line {$lineNumber}: {$reason}";
         $this->errors[] = $message;
+        $this->skippedRows[] = [
+            'line' => $lineNumber,
+            'student' => $studentLabel,
+            'reason' => $reason,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $rowData
+     */
+    private function studentLabel(array $rowData): string
+    {
+        $name = trim(implode(' ', array_filter([
+            $this->nullIfEmpty(Arr::get($rowData, 'first_name')),
+            $this->nullIfEmpty(Arr::get($rowData, 'second_name')),
+            $this->nullIfEmpty(Arr::get($rowData, 'middle_name')),
+            $this->nullIfEmpty(Arr::get($rowData, 'last_name')),
+        ], static fn (?string $value): bool => $value !== null)));
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        $studentId = $this->nullIfEmpty(Arr::get($rowData, 'student_id', Arr::get($rowData, 'id')));
+        if ($studentId !== null) {
+            return "ID {$studentId}";
+        }
+
+        $phone = PhoneNumberHelper::normalizeForStorage(Arr::get($rowData, 'phone_number'));
+        if ($phone !== null) {
+            return $phone;
+        }
+
+        $parentPhone = PhoneNumberHelper::normalizeForStorage(Arr::get($rowData, 'parent_phone_number'));
+        if ($parentPhone !== null) {
+            return $parentPhone;
+        }
+
+        $email = $this->nullIfEmpty(Arr::get($rowData, 'email'));
+
+        return $email ?? '-';
     }
 
     private function nullIfEmpty(mixed $value): ?string

@@ -53,6 +53,7 @@ const freezeVisible = ref(false);
 const congratulatoryVisible = ref(false);
 const exportVisible = ref(false);
 const importVisible = ref(false);
+const importReportVisible = ref(false);
 const selectedStudent = ref(null);
 const actionLoading = ref(false);
 const freezeErrors = ref({});
@@ -60,6 +61,12 @@ const congratulatoryErrors = ref({});
 const importErrors = ref({});
 const exportCenterId = ref(null);
 const importFile = ref(null);
+const importReport = ref({
+    updated: 0,
+    skipped: 0,
+    errors: [],
+    skipped_rows: [],
+});
 const freezeForm = ref({
     from: '',
     to: '',
@@ -120,6 +127,9 @@ const rowActions = computed(() => [
         title: t('students.congratulatory'),
     },
 ]);
+
+const importSkippedRows = computed(() => importReport.value?.skipped_rows ?? []);
+
 const phoneOptions = {
     initialCountry: 'jo',
     preferredCountries: ['jo', 'sa', 'ae', 'eg'],
@@ -219,8 +229,17 @@ const runExport = () => {
 const openImportDialog = () => {
     importFile.value = null;
     importErrors.value = {};
+    importReportVisible.value = false;
+    importReport.value = normalizeImportReport();
     importVisible.value = true;
 };
+
+const normalizeImportReport = (meta) => ({
+    updated: Number(meta?.updated ?? 0),
+    skipped: Number(meta?.skipped ?? 0),
+    errors: Array.isArray(meta?.errors) ? meta.errors : [],
+    skipped_rows: Array.isArray(meta?.skipped_rows) ? meta.skipped_rows : [],
+});
 
 const onImportFileChange = (event) => {
     const file = event?.target?.files?.[0] ?? null;
@@ -250,10 +269,20 @@ const submitImport = async () => {
         });
 
         appToast.success(data?.message ?? t('students.importSuccess'));
+        importReport.value = normalizeImportReport(data?.meta);
+        importReportVisible.value = importReport.value.skipped > 0 || importSkippedRows.value.length > 0;
         importVisible.value = false;
         await fetchStudents();
     } catch (error) {
-        importErrors.value = error?.response?.data?.errors ?? {};
+        const responseData = error?.response?.data ?? {};
+        importErrors.value = responseData.errors ?? {};
+        if (responseData.meta) {
+            importReport.value = normalizeImportReport(responseData.meta);
+            importReportVisible.value = importReport.value.skipped > 0 || importSkippedRows.value.length > 0;
+            if (importReportVisible.value) {
+                importVisible.value = false;
+            }
+        }
         appToast.fromAxiosError(error, {
             summary: t('notifications.requestFailedTitle'),
             fallback: t('students.importFailed'),
@@ -556,6 +585,51 @@ onMounted(() => {
                         <Button type="submit" icon="pi pi-upload" :label="t('students.importNow')" :loading="actionLoading" />
                     </div>
                 </form>
+            </Dialog>
+
+            <Dialog
+                v-model:visible="importReportVisible"
+                modal
+                :header="t('students.importReport')"
+                :style="{ width: 'min(52rem, 96vw)' }"
+            >
+                <div class="grid gap-4">
+                    <div class="flex flex-wrap gap-2 text-sm">
+                        <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
+                            {{ t('students.importUpdated') }}: {{ importReport.updated }}
+                        </span>
+                        <span class="rounded-md border border-amber-300 bg-amber-50 px-3 py-1 font-semibold text-amber-900">
+                            {{ t('students.importSkipped') }}: {{ importReport.skipped }}
+                        </span>
+                    </div>
+
+                    <div v-if="importSkippedRows.length" class="max-h-[55vh] overflow-auto rounded-md border border-(--border)">
+                        <table class="min-w-full border-separate border-spacing-0 text-sm">
+                            <thead class="sticky top-0 bg-(--card)">
+                                <tr>
+                                    <th class="border-b border-(--border) px-3 py-2 text-start font-semibold">{{ t('students.importLine') }}</th>
+                                    <th class="border-b border-(--border) px-3 py-2 text-start font-semibold">{{ t('students.studentName') }}</th>
+                                    <th class="border-b border-(--border) px-3 py-2 text-start font-semibold">{{ t('students.importSkipReason') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="row in importSkippedRows" :key="`${row.line}-${row.student}-${row.reason}`">
+                                    <td class="border-b border-(--border) px-3 py-2 font-semibold">{{ row.line }}</td>
+                                    <td class="border-b border-(--border) px-3 py-2">{{ row.student || '-' }}</td>
+                                    <td class="border-b border-(--border) px-3 py-2 text-red-700">{{ row.reason }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-else-if="importReport.errors.length" class="grid gap-2 text-sm text-red-700">
+                        <p v-for="error in importReport.errors" :key="error">{{ error }}</p>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <Button type="button" :label="t('common.close')" severity="secondary" @click="importReportVisible = false" />
+                    </div>
+                </div>
             </Dialog>
 
             <Dialog

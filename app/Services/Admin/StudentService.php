@@ -196,7 +196,7 @@ class StudentService
     }
 
     /**
-     * @return array{updated: int, skipped: int, errors: array<int, string>}
+     * @return array{updated: int, skipped: int, errors: array<int, string>, skipped_rows: array<int, array{line: int, student: string, reason: string}>}
      */
     public function importFile(UploadedFile $file): array
     {
