@@ -359,6 +359,7 @@
     "studentsHint": "لكل طالب تظهر عشرون خانة من نقاط الخطة التالية له.",
     "noStudentsLoaded": "اختر مركزًا وتاريخًا ثم حمّل الطلاب.",
     "loadStudents": "تحميل الطلاب",
+    "exportPdf": "تصدير PDF",
     "centerWorkingDaysHint": "الأيام المسموحة حسب دوام المركز: {days}",
     "alreadyExists": "يوجد واجب مسجل لهذا المركز في نفس التاريخ.",
     "openExisting": "فتح الواجب الحالي",

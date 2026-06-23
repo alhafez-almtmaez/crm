@@ -16,6 +16,8 @@ use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\LaravelPdf\Facades\Pdf;
+use Spatie\LaravelPdf\PdfBuilder;
 
 class HomeworkController extends Controller implements HasMiddleware
 {
@@ -24,7 +26,7 @@ class HomeworkController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:homeworks.view', only: ['index', 'records', 'pointHistory']),
+            new Middleware('can:homeworks.view', only: ['index', 'records', 'pointHistory', 'pdf']),
             new Middleware('can:homeworks.create', only: ['create', 'store']),
             new Middleware('can:homeworks.update', only: ['edit', 'update']),
             new Middleware('can:homeworks.delete', only: ['destroy']),
@@ -107,6 +109,17 @@ class HomeworkController extends Controller implements HasMiddleware
         return response()->json([
             'message' => __('homeworks.deleted_successfully'),
         ]);
+    }
+
+    public function pdf(Homework $homework): PdfBuilder
+    {
+        $payload = $this->service->pdfPayload($homework);
+
+        return Pdf::view('pdf.homework', $payload)
+            ->name($payload['file_name'])
+            ->format('a4')
+            ->margins(10, 10, 10, 10)
+            ->download();
     }
 
     public function pointHistory(Student $student): JsonResponse

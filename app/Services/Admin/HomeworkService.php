@@ -21,6 +21,8 @@ class HomeworkService
 {
     private const POINT_WINDOW_SIZE = 20;
 
+    private const PDF_ASSIGNMENT_COLUMNS = 5;
+
     public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
     /**
@@ -158,6 +160,7 @@ class HomeworkService
             'students.student.center',
             'students.student.group',
             'students.student.plan',
+            'students.plan',
             'students.currentPlanPoint',
             'students.points.planPoint',
         ]);
@@ -167,6 +170,182 @@ class HomeworkService
             ->values()
             ->map(fn (HomeworkStudent $row): array => $this->studentRowDataFromHomework($row))
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function pdfPayload(Homework $homework): array
+    {
+        app()->setLocale('ar');
+
+        $homework->loadMissing([
+            'center:id,name,working_days',
+            'admin:id,name',
+        ]);
+
+        $nextHomeworkDate = $this->nextHomeworkDate($homework);
+
+        $students = collect($this->editStudentRows($homework))
+            ->map(function (array $student): array {
+                $points = collect($student['points'] ?? []);
+
+                $student['done_points'] = $points
+                    ->filter(static fn (array $point): bool => (bool) ($point['is_done'] ?? false))
+                    ->values()
+                    ->all();
+                $student['next_homework_points'] = $points
+                    ->filter(static fn (array $point): bool => (bool) ($point['is_next_homework'] ?? false))
+                    ->values()
+                    ->all();
+                $student['pending_points'] = $points
+                    ->reject(static fn (array $point): bool => (bool) ($point['is_done'] ?? false) || (bool) ($point['is_next_homework'] ?? false))
+                    ->values()
+                    ->all();
+                $student['pdf_name'] = $this->threePartStudentName((string) ($student['full_name'] ?? ''));
+                $student['pdf_homework_cells'] = $this->pdfHomeworkCells(
+                    collect($student['next_homework_points'])
+                        ->pluck('name')
+                        ->filter(static fn ($name): bool => is_string($name) && trim($name) !== '')
+                        ->values()
+                        ->all()
+                );
+
+                return $student;
+            })
+            ->filter(static fn (array $student): bool => $nextHomeworkDate !== null
+                && (int) ($student['is_active'] ?? Student::STATUS_INACTIVE) === Student::STATUS_ACTIVE
+                && count($student['next_homework_points'] ?? []) > 0)
+            ->values();
+
+        $date = $homework->date?->copy()->locale(app()->getLocale());
+        $nextDate = $nextHomeworkDate?->copy()->locale(app()->getLocale());
+        $generatedAt = now()->locale(app()->getLocale());
+        $fileDate = $homework->date?->format('Y-m-d') ?? now()->toDateString();
+        $groupNames = $students
+            ->pluck('group_name')
+            ->filter(static fn ($name): bool => is_string($name) && trim($name) !== '')
+            ->unique()
+            ->values();
+        $title = $groupNames->count() === 1
+            ? __('homeworks.pdf_group_homework_title', ['group' => $groupNames->first()])
+            : __('homeworks.pdf_center_homework_title', ['center' => $homework->center?->name ?? __('homeworks.pdf_none')]);
+
+        return [
+            'file_name' => "homework-{$homework->id}-{$fileDate}.pdf",
+            'homework' => [
+                'id' => (int) $homework->id,
+                'date' => $homework->date?->toDateString(),
+                'date_formatted' => $date?->translatedFormat('d/m/Y') ?? '',
+                'date_numeric' => $date?->format('Y / n / j') ?? '',
+                'day_name' => $date?->translatedFormat('l') ?? '',
+                'date_full' => $date?->translatedFormat('l ، j F ، Y') ?? '',
+                'next_homework_date' => $nextDate?->toDateString(),
+                'next_homework_date_numeric' => $nextDate?->format('Y / n / j') ?? '',
+                'next_homework_day_name' => $nextDate?->translatedFormat('l') ?? '',
+                'center_name' => $homework->center?->name,
+                'admin_name' => $homework->admin?->name,
+                'generated_at' => $generatedAt->translatedFormat('d/m/Y H:i'),
+            ],
+            'pdf' => [
+                'title' => $title,
+                'assignment_columns' => range(1, self::PDF_ASSIGNMENT_COLUMNS),
+                'logo_data_uri' => $this->pdfLogoDataUri(),
+                'fonts' => $this->pdfFontDataUris(),
+            ],
+            'students' => $students->all(),
+            'totals' => [
+                'students_count' => $students->count(),
+                'completed_points_count' => $students->sum(static fn (array $student): int => count($student['done_points'] ?? [])),
+                'next_homework_count' => $students->sum(static fn (array $student): int => count($student['next_homework_points'] ?? [])),
+                'manual_adjustments_total' => $students->sum(static fn (array $student): int => (int) ($student['points_adjustment'] ?? 0)),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $names
+     * @return array<int, string>
+     */
+    private function pdfHomeworkCells(array $names): array
+    {
+        $cells = array_fill(0, self::PDF_ASSIGNMENT_COLUMNS, '');
+        $lastIndex = self::PDF_ASSIGNMENT_COLUMNS - 1;
+
+        foreach ($names as $index => $name) {
+            if ($index < $lastIndex) {
+                $cells[$index] = $name;
+
+                continue;
+            }
+
+            $cells[$lastIndex] = trim($cells[$lastIndex]."\n".$name);
+        }
+
+        return $cells;
+    }
+
+    private function threePartStudentName(string $name): string
+    {
+        $parts = preg_split('/\s+/u', trim($name)) ?: [];
+        $parts = array_values(array_filter($parts, static fn (string $part): bool => $part !== ''));
+
+        return implode(' ', array_slice($parts, 0, 3)) ?: $name;
+    }
+
+    private function nextHomeworkDate(Homework $homework): ?Carbon
+    {
+        if ($homework->date === null || $homework->center === null) {
+            return null;
+        }
+
+        $workingDays = $this->workingDayLookup($homework->center);
+        if ($workingDays === []) {
+            return null;
+        }
+
+        $cursor = $homework->date->copy()->addDay();
+        for ($index = 0; $index < 31; $index++) {
+            if (isset($workingDays[$this->dayName($cursor)])) {
+                return $cursor;
+            }
+
+            $cursor = $cursor->addDay();
+        }
+
+        return null;
+    }
+
+    private function pdfLogoDataUri(): ?string
+    {
+        return $this->assetDataUri(public_path('media/logos/logo.png'), 'image/png');
+    }
+
+    /**
+     * @return array<string, ?string>
+     */
+    private function pdfFontDataUris(): array
+    {
+        return [
+            'naskh_regular' => $this->assetDataUri('/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf', 'font/ttf'),
+            'naskh_bold' => $this->assetDataUri('/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf', 'font/ttf'),
+            'kufi_regular' => $this->assetDataUri('/usr/share/fonts/truetype/noto/NotoKufiArabic-Regular.ttf', 'font/ttf'),
+            'kufi_bold' => $this->assetDataUri('/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf', 'font/ttf'),
+        ];
+    }
+
+    private function assetDataUri(string $path, string $mime): ?string
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            return null;
+        }
+
+        return "data:{$mime};base64,".base64_encode($contents);
     }
 
     /**
@@ -319,6 +498,7 @@ class HomeworkService
             'plan_id' => $row->plan_id !== null ? (int) $row->plan_id : null,
             'plan_name' => $row->plan?->name ?? $student?->plan?->name,
             'group_name' => $student?->group?->name,
+            'is_active' => (int) ($student?->is_active ?? Student::STATUS_INACTIVE),
             'points_balance' => (int) ($student?->points_balance ?? $row->points_balance_after),
             'points_balance_before' => (int) $row->points_balance_before,
             'points_adjustment' => (int) $row->points_adjustment,

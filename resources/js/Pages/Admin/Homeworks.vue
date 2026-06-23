@@ -49,12 +49,35 @@ const columns = computed(() => [
     { field: 'created_at_formatted', header: t('homeworks.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
 
+const rowActions = computed(() => [
+    {
+        key: 'pdf',
+        icon: 'pi pi-file-pdf',
+        severity: 'secondary',
+        title: t('homeworks.exportPdf'),
+    },
+]);
+
 const openCreate = () => {
     router.get('/admin/homeworks/create');
 };
 
 const openEdit = (row) => {
     router.get(`/admin/homeworks/${row.id}/edit`);
+};
+
+const openPdf = (row) => {
+    if (!row?.id) {
+        return;
+    }
+
+    window.open(`/admin/homeworks/${row.id}/pdf`, '_blank', 'noopener');
+};
+
+const handleRowAction = ({ action, data }) => {
+    if (action === 'pdf') {
+        openPdf(data);
+    }
 };
 
 const deleteRow = async (row) => {
@@ -117,6 +140,7 @@ onMounted(() => {
                 :search="search"
                 :sort-field="sortBy"
                 :sort-order="tableSortOrder"
+                :row-actions="rowActions"
                 :create-label="t('homeworks.createHomework')"
                 :search-label="t('homeworks.searchHomeworks')"
                 :table-title="t('homeworks.tableTitle')"
@@ -126,6 +150,7 @@ onMounted(() => {
                 @create="openCreate"
                 @edit="openEdit"
                 @delete="askDelete"
+                @row-action="handleRowAction"
             />
             <ConfirmPopup />
         </section>

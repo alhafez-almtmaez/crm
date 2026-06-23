@@ -97,6 +97,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
 
         Route::get('homeworks/records', [HomeworkController::class, 'records'])->name('homeworks.records');
         Route::get('homeworks/students/{student}/point-history', [HomeworkController::class, 'pointHistory'])->name('homeworks.students.point-history');
+        Route::get('homeworks/{homework}/pdf', [HomeworkController::class, 'pdf'])->name('homeworks.pdf');
         Route::resource('homeworks', HomeworkController::class)->except(['show']);
 
         Route::get('absence-rules/records', [AbsenceRuleController::class, 'records'])->name('absence-rules.records');
