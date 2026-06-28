@@ -47,7 +47,12 @@ class StudentStoreRequest extends FormRequest
                 Rule::exists('groups', 'id')->where('center_id', (int) $this->input('center_id')),
             ],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
-            'max_daily_weight' => ['required', 'numeric', 'min:0.01', 'max:99'],
+            'current_plan_point_id' => [
+                'nullable',
+                Rule::exists('plan_points', 'id')->where('plan_id', (int) $this->input('plan_type_id')),
+            ],
+            'max_daily_weight' => ['required', 'integer', 'min:1', 'max:99'],
+            'points_balance' => ['nullable', 'integer'],
             'admin_id' => [
                 Rule::requiredIf((bool) $this->user()?->hasRole('admin')),
                 'nullable',
@@ -66,15 +71,17 @@ class StudentStoreRequest extends FormRequest
             'email' => $this->emptyToNull($this->input('email')),
             'date_of_birth' => $this->emptyToNull($this->input('date_of_birth')),
             'group_id' => $this->emptyToNull($this->input('group_id')),
+            'current_plan_point_id' => $this->emptyToNull($this->input('current_plan_point_id')),
             'admin_id' => $this->emptyToNull($this->input('admin_id')),
             'max_daily_weight' => $this->input('max_daily_weight', 2),
+            'points_balance' => $this->input('points_balance', 0),
             'is_active' => $this->input('is_active', 1),
         ]);
     }
 
     private function emptyToNull(mixed $value): mixed
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             return $value;
         }
 

@@ -13,19 +13,19 @@ use App\Http\Requests\Admin\StudentStoreRequest;
 use App\Http\Requests\Admin\StudentUpdateRequest;
 use App\Models\Student;
 use App\Services\Admin\ActivityLogService;
-use App\Services\Admin\StudentCommunicationService;
 use App\Services\Admin\GroupService;
+use App\Services\Admin\StudentCommunicationService;
 use App\Services\Admin\StudentService;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class StudentController extends Controller implements HasMiddleware
 {
@@ -34,9 +34,7 @@ class StudentController extends Controller implements HasMiddleware
         private readonly StudentCommunicationService $studentCommunicationService,
         private readonly GroupService $groupService,
         private readonly ActivityLogService $activityLogService,
-    )
-    {
-    }
+    ) {}
 
     public static function middleware(): array
     {
@@ -64,6 +62,7 @@ class StudentController extends Controller implements HasMiddleware
         return Inertia::render('Admin/Students/Create', [
             'centers' => $this->studentService->centerOptions(),
             'plans' => $this->studentService->planOptions(),
+            'planPoints' => $this->studentService->planPointOptions(),
             'admins' => $this->studentService->adminOptions(),
             'canAssignAdmin' => (bool) Auth::user()?->hasRole('admin'),
         ]);
@@ -86,12 +85,15 @@ class StudentController extends Controller implements HasMiddleware
                 'center_id' => $student->center_id,
                 'group_id' => $student->group_id,
                 'plan_type_id' => $student->plan_type_id,
+                'current_plan_point_id' => $student->current_plan_point_id,
                 'max_daily_weight' => $student->max_daily_weight,
+                'points_balance' => $student->points_balance,
                 'admin_id' => $student->admin_id,
                 'is_active' => $student->is_active,
             ],
             'centers' => $this->studentService->centerOptions(),
             'plans' => $this->studentService->planOptions(),
+            'planPoints' => $this->studentService->planPointOptions(),
             'admins' => $this->studentService->adminOptions(),
             'canAssignAdmin' => (bool) Auth::user()?->hasRole('admin'),
             'groups' => $student->center

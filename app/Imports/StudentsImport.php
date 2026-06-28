@@ -74,7 +74,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         if ($hasMaxDailyWeightColumn) {
-            $payload['max_daily_weight'] = $this->floatOrNull(Arr::get($rowData, 'max_daily_weight'));
+            $payload['max_daily_weight'] = $this->nullIfEmpty(Arr::get($rowData, 'max_daily_weight'));
         }
 
         $rules = [
@@ -124,7 +124,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         if ($hasMaxDailyWeightColumn) {
-            $rules['max_daily_weight'] = ['nullable', 'numeric', 'min:0.01', 'max:99'];
+            $rules['max_daily_weight'] = ['nullable', 'integer', 'min:1', 'max:99'];
         }
 
         $validator = Validator::make($payload, $rules);
@@ -174,7 +174,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         if ($hasMaxDailyWeightColumn) {
-            $payload['max_daily_weight'] = (float) ($validated['max_daily_weight'] ?? 2);
+            $payload['max_daily_weight'] = (int) ($validated['max_daily_weight'] ?? 2);
         }
 
         if ($student) {
@@ -279,20 +279,6 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         return (int) $trimmed;
-    }
-
-    private function floatOrNull(mixed $value): ?float
-    {
-        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
-            return null;
-        }
-
-        $trimmed = trim((string) $value);
-        if ($trimmed === '') {
-            return null;
-        }
-
-        return (float) $trimmed;
     }
 
     private function normalizeDateValue(mixed $value): ?string

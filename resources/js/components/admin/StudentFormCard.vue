@@ -35,6 +35,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    planPoints: {
+        type: Array,
+        default: () => [],
+    },
     initialGroups: {
         type: Array,
         default: () => [],
@@ -89,6 +93,15 @@ const statusOptions = computed(() => [
     { value: 0, label: t('students.statusInactive') },
     { value: 2, label: t('students.statusFrozen') },
 ]);
+const currentPlanPointOptions = computed(() => {
+    const planId = props.form.plan_type_id ? Number(props.form.plan_type_id) : null;
+
+    if (planId === null) {
+        return [];
+    }
+
+    return props.planPoints.filter((point) => Number(point.plan_id) === planId);
+});
 const maxBirthDate = new Date();
 
 const dateOfBirthValue = computed({
@@ -237,6 +250,22 @@ watch(
         }
     },
     { immediate: true },
+);
+
+watch(
+    () => props.form.plan_type_id,
+    () => {
+        if (!props.form.current_plan_point_id) {
+            return;
+        }
+
+        const currentPointId = Number(props.form.current_plan_point_id);
+        const hasCurrentPoint = currentPlanPointOptions.value.some((point) => Number(point.id) === currentPointId);
+
+        if (!hasCurrentPoint) {
+            props.form.current_plan_point_id = null;
+        }
+    },
 );
 </script>
 
@@ -413,6 +442,24 @@ watch(
                     <small v-if="form.errors.plan_type_id" class="text-sm text-red-600">{{ form.errors.plan_type_id }}</small>
                 </div>
 
+                <div class="flex flex-col gap-1">
+                    <FloatLabel variant="on">
+                        <Select
+                            input-id="student-current-plan-point-id"
+                            v-model="form.current_plan_point_id"
+                            :options="currentPlanPointOptions"
+                            option-label="name"
+                            option-value="id"
+                            filter
+                            show-clear
+                            :disabled="!form.plan_type_id"
+                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                        />
+                        <FormFieldLabel for-id="student-current-plan-point-id" :text="t('students.currentPlanPoint')" />
+                    </FloatLabel>
+                    <small v-if="form.errors.current_plan_point_id" class="text-sm text-red-600">{{ form.errors.current_plan_point_id }}</small>
+                </div>
+
                 <div v-if="canAssignAdmin" class="flex flex-col gap-1">
                     <FloatLabel variant="on">
                         <Select
@@ -434,10 +481,20 @@ watch(
                     v-model="form.max_daily_weight"
                     :label="t('students.maxDailyWeight')"
                     input-type="number"
-                    :input-props="{ min: '0.01', step: '0.25' }"
+                    :input-props="{ min: '1', step: '1' }"
                     required
                     :invalid="Boolean(form.errors.max_daily_weight)"
                     :error="form.errors.max_daily_weight"
+                />
+
+                <PrimeFloatField
+                    id="student-points-balance"
+                    v-model="form.points_balance"
+                    :label="t('students.pointsBalance')"
+                    input-type="number"
+                    :input-props="{ step: '1' }"
+                    :invalid="Boolean(form.errors.points_balance)"
+                    :error="form.errors.points_balance"
                 />
 
                 <div class="flex flex-col gap-1">

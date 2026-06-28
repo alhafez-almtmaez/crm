@@ -92,7 +92,7 @@ class StudentMonthlyPlanService
                 'plan_name' => (string) ($plan->plan?->name ?? ''),
                 'month' => (int) $plan->month,
                 'year' => (int) $plan->year,
-                'max_daily_weight' => (float) $plan->max_daily_weight,
+                'max_daily_weight' => (int) $plan->max_daily_weight,
                 'starts_after_plan_point_name' => $plan->startsAfterPlanPoint?->name,
                 'ends_at_plan_point_name' => $plan->endsAtPlanPoint?->name,
                 'generated_items_count' => (int) $plan->generated_items_count,

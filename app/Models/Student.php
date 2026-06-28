@@ -48,7 +48,7 @@ class Student extends Model
         'date_of_birth' => 'date',
         'is_active' => 'int',
         'current_plan_point_id' => 'int',
-        'max_daily_weight' => 'decimal:2',
+        'max_daily_weight' => 'int',
         'monthly_plan_cursor_point_id' => 'int',
         'deducted_points_count' => 'int',
         'points_balance' => 'int',

@@ -62,6 +62,7 @@ class StudentMonthlyPlanGenerator
             $monthlyPlan = $this->generateForStudent($student, $month, $year);
             if ($monthlyPlan === null) {
                 $skipped++;
+
                 continue;
             }
 
@@ -112,7 +113,7 @@ class StudentMonthlyPlanGenerator
                 'plan_id' => $lockedStudent->plan_type_id,
                 'month' => $month,
                 'year' => $year,
-                'max_daily_weight' => max(0.01, (float) ($lockedStudent->max_daily_weight ?? 2)),
+                'max_daily_weight' => max(1, (int) ($lockedStudent->max_daily_weight ?? 2)),
                 'starts_after_plan_point_id' => $startPoint?->id,
                 'status' => StudentMonthlyPlan::STATUS_GENERATED,
                 'generated_at' => now(),
@@ -153,7 +154,7 @@ class StudentMonthlyPlanGenerator
         $lastGeneratedDay = null;
         $currentWeight = 0.0;
         $pendingZeroPoints = [];
-        $maxDailyWeight = max(0.01, (float) $plan->max_daily_weight);
+        $maxDailyWeight = max(1, (int) $plan->max_daily_weight);
 
         foreach ($points as $point) {
             $weightData = $this->weightDataForPoint($point);
@@ -165,10 +166,12 @@ class StudentMonthlyPlanGenerator
                     $this->createItem($plan, $lastGeneratedDay, $student, $point, $weightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
                     $generatedCount++;
                     $lastPlanPointId = (int) $point->id;
+
                     continue;
                 }
 
                 $pendingZeroPoints[] = [$point, $weightData];
+
                 continue;
             }
 
@@ -285,7 +288,7 @@ class StudentMonthlyPlanGenerator
     }
 
     /**
-     * @param array{weight: float, is_standalone: bool} $weightData
+     * @param  array{weight: float, is_standalone: bool}  $weightData
      */
     private function createItem(
         StudentMonthlyPlan $plan,
@@ -365,5 +368,4 @@ class StudentMonthlyPlanGenerator
 
         return $dates;
     }
-
 }

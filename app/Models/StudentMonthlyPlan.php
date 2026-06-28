@@ -38,7 +38,7 @@ class StudentMonthlyPlan extends Model
         'plan_id' => 'int',
         'month' => 'int',
         'year' => 'int',
-        'max_daily_weight' => 'decimal:2',
+        'max_daily_weight' => 'int',
         'starts_after_plan_point_id' => 'int',
         'ends_at_plan_point_id' => 'int',
         'generated_items_count' => 'int',

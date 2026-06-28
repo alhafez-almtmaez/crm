@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Imports\StudentsImport;
 use App\Models\Center;
 use App\Models\Plan;
+use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\System\DateTimeFormatterService;
@@ -143,6 +144,24 @@ class StudentService
     }
 
     /**
+     * @return array<int, array{id: int, plan_id: int, name: string}>
+     */
+    public function planPointOptions(): array
+    {
+        return PlanPoint::query()
+            ->orderBy('plan_id')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'plan_id', 'name'])
+            ->map(static fn (PlanPoint $point): array => [
+                'id' => (int) $point->id,
+                'plan_id' => (int) $point->plan_id,
+                'name' => (string) $point->name,
+            ])
+            ->all();
+    }
+
+    /**
      * @return array<int, array{id: int, name: string}>
      */
     public function adminOptions(): array
@@ -230,7 +249,9 @@ class StudentService
             'center_id' => isset($data['center_id']) ? (int) $data['center_id'] : null,
             'group_id' => isset($data['group_id']) ? (int) $data['group_id'] : null,
             'plan_type_id' => isset($data['plan_type_id']) ? (int) $data['plan_type_id'] : null,
-            'max_daily_weight' => isset($data['max_daily_weight']) ? (float) $data['max_daily_weight'] : 2,
+            'current_plan_point_id' => isset($data['current_plan_point_id']) ? (int) $data['current_plan_point_id'] : null,
+            'max_daily_weight' => isset($data['max_daily_weight']) ? (int) $data['max_daily_weight'] : 2,
+            'points_balance' => (int) ($data['points_balance'] ?? 0),
             'admin_id' => $this->resolveAdminId($data),
             'is_active' => (int) ($data['is_active'] ?? 1),
         ];
