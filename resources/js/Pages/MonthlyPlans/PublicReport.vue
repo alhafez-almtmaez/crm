@@ -11,6 +11,8 @@ const props = defineProps({
 
 const copied = shallowRef(false);
 const studentSearch = shallowRef('');
+const expandedMobilePlanIds = shallowRef(new Set());
+const mobileInitialDaysCount = 2;
 const logoUrl = computed(() => '/media/logos/logo.png');
 const monthNames = [
     '',
@@ -64,13 +66,27 @@ const tableStudentsCount = computed(() => {
 });
 const monthLabel = computed(() => monthNames[Number(monthlyPlan.value.month)] ?? monthlyPlan.value.month);
 const monthDisplay = computed(() => `${monthLabel.value} (${Number(monthlyPlan.value.month) || '-'})`);
-const title = computed(() => `الخطة الشهرية - ${monthlyPlan.value.group_name ?? ''}`);
+const title = computed(() => `الخطة الشهرية ${monthlyPlan.value.month}/${monthlyPlan.value.year} - ${monthlyPlan.value.group_name ?? ''}`);
 
 const cellItems = (plan, date) => plan.dayMap?.[date]?.items ?? [];
 const shortDate = (date) => {
     const [, month, day] = String(date).split('-').map((segment) => Number(segment));
 
     return month && day ? `${day}/${month}` : date;
+};
+const isMobilePlanExpanded = (plan) => expandedMobilePlanIds.value.has(plan.id);
+const mobileDatesForPlan = (plan) => (isMobilePlanExpanded(plan) ? dates.value : dates.value.slice(0, mobileInitialDaysCount));
+const remainingMobileDatesCount = computed(() => Math.max(dates.value.length - mobileInitialDaysCount, 0));
+const toggleMobilePlan = (plan) => {
+    const next = new Set(expandedMobilePlanIds.value);
+
+    if (next.has(plan.id)) {
+        next.delete(plan.id);
+    } else {
+        next.add(plan.id);
+    }
+
+    expandedMobilePlanIds.value = next;
 };
 
 const copyReportLink = async () => {
@@ -216,45 +232,93 @@ const clearStudentSearch = () => {
                 لا توجد نتائج لهذا الاسم.
             </div>
 
-            <div v-else class="plan-table-wrap">
-                <table class="plan-table">
-                    <thead>
-                        <tr>
-                            <th class="student-header" scope="col">الطالب والخطة</th>
-                            <th
-                                v-for="date in dates"
-                                :key="date.date"
-                                scope="col"
-                            >
-                                <span>{{ shortDate(date.date) }}</span>
-                                <small>{{ date.day_label }}</small>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="plan in filteredPlanRows" :key="plan.id">
-                            <th class="student-cell" scope="row">
+            <div v-else>
+                <div class="plan-table-wrap desktop-plan-table">
+                    <table class="plan-table">
+                        <thead>
+                            <tr>
+                                <th class="student-header" scope="col">الطالب والخطة</th>
+                                <th
+                                    v-for="date in dates"
+                                    :key="date.date"
+                                    scope="col"
+                                >
+                                    <span>{{ shortDate(date.date) }}</span>
+                                    <small>{{ date.day_label }}</small>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="plan in filteredPlanRows" :key="plan.id">
+                                <th class="student-cell" scope="row">
+                                    <strong>{{ plan.student_name }}</strong>
+                                    <span class="plan-pill">{{ plan.plan_name || '-' }}</span>
+                                </th>
+                                <td
+                                    v-for="date in dates"
+                                    :key="`${plan.id}-${date.date}`"
+                                >
+                                    <div v-if="cellItems(plan, date.date).length" class="items-stack">
+                                        <span
+                                            v-for="item in cellItems(plan, date.date)"
+                                            :key="item.id"
+                                            class="plan-item"
+                                        >
+                                            {{ item.name }}
+                                        </span>
+                                    </div>
+                                    <span v-else class="empty-cell">-</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mobile-plan-list" aria-label="خطة الطلاب الشهرية للموبايل">
+                    <article v-for="plan in filteredPlanRows" :key="`mobile-${plan.id}`" class="mobile-student-card">
+                        <header class="mobile-student-header">
+                            <div>
                                 <strong>{{ plan.student_name }}</strong>
                                 <span class="plan-pill">{{ plan.plan_name || '-' }}</span>
-                            </th>
-                            <td
-                                v-for="date in dates"
-                                :key="`${plan.id}-${date.date}`"
+                            </div>
+                            <span>{{ englishNumber(dates.length) }} أيام</span>
+                        </header>
+
+                        <div class="mobile-days-list">
+                            <section
+                                v-for="date in mobileDatesForPlan(plan)"
+                                :key="`${plan.id}-${date.date}-mobile`"
+                                class="mobile-day-card"
                             >
-                                <div v-if="cellItems(plan, date.date).length" class="items-stack">
+                                <header class="mobile-day-header">
+                                    <strong>{{ shortDate(date.date) }}</strong>
+                                    <span>{{ date.day_label }}</span>
+                                </header>
+
+                                <div v-if="cellItems(plan, date.date).length" class="mobile-items-stack">
                                     <span
                                         v-for="item in cellItems(plan, date.date)"
-                                        :key="item.id"
+                                        :key="`${item.id}-mobile`"
                                         class="plan-item"
                                     >
                                         {{ item.name }}
                                     </span>
                                 </div>
-                                <span v-else class="empty-cell">-</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                <span v-else class="mobile-empty-cell">لا يوجد واجب</span>
+                            </section>
+                        </div>
+
+                        <button
+                            v-if="remainingMobileDatesCount > 0"
+                            type="button"
+                            class="mobile-more-button"
+                            @click="toggleMobilePlan(plan)"
+                        >
+                            <span>{{ isMobilePlanExpanded(plan) ? 'عرض أقل' : `عرض المزيد (${englishNumber(remainingMobileDatesCount)})` }}</span>
+                            <i :class="isMobilePlanExpanded(plan) ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" aria-hidden="true" />
+                        </button>
+                    </article>
+                </div>
             </div>
         </section>
     </main>
@@ -673,6 +737,10 @@ const clearStudentSearch = () => {
     background: #f3f8ff !important;
 }
 
+.mobile-plan-list {
+    display: none;
+}
+
 .items-stack {
     display: grid;
     gap: 6px;
@@ -704,20 +772,75 @@ const clearStudentSearch = () => {
 
 @media (max-width: 760px) {
     .monthly-report-page {
-        padding: 14px;
+        padding: 10px;
     }
 
     .report-hero,
-    .summary-grid {
+    .summary-grid,
+    .report-meta {
         grid-template-columns: 1fr;
+    }
+
+    .report-hero {
+        gap: 14px;
+        padding: 16px 14px;
+    }
+
+    .report-hero::before {
+        width: 5px;
+    }
+
+    .brand-lockup {
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .report-logo {
+        width: 58px;
+        height: 58px;
+    }
+
+    .brand-lockup p {
+        margin-bottom: 3px;
+        font-size: 0.76rem;
+    }
+
+    .brand-lockup h1 {
+        font-size: 1.35rem;
     }
 
     .report-actions {
         justify-self: end;
     }
 
-    .report-meta {
-        grid-template-columns: 1fr;
+    .report-meta div {
+        padding: 10px 11px;
+    }
+
+    .summary-grid {
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .summary-grid article {
+        grid-template-columns: auto minmax(0, 1fr);
+        min-height: 78px;
+        padding: 12px;
+    }
+
+    .summary-grid article > i {
+        width: 38px;
+        height: 38px;
+        font-size: 0.98rem;
+    }
+
+    .summary-grid strong {
+        font-size: 1.35rem;
+    }
+
+    .plan-section {
+        margin-top: 10px;
+        padding: 12px;
     }
 
     .section-heading {
@@ -726,9 +849,149 @@ const clearStudentSearch = () => {
         gap: 6px;
     }
 
+    .section-heading h2 {
+        font-size: 1.15rem;
+    }
+
+    .section-heading > span {
+        white-space: normal;
+    }
+
     .report-search {
         grid-template-columns: 1fr;
         width: 100%;
+        margin-top: 12px;
+        padding: 10px;
+    }
+
+    .desktop-plan-table {
+        display: none;
+    }
+
+    .mobile-plan-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    .mobile-student-card {
+        overflow: hidden;
+        border: 1px solid #dbe5ef;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    }
+
+    .mobile-student-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #e6edf5;
+        background: #fbfdff;
+        padding: 12px;
+    }
+
+    .mobile-student-header strong {
+        display: block;
+        color: #0f172a;
+        font-size: 0.98rem;
+        font-weight: 950;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
+    .mobile-student-header > span {
+        flex: 0 0 auto;
+        border: 1px solid #dbe5ef;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #64748b;
+        padding: 6px 8px;
+        font-size: 0.74rem;
+        font-weight: 900;
+    }
+
+    .mobile-days-list {
+        display: grid;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .mobile-day-card {
+        border: 1px solid #dfe7ef;
+        border-radius: 8px;
+        background: #ffffff;
+    }
+
+    .mobile-day-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #edf2f7;
+        background: #f8fafc;
+        padding: 9px 10px;
+    }
+
+    .mobile-day-header strong {
+        color: #103f68;
+        font-size: 0.86rem;
+        font-weight: 950;
+    }
+
+    .mobile-day-header span {
+        color: #64748b;
+        font-size: 0.76rem;
+        font-weight: 900;
+    }
+
+    .mobile-items-stack {
+        display: grid;
+        gap: 7px;
+        padding: 9px;
+    }
+
+    .mobile-empty-cell {
+        display: block;
+        padding: 11px 10px;
+        color: #94a3b8;
+        font-size: 0.8rem;
+        font-weight: 900;
+        text-align: center;
+    }
+
+    .mobile-more-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: calc(100% - 20px);
+        min-height: 42px;
+        margin: 0 10px 10px;
+        border: 1px solid #b7d8c8;
+        border-radius: 8px;
+        background: #edf8f2;
+        color: #016e3d;
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 950;
+    }
+
+    .mobile-more-button:focus-visible {
+        outline: 3px solid rgba(1, 110, 61, 0.18);
+        outline-offset: 2px;
+    }
+
+    .plan-pill {
+        margin-top: 7px;
+        padding: 5px 8px;
+        font-size: 0.74rem;
+    }
+
+    .plan-item {
+        padding: 8px;
+        font-size: 0.8rem;
     }
 }
 
@@ -744,6 +1007,14 @@ const clearStudentSearch = () => {
 
     .print-hidden {
         display: none !important;
+    }
+
+    .mobile-plan-list {
+        display: none !important;
+    }
+
+    .desktop-plan-table {
+        display: block !important;
     }
 
     .report-hero,

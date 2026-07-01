@@ -75,8 +75,9 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
     {
         $report = $this->service->publicReportPayload($publicId);
         $plan = $report['monthly_plan'];
-        $title = 'الخطة الشهرية | مشروع الحافظ المتميز';
-        $description = trim(($plan['center_name'] ?? '').' / '.($plan['group_name'] ?? ''));
+        $period = ((int) ($plan['month'] ?? 0)).'/'.((int) ($plan['year'] ?? 0));
+        $title = "الخطة الشهرية {$period} | مشروع الحافظ المتميز";
+        $description = trim(($plan['center_name'] ?? '').' / '.($plan['group_name'] ?? '').' / '.$period);
         $imageUrl = asset('media/logos/logo.png');
 
         return Inertia::render('MonthlyPlans/PublicReport', [
