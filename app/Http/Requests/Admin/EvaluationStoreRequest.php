@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -58,12 +59,24 @@ class EvaluationStoreRequest extends FormRequest
      */
     public function rules(): array
     {
+        $dataScope = app(AdminDataScopeService::class);
+        $centerId = (int) $this->input('center_id');
+        $studentRule = Rule::exists('students', 'id')
+            ->where(function ($query) use ($centerId, $dataScope): void {
+                $query->where('center_id', $centerId);
+                $dataScope->applyStudentAccess($query, 'students');
+            });
+
         return [
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => [
+                'required',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+            ],
             'evaluation_type' => ['required', 'integer', Rule::in([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID])],
             'date' => ['required', 'date_format:Y-m-d'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.student_id' => ['required', Rule::exists('students', 'id')],
+            'items.*.student_id' => ['required', $studentRule],
             'items.*.attendances' => ['required', Rule::in([
                 EvaluationStudent::ATTENDANCE_PRESENT,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,

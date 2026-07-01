@@ -10,12 +10,13 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class AbsenceRuleService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -57,6 +58,7 @@ class AbsenceRuleService
                 'message_templates.name as message_template_name',
                 'message_templates.key as message_template_key',
             ])
+            ->tap(fn ($query) => $this->dataScope->applyAbsenceRuleAccess($query, 'absence_rules'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -83,7 +85,7 @@ class AbsenceRuleService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): AbsenceRule
     {
@@ -91,10 +93,12 @@ class AbsenceRuleService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(AbsenceRule $rule, array $data): AbsenceRule
     {
+        $this->dataScope->abortUnlessCanAccessAbsenceRule($rule);
+
         $rule->update($this->payload($data));
 
         return $rule->refresh();
@@ -102,6 +106,8 @@ class AbsenceRuleService
 
     public function delete(AbsenceRule $rule): void
     {
+        $this->dataScope->abortUnlessCanAccessAbsenceRule($rule);
+
         $rule->delete();
     }
 
@@ -111,6 +117,7 @@ class AbsenceRuleService
     public function centerOptions(): array
     {
         return Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(static fn (Center $center): array => [
@@ -138,7 +145,7 @@ class AbsenceRuleService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function payload(array $data): array

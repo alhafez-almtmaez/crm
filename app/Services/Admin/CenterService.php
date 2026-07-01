@@ -8,12 +8,13 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class CenterService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -28,6 +29,7 @@ class CenterService
 
         $query = Center::query()
             ->select(['id', 'name', 'phone', 'group_serialized', 'working_days', 'created_at'])
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -54,7 +56,7 @@ class CenterService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): Center
     {
@@ -67,7 +69,7 @@ class CenterService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(Center $center, array $data): Center
     {

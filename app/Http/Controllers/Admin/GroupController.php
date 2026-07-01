@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\GroupUpdateRequest;
 use App\Models\Center;
 use App\Models\Group;
 use App\Services\Admin\ActivityLogService;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\GroupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +23,7 @@ class GroupController extends Controller implements HasMiddleware
     public function __construct(
         private readonly GroupService $groupService,
         private readonly ActivityLogService $activityLogService,
+        private readonly AdminDataScopeService $dataScope,
     ) {}
 
     public static function middleware(): array
@@ -69,6 +71,8 @@ class GroupController extends Controller implements HasMiddleware
 
     public function edit(Group $group): Response
     {
+        $this->dataScope->abortUnlessCanAccessGroup($group);
+
         return Inertia::render('Admin/Groups/Edit', [
             'group' => $group->only(['id', 'name', 'center_id']),
             'centers' => $this->groupService->centerOptions(),
@@ -100,6 +104,8 @@ class GroupController extends Controller implements HasMiddleware
 
     public function update(GroupUpdateRequest $request, Group $group): RedirectResponse
     {
+        $this->dataScope->abortUnlessCanAccessGroup($group);
+
         $this->groupService->update($group, $request->validated());
 
         return redirect()
@@ -109,6 +115,8 @@ class GroupController extends Controller implements HasMiddleware
 
     public function destroy(Group $group): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessGroup($group);
+
         $this->groupService->delete($group);
 
         return response()->json([
@@ -118,6 +126,8 @@ class GroupController extends Controller implements HasMiddleware
 
     public function activityLogs(Group $group): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessGroup($group);
+
         return response()->json([
             'data' => $this->activityLogService->listForSubject(Group::class, $group->getKey()),
         ]);
@@ -125,6 +135,8 @@ class GroupController extends Controller implements HasMiddleware
 
     public function byCenter(Center $center): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         return response()->json([
             'data' => $this->groupService->listByCenter($center),
         ]);

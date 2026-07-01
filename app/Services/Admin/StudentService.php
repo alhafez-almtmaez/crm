@@ -18,7 +18,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class StudentService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -62,6 +65,7 @@ class StudentService
                 'plan_types.name as plan_name',
                 'admins.name as admin_name',
             ])
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -103,6 +107,8 @@ class StudentService
      */
     public function update(Student $student, array $data): Student
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         $student->update($this->buildPayload($data));
 
         return $student->refresh();
@@ -110,6 +116,8 @@ class StudentService
 
     public function delete(Student $student): void
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         $student->delete();
     }
 
@@ -119,6 +127,7 @@ class StudentService
     public function centerOptions(): array
     {
         return Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(static fn (Center $center): array => [
@@ -166,6 +175,16 @@ class StudentService
      */
     public function adminOptions(): array
     {
+        if ($this->dataScope->shouldScope()) {
+            /** @var User|null $user */
+            $user = Auth::user();
+
+            return $user === null ? [] : [[
+                'id' => $user->id,
+                'name' => $user->name !== '' ? $user->name : ($user->email ?? "User #{$user->id}"),
+            ]];
+        }
+
         return User::query()
             ->orderBy('name')
             ->get(['id', 'name', 'email'])
@@ -184,6 +203,7 @@ class StudentService
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
             ->leftJoin('plan_points as current_plan_points', 'students.current_plan_point_id', '=', 'current_plan_points.id')
             ->leftJoin('users as admins', 'students.admin_id', '=', 'admins.id')
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->when($centerId !== null, static fn ($query) => $query->where('students.center_id', $centerId))
             ->orderBy('students.id')
             ->get([
@@ -222,6 +242,7 @@ class StudentService
         $import = new StudentsImport(
             currentUserId: Auth::id(),
             canAssignAdmin: (bool) Auth::user()?->hasRole('admin'),
+            dataScope: $this->dataScope,
         );
 
         Excel::import($import, $file);

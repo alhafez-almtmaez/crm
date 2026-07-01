@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\HomeworkStoreRequest;
 use App\Http\Requests\Admin\HomeworkUpdateRequest;
 use App\Models\Homework;
 use App\Models\Student;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\HomeworkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -21,7 +22,10 @@ use Spatie\LaravelPdf\PdfBuilder;
 
 class HomeworkController extends Controller implements HasMiddleware
 {
-    public function __construct(private readonly HomeworkService $service) {}
+    public function __construct(
+        private readonly HomeworkService $service,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     public static function middleware(): array
     {
@@ -70,6 +74,8 @@ class HomeworkController extends Controller implements HasMiddleware
 
     public function edit(Homework $homework): Response
     {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
         $homework->load('center:id,name');
 
         return Inertia::render('Admin/Homeworks/Edit', [
@@ -95,6 +101,8 @@ class HomeworkController extends Controller implements HasMiddleware
 
     public function update(HomeworkUpdateRequest $request, Homework $homework): RedirectResponse
     {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
         $this->service->update($homework, $request->validated());
 
         return redirect()
@@ -104,6 +112,8 @@ class HomeworkController extends Controller implements HasMiddleware
 
     public function destroy(Homework $homework): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
         $this->service->delete($homework);
 
         return response()->json([
@@ -113,6 +123,8 @@ class HomeworkController extends Controller implements HasMiddleware
 
     public function pdf(Homework $homework): PdfBuilder
     {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
         $payload = $this->service->pdfPayload($homework);
 
         return Pdf::view('pdf.homework', $payload)
@@ -124,6 +136,8 @@ class HomeworkController extends Controller implements HasMiddleware
 
     public function pointHistory(Student $student): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         return response()->json([
             'data' => $this->service->pointHistory($student),
         ]);

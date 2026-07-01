@@ -23,7 +23,10 @@ class HomeworkService
 
     private const PDF_ASSIGNMENT_COLUMNS = 5;
 
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -49,7 +52,8 @@ class HomeworkService
             ->leftJoin('centers', 'homeworks.center_id', '=', 'centers.id')
             ->leftJoin('users as admins', 'homeworks.admin_id', '=', 'admins.id')
             ->leftJoin('homework_students', 'homeworks.id', '=', 'homework_students.homework_id')
-            ->leftJoin('homework_student_points', 'homeworks.id', '=', 'homework_student_points.homework_id')
+            ->leftJoin('students as homework_scope_students', 'homework_students.student_id', '=', 'homework_scope_students.id')
+            ->leftJoin('homework_student_points', 'homework_students.id', '=', 'homework_student_points.homework_student_id')
             ->select([
                 'homeworks.id',
                 'homeworks.date',
@@ -61,6 +65,7 @@ class HomeworkService
                 DB::raw('COUNT(DISTINCT homework_students.id) as students_count'),
                 DB::raw('COALESCE(SUM(CASE WHEN homework_student_points.is_done = true THEN 1 ELSE 0 END), 0) as completed_points_count'),
             ])
+            ->when($this->dataScope->shouldScope(), fn ($query) => $this->dataScope->applyStudentAccess($query, 'homework_scope_students'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -104,6 +109,7 @@ class HomeworkService
     public function centerOptions(): array
     {
         return Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name', 'working_days'])
             ->map(static fn (Center $center): array => [
@@ -122,8 +128,12 @@ class HomeworkService
         $resolvedDate = $this->resolveDate($date);
         $resolvedCenterId = $centerId !== null && $centerId > 0 ? $centerId : null;
         $center = $resolvedCenterId !== null
-            ? Center::query()->find($resolvedCenterId)
+            ? Center::query()
+                ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+                ->find($resolvedCenterId)
             : null;
+
+        abort_if($resolvedCenterId !== null && $center === null, 404);
 
         if ($center !== null) {
             $resolvedDate = $this->resolveWorkingDate($center, $resolvedDate);
@@ -166,6 +176,7 @@ class HomeworkService
         ]);
 
         return $homework->students
+            ->filter(fn (HomeworkStudent $row): bool => $row->student !== null && $this->dataScope->canAccessStudent($row->student))
             ->sortBy(static fn (HomeworkStudent $row): string => (string) ($row->student?->full_name ?? ''))
             ->values()
             ->map(fn (HomeworkStudent $row): array => $this->studentRowDataFromHomework($row))
@@ -355,7 +366,11 @@ class HomeworkService
     {
         $centerId = (int) $data['center_id'];
         $date = $this->resolveDate((string) $data['date']);
-        $center = Center::query()->find($centerId);
+        $center = Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+            ->find($centerId);
+
+        abort_if($center === null, 404);
 
         if ($center !== null && ! $this->isWorkingDate($center, $date)) {
             throw ValidationException::withMessages([
@@ -392,6 +407,8 @@ class HomeworkService
      */
     public function update(Homework $homework, array $data): Homework
     {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
         return DB::transaction(function () use ($homework, $data): Homework {
             $this->syncHomeworkRows($homework, $data['items'] ?? []);
 
@@ -401,6 +418,8 @@ class HomeworkService
 
     public function delete(Homework $homework): void
     {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
         $homework->delete();
     }
 
@@ -409,6 +428,8 @@ class HomeworkService
      */
     public function pointHistory(Student $student): array
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         return StudentPointTransaction::query()
             ->with(['homework:id,date', 'planPoint:id,name,points'])
             ->where('student_id', $student->id)
@@ -437,6 +458,7 @@ class HomeworkService
         $students = Student::query()
             ->with(['plan:id,name', 'group:id,name'])
             ->where('center_id', $centerId)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->orderBy('plan_type_id')
             ->orderBy('full_name')
@@ -550,6 +572,7 @@ class HomeworkService
         $students = Student::query()
             ->with('plan:id,name')
             ->whereIn('id', $studentIds)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->get()
             ->keyBy('id');
 

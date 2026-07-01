@@ -18,7 +18,10 @@ class GroupService
 {
     private const TASK_WINDOW_SIZE = 10;
 
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -38,6 +41,7 @@ class GroupService
         $query = Group::query()
             ->leftJoin('centers', 'groups.center_id', '=', 'centers.id')
             ->select(['groups.id', 'groups.ulid', 'groups.name', 'groups.center_id', 'groups.created_at', 'centers.name as center_name'])
+            ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -136,6 +140,7 @@ class GroupService
     public function centerOptions(): array
     {
         return Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(static fn (Center $center): array => [
@@ -261,8 +266,11 @@ class GroupService
      */
     public function listByCenter(Center $center): array
     {
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         return Group::query()
             ->where('center_id', $center->id)
+            ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(static fn (Group $group): array => [

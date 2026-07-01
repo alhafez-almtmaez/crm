@@ -2,19 +2,22 @@
 
 namespace App\Services\Admin;
 
+use App\Models\User;
 use App\Services\System\DateTimeFormatterService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Spatie\Activitylog\Models\Activity;
 
 class ActivityLogService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
@@ -30,6 +33,11 @@ class ActivityLogService
         $logs = Activity::query()
             ->select(['id', 'log_name', 'description', 'event', 'subject_type', 'subject_id', 'causer_type', 'causer_id', 'created_at'])
             ->with(['causer', 'subject'])
+            ->when($this->dataScope->shouldScope(), function ($query): void {
+                $query
+                    ->where('causer_type', User::class)
+                    ->where('causer_id', Auth::id() ?? 0);
+            })
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder

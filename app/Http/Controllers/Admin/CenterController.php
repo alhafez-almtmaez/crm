@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\CenterStoreRequest;
 use App\Http\Requests\Admin\CenterUpdateRequest;
 use App\Models\Center;
 use App\Services\Admin\ActivityLogService;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\CenterService;
 use App\Services\Admin\WhatsAppGroupService;
 use Illuminate\Http\JsonResponse;
@@ -23,9 +24,8 @@ class CenterController extends Controller implements HasMiddleware
         private readonly CenterService $centerService,
         private readonly ActivityLogService $activityLogService,
         private readonly WhatsAppGroupService $whatsAppGroupService,
-    )
-    {
-    }
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     public static function middleware(): array
     {
@@ -52,6 +52,8 @@ class CenterController extends Controller implements HasMiddleware
 
     public function edit(Center $center): Response
     {
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         return Inertia::render('Admin/Centers/Edit', [
             'center' => [
                 ...$center->only(['id', 'name', 'phone', 'group_serialized']),
@@ -86,6 +88,8 @@ class CenterController extends Controller implements HasMiddleware
 
     public function update(CenterUpdateRequest $request, Center $center): RedirectResponse
     {
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         $this->centerService->update($center, $request->validated());
 
         return redirect()
@@ -95,6 +99,8 @@ class CenterController extends Controller implements HasMiddleware
 
     public function destroy(Center $center): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         $this->centerService->delete($center);
 
         return response()->json([
@@ -104,6 +110,8 @@ class CenterController extends Controller implements HasMiddleware
 
     public function activityLogs(Center $center): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         return response()->json([
             'data' => $this->activityLogService->listForSubject(Center::class, $center->getKey()),
         ]);

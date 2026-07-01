@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Services\Admin\AdminDataScopeService;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -18,6 +19,15 @@ class StudentStoreRequest extends FormRequest
      */
     public function rules(): array
     {
+        $dataScope = app(AdminDataScopeService::class);
+        $centerRule = Rule::exists('centers', 'id')
+            ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers'));
+        $groupRule = Rule::exists('groups', 'id')
+            ->where(function ($query) use ($dataScope): void {
+                $query->where('center_id', (int) $this->input('center_id'));
+                $dataScope->applyGroupAccess($query, 'groups');
+            });
+
         return [
             'first_name' => ['required', 'string', 'max:100'],
             'second_name' => ['required', 'string', 'max:100'],
@@ -41,10 +51,10 @@ class StudentStoreRequest extends FormRequest
             ],
             'email' => ['nullable', 'string', 'email', 'max:255', Rule::unique('students', 'email')],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => ['required', $centerRule],
             'group_id' => [
                 'nullable',
-                Rule::exists('groups', 'id')->where('center_id', (int) $this->input('center_id')),
+                $groupRule,
             ],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
             'current_plan_point_id' => [

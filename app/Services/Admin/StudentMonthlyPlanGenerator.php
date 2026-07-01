@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class StudentMonthlyPlanGenerator
 {
+    public function __construct(private readonly AdminDataScopeService $dataScope) {}
+
     /**
      * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
@@ -27,6 +29,7 @@ class StudentMonthlyPlanGenerator
             ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
             ->where('center_id', $center->id)
             ->when($groupId !== null, fn ($query) => $query->where('group_id', $groupId))
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->whereNotNull('plan_type_id')
             ->orderBy('full_name')
@@ -43,6 +46,7 @@ class StudentMonthlyPlanGenerator
         $students = Student::query()
             ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
             ->where('group_id', $group->id)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->whereNotNull('plan_type_id')
             ->orderBy('full_name')
@@ -88,6 +92,8 @@ class StudentMonthlyPlanGenerator
         if ($student->plan_type_id === null) {
             return null;
         }
+
+        $this->dataScope->abortUnlessCanAccessStudent($student);
 
         $student->loadMissing(['center:id,working_days', 'group:id,center_id']);
         $dates = $this->workingDatesForMonth($student, $month, $year);

@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Services\Admin\AbsenceRules\Actions\DismissStudentAction;
 use App\Services\Admin\AbsenceRules\Actions\FreezeStudentAction;
 use App\Services\Admin\AbsenceRules\Contracts\RuleActionHandler;
+use App\Services\Admin\AdminDataScopeService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -35,10 +36,10 @@ class AbsenceRuleEngine
 
     public function __construct(
         private readonly MessageTemplateRenderer $templateRenderer,
+        private readonly AdminDataScopeService $dataScope,
         FreezeStudentAction $freezeStudentAction,
         DismissStudentAction $dismissStudentAction,
-    )
-    {
+    ) {
         $availableHandlers = [
             $freezeStudentAction,
             $dismissStudentAction,
@@ -63,7 +64,7 @@ class AbsenceRuleEngine
             ->with('center')
             ->find($evaluationId);
 
-        if (!$evaluation) {
+        if (! $evaluation) {
             return [
                 'processed' => 0,
                 'skipped' => 0,
@@ -111,8 +112,11 @@ class AbsenceRuleEngine
         }
 
         $items = EvaluationStudent::query()
+            ->join('students as scope_students', 'evaluations_users.student_id', '=', 'scope_students.id')
             ->where('evaluation_id', $evaluation->id)
             ->whereIn('attendances', array_keys(self::ATTENDANCE_TYPE_MAP))
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'scope_students'))
+            ->select('evaluations_users.*')
             ->get();
 
         foreach ($items as $item) {
@@ -121,6 +125,7 @@ class AbsenceRuleEngine
 
             if ($attendanceType === null) {
                 $skipped++;
+
                 continue;
             }
 
@@ -128,13 +133,18 @@ class AbsenceRuleEngine
             if ($studentId === null) {
                 $skipped++;
                 $errors[] = "Evaluation item {$item->id}: missing student reference.";
+
                 continue;
             }
 
-            $student = Student::query()->with('center')->find($studentId);
-            if (!$student) {
+            $student = Student::query()
+                ->with('center')
+                ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
+                ->find($studentId);
+            if (! $student) {
                 $skipped++;
                 $errors[] = "Evaluation item {$item->id}: student {$studentId} not found.";
+
                 continue;
             }
 
@@ -152,6 +162,7 @@ class AbsenceRuleEngine
 
             if ($occurrence <= 0) {
                 $skipped++;
+
                 continue;
             }
 
@@ -172,10 +183,13 @@ class AbsenceRuleEngine
                     ->orderByRaw('CASE WHEN center_id = ? THEN 0 ELSE 1 END', [$centerId]);
             }
 
+            $this->dataScope->applyAbsenceRuleAccess($ruleQuery, 'absence_rules');
+
             $rule = $ruleQuery->first();
 
-            if (!$rule) {
+            if (! $rule) {
                 $skipped++;
+
                 continue;
             }
 
@@ -276,7 +290,7 @@ class AbsenceRuleEngine
             }
         }
 
-        $alertsMarkedAsSent = $errors === [];
+        $alertsMarkedAsSent = $errors === [] && ! $this->dataScope->shouldScope();
         if ($alertsMarkedAsSent) {
             $evaluation->update(['is_send_absence_alerts' => true]);
         }
@@ -357,7 +371,7 @@ class AbsenceRuleEngine
     }
 
     /**
-     * @param array<int, mixed>|null $workingDays
+     * @param  array<int, mixed>|null  $workingDays
      * @return array<int, int>
      */
     private function normalizeWorkingDays(?array $workingDays): array
@@ -404,7 +418,7 @@ class AbsenceRuleEngine
         $unique = [];
 
         foreach ([$student->parent_phone_number, $student->phone_number] as $phone) {
-            if (!is_string($phone)) {
+            if (! is_string($phone)) {
                 continue;
             }
 
@@ -420,7 +434,7 @@ class AbsenceRuleEngine
     }
 
     /**
-     * @param array<string, mixed> $freezeWindow
+     * @param  array<string, mixed>  $freezeWindow
      * @return array<string, mixed>
      */
     private function buildTemplateContext(

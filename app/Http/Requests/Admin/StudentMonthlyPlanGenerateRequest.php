@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -27,12 +28,20 @@ class StudentMonthlyPlanGenerateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $dataScope = app(AdminDataScopeService::class);
+        $centerRule = Rule::exists('centers', 'id')
+            ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers'));
+        $groupRule = Rule::exists('groups', 'id')
+            ->where(function ($query) use ($dataScope): void {
+                $query->where('center_id', (int) $this->input('center_id'));
+                $dataScope->applyGroupAccess($query, 'groups');
+            });
+
         return [
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => ['required', $centerRule],
             'group_id' => [
                 'nullable',
-                Rule::exists('groups', 'id')
-                    ->where('center_id', (int) $this->input('center_id')),
+                $groupRule,
             ],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
             'year' => ['required', 'integer', 'min:2020', 'max:2100'],

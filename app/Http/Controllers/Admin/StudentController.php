@@ -13,6 +13,7 @@ use App\Http\Requests\Admin\StudentStoreRequest;
 use App\Http\Requests\Admin\StudentUpdateRequest;
 use App\Models\Student;
 use App\Services\Admin\ActivityLogService;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\GroupService;
 use App\Services\Admin\StudentCommunicationService;
 use App\Services\Admin\StudentService;
@@ -34,6 +35,7 @@ class StudentController extends Controller implements HasMiddleware
         private readonly StudentCommunicationService $studentCommunicationService,
         private readonly GroupService $groupService,
         private readonly ActivityLogService $activityLogService,
+        private readonly AdminDataScopeService $dataScope,
     ) {}
 
     public static function middleware(): array
@@ -70,6 +72,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function edit(Student $student): Response
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         return Inertia::render('Admin/Students/Edit', [
             'student' => [
                 'id' => $student->id,
@@ -127,6 +131,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function update(StudentUpdateRequest $request, Student $student): RedirectResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         $this->studentService->update($student, $request->validated());
 
         return redirect()
@@ -136,6 +142,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function destroy(Student $student): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         $this->studentService->delete($student);
 
         return response()->json([
@@ -145,6 +153,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function activityLogs(Student $student): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         return response()->json([
             'data' => $this->activityLogService->listForSubject(Student::class, $student->getKey()),
         ]);
@@ -152,6 +162,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function freeze(StudentFreezeRequest $request, Student $student): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         try {
             $this->studentCommunicationService->freeze($student, $request->validated());
         } catch (RuntimeException $exception) {
@@ -167,6 +179,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function unfreeze(Student $student): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         try {
             $this->studentCommunicationService->unfreeze($student);
         } catch (RuntimeException $exception) {
@@ -182,6 +196,8 @@ class StudentController extends Controller implements HasMiddleware
 
     public function congratulatory(StudentCongratulatoryRequest $request, Student $student): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
         try {
             $this->studentCommunicationService->congratulatory($student, $request->validated());
         } catch (RuntimeException $exception) {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,6 +18,8 @@ class GroupStoreRequest extends FormRequest
      */
     public function rules(): array
     {
+        $dataScope = app(AdminDataScopeService::class);
+
         return [
             'name' => [
                 'required',
@@ -27,7 +30,11 @@ class GroupStoreRequest extends FormRequest
                     (int) $this->input('center_id'),
                 ),
             ],
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => [
+                'required',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+            ],
         ];
     }
 }

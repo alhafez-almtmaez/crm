@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\StudentMonthlyPlanIndexRequest;
 use App\Models\Center;
 use App\Models\Group;
 use App\Models\MonthlyPlan;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,7 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
     public function __construct(
         private readonly StudentMonthlyPlanService $service,
         private readonly StudentMonthlyPlanGenerator $generator,
+        private readonly AdminDataScopeService $dataScope,
     ) {}
 
     public static function middleware(): array
@@ -64,6 +66,8 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
 
     public function edit(MonthlyPlan $monthlyPlan): Response
     {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+
         return Inertia::render('Admin/MonthlyPlans/Edit', $this->service->savedPlanPayload($monthlyPlan));
     }
 
@@ -71,11 +75,17 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
     {
         $data = $request->validated();
         $center = Center::query()->findOrFail((int) $data['center_id']);
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         $group = isset($data['group_id'])
             ? Group::query()
                 ->where('center_id', $center->id)
                 ->findOrFail((int) $data['group_id'])
             : null;
+        if ($group !== null) {
+            $this->dataScope->abortUnlessCanAccessGroup($group);
+        }
+
         $month = (int) $data['month'];
         $year = (int) $data['year'];
 
@@ -110,6 +120,8 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
 
     public function destroy(MonthlyPlan $monthlyPlan): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+
         $this->service->delete($monthlyPlan);
 
         return response()->json([

@@ -23,6 +23,7 @@ class EvaluationService
     public function __construct(
         private readonly DateTimeFormatterService $dateTimeFormatter,
         private readonly AbsenceRuleEngine $absenceRuleEngine,
+        private readonly AdminDataScopeService $dataScope,
     ) {}
 
     /**
@@ -45,9 +46,6 @@ class EvaluationService
 
         $sortColumn = $sortMap[$sortBy] ?? 'evaluations.id';
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
-        $isAdmin = (bool) Auth::user()?->hasRole('admin');
-        $currentUserId = Auth::id();
-
         $rows = Evaluation::query()
             ->leftJoin('centers', 'evaluations.center_id', '=', 'centers.id')
             ->leftJoin('users as admins', 'evaluations.admin_id', '=', 'admins.id')
@@ -62,9 +60,7 @@ class EvaluationService
                 'centers.name as center_name',
                 'admins.name as admin_name',
             ])
-            ->when(! $isAdmin, function ($query) use ($currentUserId): void {
-                $query->where('evaluations.admin_id', $currentUserId);
-            })
+            ->tap(fn ($query) => $this->dataScope->applyEvaluationAccess($query, 'evaluations'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -103,6 +99,7 @@ class EvaluationService
     public function centerOptions(): array
     {
         return Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(static fn (Center $center): array => [
@@ -119,6 +116,15 @@ class EvaluationService
     {
         $resolvedDate = $this->resolveDate($date);
         $resolvedCenterId = $centerId !== null && $centerId > 0 ? $centerId : null;
+
+        if ($resolvedCenterId !== null) {
+            $centerExists = Center::query()
+                ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+                ->whereKey($resolvedCenterId)
+                ->exists();
+
+            abort_unless($centerExists, 404);
+        }
 
         if ($resolvedCenterId === null) {
             return [
@@ -151,6 +157,8 @@ class EvaluationService
      */
     public function editStudentRows(Evaluation $evaluation): array
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         $date = Carbon::parse((string) $evaluation->date)->toDateString();
 
         return $this->studentRowsForCenterDate(
@@ -169,6 +177,13 @@ class EvaluationService
         $date = $this->resolveDate((string) $data['date']);
         $adminId = Auth::id();
         $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? Evaluation::TYPE_ALHIFZ);
+
+        $centerExists = Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+            ->whereKey($centerId)
+            ->exists();
+
+        abort_unless($centerExists, 404);
 
         $exists = Evaluation::query()
             ->where('center_id', $centerId)
@@ -203,6 +218,8 @@ class EvaluationService
      */
     public function update(Evaluation $evaluation, array $data): Evaluation
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         return DB::transaction(function () use ($evaluation, $data): Evaluation {
             $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? $evaluation->evaluation_type);
             if ((int) $evaluation->evaluation_type !== $evaluationType) {
@@ -222,6 +239,8 @@ class EvaluationService
 
     public function delete(Evaluation $evaluation): void
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         $evaluation->delete();
     }
 
@@ -235,6 +254,8 @@ class EvaluationService
      */
     public function sendAbsenceAlerts(Evaluation $evaluation): array
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         return $this->absenceRuleEngine->processEvaluation(
             evaluationId: $evaluation->id,
             executedBy: Auth::id(),
@@ -500,6 +521,7 @@ class EvaluationService
         if ($evaluation !== null) {
             $existingItemsByStudent = $evaluation->evaluationStudents()
                 ->where('attendances', '!=', EvaluationStudent::ATTENDANCE_FROZEN)
+                ->whereHas('student', fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
                 ->get()
                 ->mapWithKeys(static function (EvaluationStudent $item): array {
                     $studentId = $item->resolvedStudentId();
@@ -517,6 +539,7 @@ class EvaluationService
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
             ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
             ->where('students.center_id', $centerId)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('students.is_active', Student::STATUS_ACTIVE)
             ->orderBy('students.plan_type_id')
             ->orderBy('students.full_name')
@@ -557,6 +580,7 @@ class EvaluationService
                 ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
                 ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
                 ->where('students.id', $studentId)
+                ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
                 ->select([
                     'students.id',
                     'students.full_name',
@@ -615,6 +639,7 @@ class EvaluationService
         return StudentFreeze::query()
             ->join('students', 'student_freezes.student_id', '=', 'students.id')
             ->where('students.center_id', $centerId)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->whereDate('student_freezes.from', '<=', $date)
             ->whereDate('student_freezes.to', '>=', $date)
             ->where(function ($query) use ($date): void {

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\AbsenceRule;
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -47,9 +48,15 @@ class AbsenceRuleStoreRequest extends FormRequest
     {
         $centerId = $this->input('center_id');
         $action = (string) $this->input('action');
+        $dataScope = app(AdminDataScopeService::class);
 
         return [
-            'center_id' => ['nullable', Rule::exists('centers', 'id')],
+            'center_id' => [
+                Rule::requiredIf($dataScope->shouldScope()),
+                'nullable',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+            ],
             'attendance_type' => ['required', Rule::in([
                 AbsenceRule::ATTENDANCE_TYPE_ABSENCE,
                 AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,

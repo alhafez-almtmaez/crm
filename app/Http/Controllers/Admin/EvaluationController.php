@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\EvaluationIndexRequest;
 use App\Http\Requests\Admin\EvaluationStoreRequest;
 use App\Http\Requests\Admin\EvaluationUpdateRequest;
 use App\Models\Evaluation;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\EvaluationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -18,9 +19,10 @@ use Inertia\Response;
 
 class EvaluationController extends Controller implements HasMiddleware
 {
-    public function __construct(private readonly EvaluationService $service)
-    {
-    }
+    public function __construct(
+        private readonly EvaluationService $service,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     public static function middleware(): array
     {
@@ -93,6 +95,8 @@ class EvaluationController extends Controller implements HasMiddleware
 
     public function edit(Evaluation $evaluation): Response
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         return Inertia::render('Admin/Evaluations/Edit', [
             'evaluation' => [
                 'id' => $evaluation->id,
@@ -117,6 +121,8 @@ class EvaluationController extends Controller implements HasMiddleware
 
     public function update(EvaluationUpdateRequest $request, Evaluation $evaluation): RedirectResponse
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         $this->service->update($evaluation, $request->validated());
 
         return redirect()
@@ -126,6 +132,8 @@ class EvaluationController extends Controller implements HasMiddleware
 
     public function destroy(Evaluation $evaluation): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         $this->service->delete($evaluation);
 
         return response()->json([
@@ -135,6 +143,8 @@ class EvaluationController extends Controller implements HasMiddleware
 
     public function sendAbsenceAlerts(Evaluation $evaluation): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
         $result = $this->service->sendAbsenceAlerts($evaluation);
         $hasErrors = $result['errors'] !== [];
 

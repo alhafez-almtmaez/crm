@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Student;
+use App\Services\Admin\AdminDataScopeService;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -30,6 +31,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
     public function __construct(
         private readonly ?int $currentUserId,
         private readonly bool $canAssignAdmin,
+        private readonly AdminDataScopeService $dataScope,
     ) {}
 
     public function onRow(Row $row): void
@@ -45,7 +47,15 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
         $student = null;
         if ($studentId !== null) {
-            $student = Student::query()->find($studentId);
+            $student = $this->dataScope
+                ->applyStudentAccess(Student::query())
+                ->find($studentId);
+
+            if ($student === null) {
+                $this->markSkipped($lineNumber, $studentLabel, __('validation.exists', ['attribute' => 'student_id']));
+
+                return;
+            }
         }
 
         $payload = [
@@ -103,9 +113,16 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
                     : Rule::unique('students', 'email'),
             ],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => [
+                'required',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers')),
+            ],
             'group_id' => ['nullable', Rule::exists('groups', 'id')
-                ->where('center_id', (int) ($payload['center_id'] ?? 0))],
+                ->where(function ($query) use ($payload): void {
+                    $query->where('center_id', (int) ($payload['center_id'] ?? 0));
+                    $this->dataScope->applyGroupAccess($query, 'groups');
+                })],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
             'admin_id' => ['nullable', Rule::exists('users', 'id')],
             'is_active' => ['nullable', 'integer', Rule::in([0, 1, 2])],

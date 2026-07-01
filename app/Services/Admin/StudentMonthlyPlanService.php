@@ -12,7 +12,10 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class StudentMonthlyPlanService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -54,6 +57,7 @@ class StudentMonthlyPlanService
                 'centers.name as center_name',
                 'groups.name as group_name',
             ])
+            ->tap(fn ($query) => $this->dataScope->applyMonthlyPlanAccess($query, 'monthly_plans'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -74,6 +78,14 @@ class StudentMonthlyPlanService
 
         $rows->setCollection(
             $rows->getCollection()->map(function (MonthlyPlan $row): MonthlyPlan {
+                if ($this->dataScope->shouldScope()) {
+                    $summary = $this->monthlyPlanSummary((int) $row->id, scoped: true);
+                    $row->setAttribute('students_count', $summary['students_count']);
+                    $row->setAttribute('generated_items_count', $summary['generated_items_count']);
+                    $row->setAttribute('skipped_items_count', $summary['skipped_items_count']);
+                    $row->setAttribute('generated_at', $summary['generated_at']);
+                }
+
                 $row->setAttribute('center_name', $row->center_name ?? '');
                 $row->setAttribute('group_name', $row->group_name ?? '');
                 $row->setAttribute('generated_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->generated_at));
@@ -92,6 +104,7 @@ class StudentMonthlyPlanService
     public function centerOptions(): array
     {
         return Center::query()
+            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name', 'working_days'])
             ->map(static fn (Center $center): array => [
@@ -108,6 +121,7 @@ class StudentMonthlyPlanService
     public function groupOptions(): array
     {
         return Group::query()
+            ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
             ->orderBy('center_id')
             ->orderBy('name')
             ->get(['id', 'name', 'center_id'])
@@ -131,11 +145,39 @@ class StudentMonthlyPlanService
             ->where('month', $month)
             ->where('year', $year)
             ->whereHas('studentPlans.items')
+            ->tap(fn ($query) => $this->dataScope->applyMonthlyPlanAccess($query, 'monthly_plans'))
             ->first();
     }
 
     public function delete(MonthlyPlan $monthlyPlan): void
     {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+
+        if ($this->dataScope->shouldScope()) {
+            $studentPlanIds = StudentMonthlyPlan::query()
+                ->join('students', 'student_monthly_plans.student_id', '=', 'students.id')
+                ->where('student_monthly_plans.monthly_plan_id', $monthlyPlan->id)
+                ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
+                ->pluck('student_monthly_plans.id')
+                ->all();
+
+            if ($studentPlanIds !== []) {
+                StudentMonthlyPlan::query()
+                    ->whereIn('id', $studentPlanIds)
+                    ->delete();
+            }
+
+            if (! StudentMonthlyPlan::query()->where('monthly_plan_id', $monthlyPlan->id)->exists()) {
+                $monthlyPlan->delete();
+
+                return;
+            }
+
+            $this->refreshStoredMonthlyPlanTotals($monthlyPlan);
+
+            return;
+        }
+
         $monthlyPlan->delete();
     }
 
@@ -144,9 +186,11 @@ class StudentMonthlyPlanService
      */
     public function savedPlanPayload(MonthlyPlan $monthlyPlan): array
     {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+
         $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name']);
 
-        $studentPlans = StudentMonthlyPlan::query()
+        $studentPlanModels = StudentMonthlyPlan::query()
             ->with([
                 'student:id,full_name,max_daily_weight',
                 'center:id,name',
@@ -160,11 +204,18 @@ class StudentMonthlyPlanService
                 'days.items' => fn ($query) => $query->orderBy('sort_order'),
                 'days.items.planPoint:id,name,sort_order',
             ])
+            ->join('students', 'student_monthly_plans.student_id', '=', 'students.id')
             ->where('monthly_plan_id', $monthlyPlan->id)
-            ->orderBy('student_id')
-            ->get()
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
+            ->orderBy('student_monthly_plans.student_id')
+            ->select('student_monthly_plans.*')
+            ->get();
+
+        $studentPlans = $studentPlanModels
             ->map(fn (StudentMonthlyPlan $plan): array => $this->studentPlanPayload($plan))
             ->all();
+        $generatedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count);
+        $skippedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->skipped_items_count);
 
         return [
             'monthly_plan' => [
@@ -175,9 +226,9 @@ class StudentMonthlyPlanService
                 'group_name' => (string) ($monthlyPlan->group?->name ?? ''),
                 'month' => (int) $monthlyPlan->month,
                 'year' => (int) $monthlyPlan->year,
-                'students_count' => (int) $monthlyPlan->students_count,
-                'generated_items_count' => (int) $monthlyPlan->generated_items_count,
-                'skipped_items_count' => (int) $monthlyPlan->skipped_items_count,
+                'students_count' => $studentPlanModels->count(),
+                'generated_items_count' => $generatedItemsCount,
+                'skipped_items_count' => $skippedItemsCount,
                 'generated_at' => $this->dateTimeFormatter->formatForAdmin($monthlyPlan->generated_at),
             ],
             'dates' => $monthlyPlan->center !== null
@@ -230,6 +281,46 @@ class StudentMonthlyPlanService
                 ])->all(),
             ])->all(),
         ];
+    }
+
+    /**
+     * @return array{students_count: int, generated_items_count: int, skipped_items_count: int, generated_at: mixed}
+     */
+    private function monthlyPlanSummary(int $monthlyPlanId, bool $scoped): array
+    {
+        $query = StudentMonthlyPlan::query()
+            ->where('student_monthly_plans.monthly_plan_id', $monthlyPlanId)
+            ->selectRaw('COUNT(*) as students_count')
+            ->selectRaw('COALESCE(SUM(student_monthly_plans.generated_items_count), 0) as generated_items_count')
+            ->selectRaw('COALESCE(SUM(student_monthly_plans.skipped_items_count), 0) as skipped_items_count')
+            ->selectRaw('MAX(student_monthly_plans.generated_at) as generated_at');
+
+        if ($scoped) {
+            $query
+                ->join('students', 'student_monthly_plans.student_id', '=', 'students.id')
+                ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'));
+        }
+
+        $summary = $query->first();
+
+        return [
+            'students_count' => (int) ($summary->students_count ?? 0),
+            'generated_items_count' => (int) ($summary->generated_items_count ?? 0),
+            'skipped_items_count' => (int) ($summary->skipped_items_count ?? 0),
+            'generated_at' => $summary->generated_at ?? null,
+        ];
+    }
+
+    private function refreshStoredMonthlyPlanTotals(MonthlyPlan $monthlyPlan): void
+    {
+        $summary = $this->monthlyPlanSummary((int) $monthlyPlan->id, scoped: false);
+
+        $monthlyPlan->update([
+            'students_count' => $summary['students_count'],
+            'generated_items_count' => $summary['generated_items_count'],
+            'skipped_items_count' => $summary['skipped_items_count'],
+            'generated_at' => $summary['generated_at'] ?? $monthlyPlan->generated_at,
+        ]);
     }
 
     /**

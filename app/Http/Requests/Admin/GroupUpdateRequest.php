@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Group;
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -10,7 +11,9 @@ class GroupUpdateRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $group = $this->route('group');
+
+        return ! $group instanceof Group || app(AdminDataScopeService::class)->canAccessGroup($group);
     }
 
     /**
@@ -20,6 +23,7 @@ class GroupUpdateRequest extends FormRequest
     {
         /** @var Group $group */
         $group = $this->route('group');
+        $dataScope = app(AdminDataScopeService::class);
 
         return [
             'name' => [
@@ -30,7 +34,11 @@ class GroupUpdateRequest extends FormRequest
                     ->where('center_id', (int) $this->input('center_id'))
                     ->ignore($group->id),
             ],
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => [
+                'required',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+            ],
         ];
     }
 }

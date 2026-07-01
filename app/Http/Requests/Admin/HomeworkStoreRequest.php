@@ -3,8 +3,9 @@
 namespace App\Http\Requests\Admin;
 
 use App\Models\Center;
-use Illuminate\Support\Carbon;
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -29,11 +30,26 @@ class HomeworkStoreRequest extends FormRequest
      */
     public function rules(): array
     {
+        $dataScope = app(AdminDataScopeService::class);
+        $centerId = $this->rowCenterId();
+        $studentRule = Rule::exists('students', 'id')
+            ->where(function ($query) use ($centerId, $dataScope): void {
+                if ($centerId !== null) {
+                    $query->where('center_id', $centerId);
+                }
+
+                $dataScope->applyStudentAccess($query, 'students');
+            });
+
         return [
-            'center_id' => ['required', Rule::exists('centers', 'id')],
+            'center_id' => [
+                'required',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+            ],
             'date' => ['required', 'date_format:Y-m-d'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.student_id' => ['required', Rule::exists('students', 'id')],
+            'items.*.student_id' => ['required', $studentRule],
             'items.*.points_adjustment' => ['nullable', 'integer', 'min:-1000000', 'max:1000000'],
             'items.*.points' => ['array'],
             'items.*.points.*.plan_point_id' => ['required', Rule::exists('plan_points', 'id')],
@@ -49,7 +65,9 @@ class HomeworkStoreRequest extends FormRequest
                 return;
             }
 
-            $center = Center::query()->find((int) $this->input('center_id'));
+            $center = Center::query()
+                ->tap(fn ($query) => app(AdminDataScopeService::class)->applyCenterAccess($query, 'centers'))
+                ->find((int) $this->input('center_id'));
             if ($center === null || $this->dateMatchesCenterWorkingDays($center, (string) $this->input('date'))) {
                 return;
             }
@@ -88,6 +106,13 @@ class HomeworkStoreRequest extends FormRequest
                 ], array_filter($points, static fn ($point): bool => is_array($point))),
             ];
         }, $items);
+    }
+
+    protected function rowCenterId(): ?int
+    {
+        $centerId = (int) $this->input('center_id');
+
+        return $centerId > 0 ? $centerId : null;
     }
 
     private function dateMatchesCenterWorkingDays(Center $center, string $date): bool

@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\AbsenceRuleStoreRequest;
 use App\Http\Requests\Admin\AbsenceRuleUpdateRequest;
 use App\Models\AbsenceRule;
 use App\Services\Admin\AbsenceRuleService;
+use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -17,9 +18,10 @@ use Inertia\Response;
 
 class AbsenceRuleController extends Controller implements HasMiddleware
 {
-    public function __construct(private readonly AbsenceRuleService $service)
-    {
-    }
+    public function __construct(
+        private readonly AbsenceRuleService $service,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     public static function middleware(): array
     {
@@ -46,6 +48,8 @@ class AbsenceRuleController extends Controller implements HasMiddleware
 
     public function edit(AbsenceRule $absenceRule): Response
     {
+        $this->dataScope->abortUnlessCanAccessAbsenceRule($absenceRule);
+
         return Inertia::render('Admin/AbsenceRules/Edit', [
             'rule' => [
                 'id' => $absenceRule->id,
@@ -91,6 +95,8 @@ class AbsenceRuleController extends Controller implements HasMiddleware
 
     public function update(AbsenceRuleUpdateRequest $request, AbsenceRule $absenceRule): RedirectResponse
     {
+        $this->dataScope->abortUnlessCanAccessAbsenceRule($absenceRule);
+
         $this->service->update($absenceRule, $request->validated());
 
         return redirect()
@@ -100,6 +106,8 @@ class AbsenceRuleController extends Controller implements HasMiddleware
 
     public function destroy(AbsenceRule $absenceRule): JsonResponse
     {
+        $this->dataScope->abortUnlessCanAccessAbsenceRule($absenceRule);
+
         $this->service->delete($absenceRule);
 
         return response()->json([
