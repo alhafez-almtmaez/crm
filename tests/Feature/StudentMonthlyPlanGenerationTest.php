@@ -2,6 +2,7 @@
 
 use App\Models\Center;
 use App\Models\Group;
+use App\Models\MonthlyPlan;
 use App\Models\Plan;
 use App\Models\PlanPoint;
 use App\Models\Student;
@@ -152,12 +153,14 @@ test('monthly plans for two students do not mix their data', function () {
     $result = app(StudentMonthlyPlanGenerator::class)->generateForGroup($group, 6, 2026);
 
     expect($result['generated'])->toBe(2)
+        ->and(MonthlyPlan::query()->count())->toBe(1)
         ->and(StudentMonthlyPlan::query()->count())->toBe(2);
 
     $firstPlan = StudentMonthlyPlan::query()->where('student_id', $firstStudent->id)->firstOrFail();
     $secondPlan = StudentMonthlyPlan::query()->where('student_id', $secondStudent->id)->firstOrFail();
 
-    expect($firstPlan->items()->where('student_id', $secondStudent->id)->exists())->toBeFalse()
+    expect($firstPlan->monthly_plan_id)->toBe($secondPlan->monthly_plan_id)
+        ->and($firstPlan->items()->where('student_id', $secondStudent->id)->exists())->toBeFalse()
         ->and($secondPlan->items()->where('student_id', $firstStudent->id)->exists())->toBeFalse();
 });
 
@@ -226,7 +229,8 @@ test('center monthly generation stores one plan per student per month without du
     app(StudentMonthlyPlanGenerator::class)->generateForCenter($center, 6, 2026);
     app(StudentMonthlyPlanGenerator::class)->generateForCenter($center, 6, 2026);
 
-    expect(StudentMonthlyPlan::query()->where('center_id', $center->id)->where('year', 2026)->where('month', 6)->count())->toBe(2)
+    expect(MonthlyPlan::query()->where('center_id', $center->id)->where('year', 2026)->where('month', 6)->count())->toBe(2)
+        ->and(StudentMonthlyPlan::query()->where('center_id', $center->id)->where('year', 2026)->where('month', 6)->count())->toBe(2)
         ->and(StudentMonthlyPlan::query()->where('student_id', $firstStudent->id)->where('year', 2026)->where('month', 6)->count())->toBe(1)
         ->and(StudentMonthlyPlan::query()->where('student_id', $secondStudent->id)->where('year', 2026)->where('month', 6)->count())->toBe(1)
         ->and(StudentMonthlyPlanItem::query()->where('student_id', $firstStudent->id)->count())->toBe(2)

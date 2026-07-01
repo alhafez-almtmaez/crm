@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\Center;
 use App\Models\Group;
+use App\Models\MonthlyPlan;
 use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentMonthlyPlan;
@@ -12,12 +13,13 @@ use App\Models\StudentMonthlyPlanItem;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class StudentMonthlyPlanGenerator
 {
     /**
-     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>}
+     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
     public function generateForCenter(Center $center, int $month, int $year, ?int $groupId = null): array
     {
@@ -34,7 +36,7 @@ class StudentMonthlyPlanGenerator
     }
 
     /**
-     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>}
+     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
     public function generateForGroup(Group $group, int $month, int $year): array
     {
@@ -51,11 +53,12 @@ class StudentMonthlyPlanGenerator
 
     /**
      * @param  EloquentCollection<int, Student>  $students
-     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>}
+     * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
     private function generateForStudents(EloquentCollection $students, int $month, int $year): array
     {
         $planIds = [];
+        $monthlyPlanIds = [];
         $skipped = 0;
 
         foreach ($students as $student) {
@@ -67,12 +70,16 @@ class StudentMonthlyPlanGenerator
             }
 
             $planIds[] = (int) $monthlyPlan->id;
+            if ($monthlyPlan->monthly_plan_id !== null) {
+                $monthlyPlanIds[] = (int) $monthlyPlan->monthly_plan_id;
+            }
         }
 
         return [
             'generated' => count($planIds),
             'skipped_students' => $skipped,
             'plan_ids' => $planIds,
+            'monthly_plan_ids' => array_values(array_unique($monthlyPlanIds)),
         ];
     }
 
@@ -90,12 +97,17 @@ class StudentMonthlyPlanGenerator
 
         return DB::transaction(function () use ($student, $month, $year, $dates): ?StudentMonthlyPlan {
             $existingPlan = StudentMonthlyPlan::query()
+                ->withCount('items')
                 ->where('student_id', $student->id)
                 ->where('year', $year)
                 ->where('month', $month)
                 ->first();
 
             if ($existingPlan !== null) {
+                if ($existingPlan->items_count > 0) {
+                    return null;
+                }
+
                 $existingPlan->delete();
             }
 
@@ -106,7 +118,10 @@ class StudentMonthlyPlanGenerator
                 ->firstOrFail();
             $startPoint = $this->startPoint($lockedStudent);
 
+            $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year);
+
             $plan = StudentMonthlyPlan::query()->create([
+                'monthly_plan_id' => $monthlyPlan->id,
                 'student_id' => $lockedStudent->id,
                 'center_id' => $lockedStudent->center_id,
                 'group_id' => $lockedStudent->group_id,
@@ -131,8 +146,47 @@ class StudentMonthlyPlanGenerator
                     : StudentMonthlyPlan::STATUS_EXHAUSTED,
             ]);
 
+            $this->refreshMonthlyPlanTotals($monthlyPlan);
+
             return $plan->refresh()->load(['days.items.planPoint', 'student', 'plan']);
         });
+    }
+
+    private function monthlyPlanForStudent(Student $student, int $month, int $year): MonthlyPlan
+    {
+        $attributes = [
+            'group_id' => $student->group_id,
+            'month' => $month,
+            'year' => $year,
+        ];
+
+        if ($student->group_id === null) {
+            $attributes['center_id'] = $student->center_id;
+        }
+
+        return MonthlyPlan::query()->firstOrCreate($attributes, [
+            'center_id' => $student->center_id,
+            'admin_id' => Auth::id(),
+            'generated_at' => now(),
+        ]);
+    }
+
+    private function refreshMonthlyPlanTotals(MonthlyPlan $monthlyPlan): void
+    {
+        $summary = StudentMonthlyPlan::query()
+            ->where('monthly_plan_id', $monthlyPlan->id)
+            ->selectRaw('COUNT(*) as students_count')
+            ->selectRaw('COALESCE(SUM(generated_items_count), 0) as generated_items_count')
+            ->selectRaw('COALESCE(SUM(skipped_items_count), 0) as skipped_items_count')
+            ->selectRaw('MAX(generated_at) as generated_at')
+            ->first();
+
+        $monthlyPlan->update([
+            'students_count' => (int) ($summary->students_count ?? 0),
+            'generated_items_count' => (int) ($summary->generated_items_count ?? 0),
+            'skipped_items_count' => (int) ($summary->skipped_items_count ?? 0),
+            'generated_at' => $summary->generated_at ?? $monthlyPlan->generated_at,
+        ]);
     }
 
     /**

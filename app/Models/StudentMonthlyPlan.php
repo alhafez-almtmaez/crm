@@ -16,6 +16,7 @@ class StudentMonthlyPlan extends Model
     public const STATUS_EXHAUSTED = 'exhausted';
 
     protected $fillable = [
+        'monthly_plan_id',
         'student_id',
         'center_id',
         'group_id',
@@ -32,6 +33,7 @@ class StudentMonthlyPlan extends Model
     ];
 
     protected $casts = [
+        'monthly_plan_id' => 'int',
         'student_id' => 'int',
         'center_id' => 'int',
         'group_id' => 'int',
@@ -49,6 +51,11 @@ class StudentMonthlyPlan extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function monthlyPlan(): BelongsTo
+    {
+        return $this->belongsTo(MonthlyPlan::class);
     }
 
     public function center(): BelongsTo

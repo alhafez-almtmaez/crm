@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StudentMonthlyPlanGenerateRequest;
 use App\Http\Requests\Admin\StudentMonthlyPlanIndexRequest;
 use App\Models\Center;
+use App\Models\Group;
+use App\Models\MonthlyPlan;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
@@ -24,14 +27,34 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:monthly_plans.view', only: ['index', 'records']),
-            new Middleware('can:monthly_plans.create', only: ['generate']),
+            new Middleware('can:monthly_plans.view', only: ['index', 'records', 'edit']),
+            new Middleware('can:monthly_plans.create', only: ['create', 'store']),
+            new Middleware('can:monthly_plans.delete', only: ['destroy']),
         ];
     }
 
     public function index(): Response
     {
-        return Inertia::render('Admin/MonthlyPlans', [
+        return Inertia::render('Admin/MonthlyPlans');
+    }
+
+    public function records(StudentMonthlyPlanIndexRequest $request): JsonResponse
+    {
+        $rows = $this->service->savedPlansPage($request->validated());
+
+        return response()->json([
+            'data' => $rows->items(),
+            'meta' => [
+                'current_page' => $rows->currentPage(),
+                'per_page' => $rows->perPage(),
+                'total' => $rows->total(),
+            ],
+        ]);
+    }
+
+    public function create(): Response
+    {
+        return Inertia::render('Admin/MonthlyPlans/Create', [
             'centers' => $this->service->centerOptions(),
             'groups' => $this->service->groupOptions(),
             'default_month' => now()->month,
@@ -39,29 +62,58 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function records(StudentMonthlyPlanIndexRequest $request): JsonResponse
+    public function edit(MonthlyPlan $monthlyPlan): Response
     {
-        return response()->json([
-            'data' => $this->service->list($request->validated()),
-        ]);
+        return Inertia::render('Admin/MonthlyPlans/Edit', $this->service->savedPlanPayload($monthlyPlan));
     }
 
-    public function generate(StudentMonthlyPlanGenerateRequest $request): JsonResponse
+    public function store(StudentMonthlyPlanGenerateRequest $request): RedirectResponse
     {
         $data = $request->validated();
         $center = Center::query()->findOrFail((int) $data['center_id']);
-        $result = $this->generator->generateForCenter(
-            $center,
-            (int) $data['month'],
-            (int) $data['year'],
-            isset($data['group_id']) ? (int) $data['group_id'] : null,
-        );
+        $group = isset($data['group_id'])
+            ? Group::query()
+                ->where('center_id', $center->id)
+                ->findOrFail((int) $data['group_id'])
+            : null;
+        $month = (int) $data['month'];
+        $year = (int) $data['year'];
+
+        if ($group !== null) {
+            $existingPlan = $this->service->savedPlanForGroup($group, $month, $year);
+            if ($existingPlan !== null) {
+                return redirect()
+                    ->route('admin.monthly-plans.edit', $existingPlan)
+                    ->with('success', __('monthly_plans.already_exists'));
+            }
+        }
+
+        $result = $group !== null
+            ? $this->generator->generateForGroup($group, $month, $year)
+            : $this->generator->generateForCenter($center, $month, $year);
+
+        $firstMonthlyPlanId = $result['monthly_plan_ids'][0] ?? null;
+        if ($firstMonthlyPlanId !== null && count($result['monthly_plan_ids']) === 1) {
+            return redirect()
+                ->route('admin.monthly-plans.edit', $firstMonthlyPlanId)
+                ->with('success', __('monthly_plans.generated_successfully', [
+                    'count' => $result['generated'],
+                ]));
+        }
+
+        return redirect()
+            ->route('admin.monthly-plans.index')
+            ->with('success', __('monthly_plans.generated_successfully', [
+                'count' => $result['generated'],
+            ]));
+    }
+
+    public function destroy(MonthlyPlan $monthlyPlan): JsonResponse
+    {
+        $this->service->delete($monthlyPlan);
 
         return response()->json([
-            'message' => __('monthly_plans.generated_successfully', [
-                'count' => $result['generated'],
-            ]),
-            'meta' => $result,
+            'message' => __('monthly_plans.deleted_successfully'),
         ]);
     }
 }

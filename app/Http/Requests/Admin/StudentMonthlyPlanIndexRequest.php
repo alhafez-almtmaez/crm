@@ -12,34 +12,26 @@ class StudentMonthlyPlanIndexRequest extends FormRequest
         return true;
     }
 
-    protected function prepareForValidation(): void
-    {
-        $this->merge([
-            'center_id' => $this->filled('center_id') ? (int) $this->input('center_id') : null,
-            'group_id' => $this->filled('group_id') ? (int) $this->input('group_id') : null,
-            'month' => (int) $this->input('month', now()->month),
-            'year' => (int) $this->input('year', now()->year),
-        ]);
-    }
-
     /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
-        $groupRule = Rule::exists('groups', 'id');
-        if ($this->filled('center_id')) {
-            $groupRule->where('center_id', (int) $this->input('center_id'));
-        }
-
         return [
-            'center_id' => ['nullable', Rule::exists('centers', 'id')],
-            'group_id' => [
-                'nullable',
-                $groupRule,
-            ],
-            'month' => ['required', 'integer', 'min:1', 'max:12'],
-            'year' => ['required', 'integer', 'min:2020', 'max:2100'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+            'sort_by' => ['nullable', Rule::in([
+                'id',
+                'center_name',
+                'group_name',
+                'month',
+                'year',
+                'students_count',
+                'generated_items_count',
+                'generated_at',
+            ])],
+            'sort_dir' => ['nullable', Rule::in(['asc', 'desc'])],
         ];
     }
 }

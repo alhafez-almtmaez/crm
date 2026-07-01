@@ -69,7 +69,13 @@
     "/build/assets/Edit-lPxmfE5U.js"
   ],
   "resources/js/Pages/Admin/MonthlyPlans.vue": [
-    "/build/assets/MonthlyPlans-Dd2gzMFy.js"
+    "/build/assets/MonthlyPlans-CC5pElmy.js"
+  ],
+  "resources/js/Pages/Admin/MonthlyPlans/Create.vue": [
+    "/build/assets/Create-CVQ28kqF.js"
+  ],
+  "resources/js/Pages/Admin/MonthlyPlans/Edit.vue": [
+    "/build/assets/Edit-CwclUqXj.js"
   ],
   "resources/js/Pages/Admin/Plans.vue": [
     "/build/assets/Plans-gxuHrM4h.js"
@@ -99,10 +105,10 @@
     "/build/assets/Students-BYzauN4d.js"
   ],
   "resources/js/Pages/Admin/Students/Create.vue": [
-    "/build/assets/Create-XcB2h0tn.js"
+    "/build/assets/Create-CSXUAig9.js"
   ],
   "resources/js/Pages/Admin/Students/Edit.vue": [
-    "/build/assets/Edit-CdF95a9w.js"
+    "/build/assets/Edit-DKrDeG-u.js"
   ],
   "resources/js/Pages/Admin/Users.vue": [
     "/build/assets/Users-DUKzYk0a.js"
@@ -177,6 +183,9 @@
   "resources/js/components/admin/MessageTemplateFormCard.vue": [
     "/build/assets/MessageTemplateFormCard-DfQg9fL7.js"
   ],
+  "resources/js/components/admin/MonthlyPlanGrid.vue": [
+    "/build/assets/Edit-CwclUqXj.js"
+  ],
   "resources/js/components/admin/PlanFormCard.vue": [
     "/build/assets/PlanFormCard-Cq6F5U7g.js"
   ],
@@ -184,7 +193,7 @@
     "/build/assets/RoleFormCard-EzgdZmiK.js"
   ],
   "resources/js/components/admin/StudentFormCard.vue": [
-    "/build/assets/StudentFormCard-DnYJ22aQ.js"
+    "/build/assets/StudentFormCard-CUDdksKq.js"
   ],
   "resources/js/components/admin/UserFormCard.vue": [
     "/build/assets/UserFormCard-BiU6NAq3.js"
