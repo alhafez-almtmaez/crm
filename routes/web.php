@@ -28,6 +28,12 @@ Route::get('evaluations/report/{publicId}', [EvaluationController::class, 'repor
 Route::get('groups/homeworks/{publicId}', [GroupController::class, 'homeworkReport'])
     ->name('groups.homeworks.report');
 
+Route::get('groups/points-ranking/{publicId}', [GroupController::class, 'pointsRanking'])
+    ->name('groups.points-ranking');
+
+Route::get('monthly-plans/{publicId}', [StudentMonthlyPlanController::class, 'report'])
+    ->name('monthly-plans.report');
+
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::middleware('guest')->group(function (): void {
         Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');

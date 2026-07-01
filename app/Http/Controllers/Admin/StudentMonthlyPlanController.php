@@ -71,6 +71,27 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
         return Inertia::render('Admin/MonthlyPlans/Edit', $this->service->savedPlanPayload($monthlyPlan));
     }
 
+    public function report(string $publicId): Response
+    {
+        $report = $this->service->publicReportPayload($publicId);
+        $plan = $report['monthly_plan'];
+        $title = 'الخطة الشهرية | مشروع الحافظ المتميز';
+        $description = trim(($plan['center_name'] ?? '').' / '.($plan['group_name'] ?? ''));
+        $imageUrl = asset('media/logos/logo.png');
+
+        return Inertia::render('MonthlyPlans/PublicReport', [
+            'report' => $report,
+        ])->withViewData([
+            'pageMeta' => [
+                'title' => $title,
+                'description' => $description,
+                'url' => url()->current(),
+                'image' => $imageUrl,
+                'type' => 'website',
+            ],
+        ]);
+    }
+
     public function store(StudentMonthlyPlanGenerateRequest $request): RedirectResponse
     {
         $data = $request->validated();

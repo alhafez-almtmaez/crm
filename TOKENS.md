@@ -22,7 +22,8 @@ Primary groups:
 
 - `:root` defines light defaults.
 - `:root.dark` and `:root.light` are explicit mode overrides.
-- `@media (prefers-color-scheme: dark)` is used as system fallback.
+- The app initializes to light mode when no saved user preference exists.
+- Saved user preferences in `vita_theme_mode` still override the default.
 
 ## Usage Rules
 

@@ -62,6 +62,26 @@ class GroupController extends Controller implements HasMiddleware
         ]);
     }
 
+    public function pointsRanking(string $publicId): Response
+    {
+        $ranking = $this->groupService->pointsRankingPayload($publicId);
+        $title = 'ترتيب الطلاب حسب النقاط | مشروع الحافظ المتميز';
+        $description = trim(($ranking['center_name'] ?? '').' / '.($ranking['group_name'] ?? ''));
+        $imageUrl = asset('media/logos/logo.png');
+
+        return Inertia::render('Groups/PointsRanking', [
+            'ranking' => $ranking,
+        ])->withViewData([
+            'pageMeta' => [
+                'title' => $title,
+                'description' => $description,
+                'url' => url()->current(),
+                'image' => $imageUrl,
+                'type' => 'website',
+            ],
+        ]);
+    }
+
     public function create(): Response
     {
         return Inertia::render('Admin/Groups/Create', [

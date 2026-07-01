@@ -1,25 +1,22 @@
-import { ref } from 'vue';
+import { shallowRef } from 'vue';
 
 const STORAGE_KEY = 'vita_theme_mode';
-export const mode = ref('light');
+const DEFAULT_MODE = 'light';
 
-const getSystemMode = () => {
-    if (typeof window === 'undefined') {
-        return 'light';
-    }
+export const mode = shallowRef(DEFAULT_MODE);
 
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
+const normalizeMode = (value) => (value === 'dark' ? 'dark' : DEFAULT_MODE);
 
 const applyMode = (value) => {
     if (typeof document === 'undefined') {
         return;
     }
 
+    const next = normalizeMode(value);
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
-    root.classList.add(value);
-    mode.value = value;
+    root.classList.add(next);
+    mode.value = next;
 };
 
 export const initThemeMode = () => {
@@ -28,13 +25,12 @@ export const initThemeMode = () => {
     }
 
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    const initial = saved === 'dark' || saved === 'light' ? saved : getSystemMode();
-    applyMode(initial);
+    applyMode(saved);
 };
 
 export const useThemeMode = () => {
     const setMode = (value) => {
-        const next = value === 'dark' ? 'dark' : 'light';
+        const next = normalizeMode(value);
         applyMode(next);
 
         if (typeof window !== 'undefined') {

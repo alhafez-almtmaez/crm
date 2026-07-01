@@ -59,6 +59,10 @@ class GroupService
                     'homework_report_url',
                     filled($group->ulid) ? route('groups.homeworks.report', ['publicId' => $group->ulid], false) : null,
                 );
+                $group->setAttribute(
+                    'points_ranking_url',
+                    filled($group->ulid) ? route('groups.points-ranking', ['publicId' => $group->ulid], false) : null,
+                );
 
                 return $group;
             }),
@@ -102,14 +106,7 @@ class GroupService
      */
     public function homeworkReportPayload(string $publicId): array
     {
-        $publicId = trim($publicId);
-        abort_if($publicId === '', 404);
-
-        /** @var Group $group */
-        $group = Group::query()
-            ->with('center:id,name')
-            ->where('ulid', $publicId)
-            ->firstOrFail();
+        $group = $this->publicGroup($publicId);
 
         $rows = Student::query()
             ->with(['plan:id,name'])
@@ -126,10 +123,64 @@ class GroupService
             'group_name' => $group->name,
             'center_name' => $group->center?->name ?? '-',
             'generated_at' => Carbon::now()->locale('ar')->translatedFormat('l ، j F ، Y'),
+            'points_ranking_url' => route('groups.points-ranking', ['publicId' => $group->ulid], false),
             'rows' => $rows,
             'summary' => [
                 'students_count' => count($rows),
                 'tasks_count' => collect($rows)->sum(static fn (array $row): int => count($row['tasks'] ?? [])),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function pointsRankingPayload(string $publicId): array
+    {
+        $group = $this->publicGroup($publicId);
+
+        $students = Student::query()
+            ->with(['plan:id,name'])
+            ->where('group_id', $group->id)
+            ->where('is_active', Student::STATUS_ACTIVE)
+            ->orderByDesc('points_balance')
+            ->orderBy('full_name')
+            ->get(['id', 'full_name', 'plan_type_id', 'current_plan_point_id', 'points_balance']);
+
+        $leaderPoints = (int) ($students->first()?->points_balance ?? 0);
+        $lastPoints = null;
+        $rank = 0;
+        $rows = $students
+            ->values()
+            ->map(function (Student $student, int $index) use (&$lastPoints, &$rank, $leaderPoints): array {
+                $points = (int) ($student->points_balance ?? 0);
+
+                if ($lastPoints === null || $points !== $lastPoints) {
+                    $rank = $index + 1;
+                    $lastPoints = $points;
+                }
+
+                return $this->pointsRankingStudentRow($student, $rank, $index + 1, $leaderPoints);
+            })
+            ->all();
+
+        $studentsCount = count($rows);
+        $totalPoints = collect($rows)->sum(static fn (array $row): int => (int) $row['points_balance']);
+        $averagePoints = $studentsCount > 0 ? round($totalPoints / $studentsCount, 1) : 0;
+
+        return [
+            'title' => 'ترتيب الطلاب حسب النقاط',
+            'group_name' => $group->name,
+            'center_name' => $group->center?->name ?? '-',
+            'generated_at' => Carbon::now()->locale('ar')->translatedFormat('l ، j F ، Y'),
+            'homework_report_url' => route('groups.homeworks.report', ['publicId' => $group->ulid], false),
+            'rows' => $rows,
+            'summary' => [
+                'students_count' => $studentsCount,
+                'total_points' => $totalPoints,
+                'average_points' => $averagePoints,
+                'leader_points' => $leaderPoints,
+                'top_student' => $rows[0]['full_name'] ?? null,
             ],
         ];
     }
@@ -174,6 +225,56 @@ class GroupService
                 ])
                 ->all(),
         ];
+    }
+
+    private function pointsRankingStudentRow(Student $student, int $rank, int $position, int $leaderPoints): array
+    {
+        $planId = $student->plan_type_id !== null ? (int) $student->plan_type_id : null;
+        $currentPlanPoint = $planId !== null ? $this->latestCompletedPlanPoint($student, $planId) : null;
+        $points = (int) ($student->points_balance ?? 0);
+        $progressBase = max(0, $leaderPoints);
+        $progressPercent = $progressBase > 0
+            ? (int) round((max(0, $points) / $progressBase) * 100)
+            : 0;
+
+        return [
+            'rank' => $rank,
+            'position' => $position,
+            'student_id' => $student->id,
+            'full_name' => $student->full_name,
+            'initials' => $this->studentInitials((string) $student->full_name),
+            'plan_name' => $student->plan?->name ?? '-',
+            'points_balance' => $points,
+            'points_gap_from_leader' => max(0, $leaderPoints - $points),
+            'progress_percent' => min(100, max(0, $progressPercent)),
+            'current_plan_point_name' => $currentPlanPoint?->name,
+        ];
+    }
+
+    private function publicGroup(string $publicId): Group
+    {
+        $publicId = trim($publicId);
+        abort_if($publicId === '', 404);
+
+        /** @var Group $group */
+        $group = Group::query()
+            ->with('center:id,name')
+            ->where('ulid', $publicId)
+            ->firstOrFail();
+
+        return $group;
+    }
+
+    private function studentInitials(string $fullName): string
+    {
+        $parts = preg_split('/\s+/u', trim($fullName)) ?: [];
+        $initials = collect($parts)
+            ->filter(static fn (string $part): bool => $part !== '')
+            ->take(2)
+            ->map(static fn (string $part): string => Str::substr($part, 0, 1))
+            ->implode('');
+
+        return $initials !== '' ? $initials : '؟';
     }
 
     /**

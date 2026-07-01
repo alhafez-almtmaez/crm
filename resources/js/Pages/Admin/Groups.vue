@@ -53,6 +53,14 @@ const rowActions = computed(() => [
         titleKey: 'groups.openHomeworkReport',
         show: (group) => Boolean(group.homework_report_url),
     },
+    {
+        key: 'open-points-ranking',
+        icon: 'pi pi-trophy',
+        severity: 'success',
+        outlined: true,
+        titleKey: 'groups.openPointsRanking',
+        show: (group) => Boolean(group.points_ranking_url),
+    },
 ]);
 
 const openCreate = () => {
@@ -112,9 +120,22 @@ const openHomeworkReport = (group) => {
     window.open(group.homework_report_url, '_blank', 'noopener');
 };
 
+const openPointsRanking = (group) => {
+    if (!group.points_ranking_url) {
+        return;
+    }
+
+    window.open(group.points_ranking_url, '_blank', 'noopener');
+};
+
 const handleRowAction = ({ action, data: group }) => {
     if (action === 'open-homework-report') {
         openHomeworkReport(group);
+        return;
+    }
+
+    if (action === 'open-points-ranking') {
+        openPointsRanking(group);
     }
 };
 

@@ -26,6 +26,7 @@ const logoUrl = computed(() => '/media/logos/logo.png');
 const summary = computed(() => props.report.summary ?? {});
 const totalTasks = computed(() => Number(summary.value.tasks_count ?? 0));
 const studentsCount = computed(() => Number(summary.value.students_count ?? rows.value.length));
+const pointsRankingUrl = computed(() => props.report.points_ranking_url ?? null);
 
 const summaryCards = computed(() => [
     {
@@ -118,6 +119,16 @@ const copyReportLink = async () => {
                 </div>
 
                 <div class="report-actions print-hidden">
+                    <a
+                        v-if="pointsRankingUrl"
+                        class="report-link-button"
+                        :href="pointsRankingUrl"
+                        title="ترتيب الطلاب حسب النقاط"
+                        aria-label="ترتيب الطلاب حسب النقاط"
+                    >
+                        <i class="pi pi-trophy" aria-hidden="true" />
+                        <span>ترتيب النقاط</span>
+                    </a>
                     <button type="button" class="icon-button" title="طباعة الصفحة" aria-label="طباعة الصفحة" @click="printPage">
                         <i class="pi pi-print" aria-hidden="true" />
                     </button>
@@ -361,7 +372,34 @@ const copyReportLink = async () => {
     align-self: start;
     justify-self: end;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 10px;
+}
+
+.report-link-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    gap: 8px;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    background: #f0fdf4;
+    color: #047857;
+    padding: 9px 12px;
+    font-size: 0.84rem;
+    font-weight: 900;
+    line-height: 1.3;
+    text-decoration: none;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.report-link-button:hover {
+    transform: translateY(-1px);
+    border-color: #047857;
+    background: #dcfce7;
 }
 
 .icon-button {

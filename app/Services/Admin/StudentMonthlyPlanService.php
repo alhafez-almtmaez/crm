@@ -45,6 +45,7 @@ class StudentMonthlyPlanService
             ->leftJoin('groups', 'monthly_plans.group_id', '=', 'groups.id')
             ->select([
                 'monthly_plans.id',
+                'monthly_plans.ulid',
                 'monthly_plans.center_id',
                 'monthly_plans.group_id',
                 'monthly_plans.month',
@@ -88,6 +89,10 @@ class StudentMonthlyPlanService
 
                 $row->setAttribute('center_name', $row->center_name ?? '');
                 $row->setAttribute('group_name', $row->group_name ?? '');
+                $row->setAttribute(
+                    'public_report_url',
+                    filled($row->ulid) ? route('monthly-plans.report', ['publicId' => $row->ulid], false) : null,
+                );
                 $row->setAttribute('generated_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->generated_at));
                 $row->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->created_at));
 
@@ -239,6 +244,55 @@ class StudentMonthlyPlanService
     }
 
     /**
+     * @return array{monthly_plan: array<string, mixed>, dates: array<int, array<string, mixed>>, plans: array<int, array<string, mixed>>}
+     */
+    public function publicReportPayload(string $publicId): array
+    {
+        $publicId = trim($publicId);
+        abort_if($publicId === '', 404);
+
+        /** @var MonthlyPlan $monthlyPlan */
+        $monthlyPlan = MonthlyPlan::query()
+            ->where('ulid', $publicId)
+            ->firstOrFail();
+
+        $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name']);
+
+        $studentPlanModels = StudentMonthlyPlan::query()
+            ->with([
+                'student:id,full_name',
+                'plan:id,name',
+                'days' => fn ($query) => $query->orderBy('date'),
+                'days.items' => fn ($query) => $query->orderBy('sort_order'),
+                'days.items.planPoint:id,name,sort_order',
+            ])
+            ->join('students', 'student_monthly_plans.student_id', '=', 'students.id')
+            ->where('monthly_plan_id', $monthlyPlan->id)
+            ->orderBy('students.full_name')
+            ->select('student_monthly_plans.*')
+            ->get();
+
+        return [
+            'monthly_plan' => [
+                'id' => (int) $monthlyPlan->id,
+                'center_name' => (string) ($monthlyPlan->center?->name ?? ''),
+                'group_name' => (string) ($monthlyPlan->group?->name ?? ''),
+                'month' => (int) $monthlyPlan->month,
+                'year' => (int) $monthlyPlan->year,
+                'students_count' => $studentPlanModels->count(),
+                'generated_items_count' => $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count),
+                'generated_at' => $this->dateTimeFormatter->formatForAdmin($monthlyPlan->generated_at),
+            ],
+            'dates' => $monthlyPlan->center !== null
+                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year)
+                : [],
+            'plans' => $studentPlanModels
+                ->map(fn (StudentMonthlyPlan $plan): array => $this->publicStudentPlanPayload($plan))
+                ->all(),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function studentPlanPayload(StudentMonthlyPlan $plan): array
@@ -278,6 +332,30 @@ class StudentMonthlyPlanService
                     'weight' => (float) $item->weight,
                     'is_standalone' => (bool) $item->is_standalone,
                     'status' => (string) $item->status,
+                ])->all(),
+            ])->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function publicStudentPlanPayload(StudentMonthlyPlan $plan): array
+    {
+        return [
+            'id' => (int) $plan->id,
+            'student_id' => (int) $plan->student_id,
+            'student_name' => (string) ($plan->student?->full_name ?? ''),
+            'plan_name' => (string) ($plan->plan?->name ?? ''),
+            'generated_items_count' => (int) $plan->generated_items_count,
+            'days' => $plan->days->map(static fn ($day): array => [
+                'id' => (int) $day->id,
+                'date' => $day->date?->format('Y-m-d'),
+                'day_number' => (int) $day->day_number,
+                'items' => $day->items->map(static fn ($item): array => [
+                    'id' => (int) $item->id,
+                    'plan_point_id' => (int) $item->plan_point_id,
+                    'name' => (string) ($item->planPoint?->name ?? ''),
                 ])->all(),
             ])->all(),
         ];

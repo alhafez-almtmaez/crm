@@ -54,12 +54,37 @@ const columns = computed(() => [
     { field: 'generated_at_formatted', header: t('monthlyPlans.generatedAt'), sortable: true, sortField: 'generated_at' },
 ]);
 
+const rowActions = computed(() => [
+    {
+        key: 'open-public-report',
+        icon: 'pi pi-link',
+        severity: 'info',
+        outlined: true,
+        titleKey: 'monthlyPlans.openPublicReport',
+        show: (row) => Boolean(row.public_report_url),
+    },
+]);
+
 const openCreate = () => {
     router.get('/admin/monthly-plans/create');
 };
 
 const openEdit = (row) => {
     router.get(`/admin/monthly-plans/${row.id}/edit`);
+};
+
+const openPublicReport = (row) => {
+    if (!row.public_report_url) {
+        return;
+    }
+
+    window.open(row.public_report_url, '_blank', 'noopener');
+};
+
+const handleRowAction = ({ action, data: row }) => {
+    if (action === 'open-public-report') {
+        openPublicReport(row);
+    }
 };
 
 const deleteRow = async (row) => {
@@ -127,10 +152,12 @@ onMounted(() => {
                 :search-label="t('monthlyPlans.searchSavedPlans')"
                 :table-title="t('monthlyPlans.savedPlans')"
                 :empty-message="t('monthlyPlans.noSavedPlans')"
+                :row-actions="rowActions"
                 @update:search="search = $event"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @create="openCreate"
+                @row-action="handleRowAction"
                 @edit="openEdit"
                 @delete="askDelete"
             />

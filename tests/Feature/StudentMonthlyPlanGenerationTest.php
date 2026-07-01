@@ -5,9 +5,11 @@ use App\Models\Group;
 use App\Models\MonthlyPlan;
 use App\Models\Plan;
 use App\Models\PlanPoint;
+use App\Models\Role;
 use App\Models\Student;
 use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanItem;
+use App\Models\User;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -162,6 +164,29 @@ test('monthly plans for two students do not mix their data', function () {
     expect($firstPlan->monthly_plan_id)->toBe($secondPlan->monthly_plan_id)
         ->and($firstPlan->items()->where('student_id', $secondStudent->id)->exists())->toBeFalse()
         ->and($secondPlan->items()->where('student_id', $firstStudent->id)->exists())->toBeFalse();
+});
+
+test('saved monthly plan records include the public monthly plan report link', function () {
+    [, $group, $plan] = monthlyPlanFixture(maxDailyWeight: 2);
+    createPlanPoint($plan, 'تسميع صفحة 1', 1);
+
+    app(StudentMonthlyPlanGenerator::class)->generateForGroup($group, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->firstOrFail();
+
+    $adminRole = Role::query()->create([
+        'name' => 'admin',
+        'guard_name' => 'web',
+    ]);
+    $admin = User::factory()->create();
+    $admin->assignRole($adminRole);
+
+    $this->actingAs($admin, 'web')
+        ->getJson('/admin/monthly-plans/records')
+        ->assertOk()
+        ->assertJsonPath(
+            'data.0.public_report_url',
+            route('monthly-plans.report', ['publicId' => $monthlyPlan->ulid], false),
+        );
 });
 
 test('regenerating a monthly plan does not duplicate data', function () {
