@@ -460,8 +460,8 @@ class HomeworkService
             ->where('center_id', $centerId)
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
-            ->orderBy('plan_type_id')
             ->orderBy('full_name')
+            ->orderBy('id')
             ->get([
                 'id',
                 'full_name',
