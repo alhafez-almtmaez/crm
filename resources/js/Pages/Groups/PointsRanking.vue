@@ -11,12 +11,25 @@ const props = defineProps({
 });
 
 const copied = shallowRef(false);
+const searchQuery = shallowRef('');
 const logoUrl = computed(() => '/media/logos/logo.png');
 const rows = computed(() => props.ranking.rows ?? []);
 const summary = computed(() => props.ranking.summary ?? {});
-const topRows = computed(() => rows.value.slice(0, 3));
-const remainingRows = computed(() => rows.value.slice(3));
+const normalizeSearchText = (value) => String(value ?? '').trim().toLocaleLowerCase('ar');
+const normalizedSearch = computed(() => normalizeSearchText(searchQuery.value));
+const filteredRows = computed(() => {
+    if (normalizedSearch.value === '') {
+        return rows.value;
+    }
+
+    return rows.value.filter((row) => normalizeSearchText(row.full_name).includes(normalizedSearch.value));
+});
+const topRows = computed(() => filteredRows.value.slice(0, 3));
+const remainingRows = computed(() => filteredRows.value.slice(3));
 const hasRows = computed(() => rows.value.length > 0);
+const hasMatches = computed(() => filteredRows.value.length > 0);
+const isSearching = computed(() => normalizedSearch.value !== '');
+const leaderName = computed(() => topRows.value[0]?.full_name ?? null);
 const englishNumber = (value) => Number(value ?? 0).toLocaleString('en-US');
 const averagePointsLabel = computed(() => Number(summary.value.average_points ?? 0).toLocaleString('en-US', {
     maximumFractionDigits: 1,
@@ -47,6 +60,10 @@ const summaryCards = computed(() => [
         icon: 'pi pi-trophy',
     },
 ]);
+
+const clearSearch = () => {
+    searchQuery.value = '';
+};
 
 const copyRankingLink = async () => {
     const url = window.location.href;
@@ -120,19 +137,47 @@ const copyRankingLink = async () => {
                 </article>
             </section>
 
+            <section class="search-panel" aria-label="بحث الطلاب">
+                <label class="search-label" for="student-ranking-search">بحث باسم الطالب</label>
+                <div class="search-field">
+                    <i class="pi pi-search" aria-hidden="true" />
+                    <input
+                        id="student-ranking-search"
+                        v-model="searchQuery"
+                        type="search"
+                        autocomplete="off"
+                        inputmode="search"
+                        placeholder="اسم الطالب"
+                    >
+                    <button
+                        v-if="searchQuery"
+                        type="button"
+                        class="search-clear"
+                        title="مسح البحث"
+                        aria-label="مسح البحث"
+                        @click="clearSearch"
+                    >
+                        <i class="pi pi-times" aria-hidden="true" />
+                    </button>
+                </div>
+                <span class="search-count">
+                    {{ isSearching ? `${englishNumber(filteredRows.length)} نتيجة` : `${englishNumber(rows.length)} طالب` }}
+                </span>
+            </section>
+
             <section class="ranking-section ranking-section--leaders" aria-label="أوائل الطلاب">
                 <div class="section-heading section-heading--leaders">
                     <div>
                         <p>لوحة الصدارة</p>
                         <h2><span>الطلاب الأعلى رصيداً</span></h2>
                     </div>
-                    <span v-if="summary.top_student" class="leader-chip">
+                    <span v-if="leaderName" class="leader-chip">
                         <i class="pi pi-trophy" aria-hidden="true" />
-                        المتصدر: {{ summary.top_student }}
+                        المتصدر: {{ leaderName }}
                     </span>
                 </div>
 
-                <div v-if="hasRows" class="top-grid">
+                <div v-if="hasMatches" class="top-grid">
                     <StudentRankingCard
                         v-for="(row, index) in topRows"
                         :key="row.student_id"
@@ -141,7 +186,7 @@ const copyRankingLink = async () => {
                         :breath-index="index"
                     />
                 </div>
-                <p v-else class="empty-state">لا يوجد طلاب فعالين في هذه المجموعة</p>
+                <p v-else class="empty-state">{{ hasRows ? 'لا توجد نتائج لهذا الاسم' : 'لا يوجد طلاب فعالين في هذه المجموعة' }}</p>
             </section>
 
             <section v-if="remainingRows.length" class="ranking-section" aria-label="باقي ترتيب الطلاب">
@@ -365,6 +410,92 @@ const copyRankingLink = async () => {
     font-size: 1.38rem;
     font-weight: 900;
     line-height: 1.25;
+}
+
+.search-panel {
+    display: grid;
+    grid-template-columns: auto minmax(240px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    border: 1px solid #dfe7ef;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 12px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.search-label {
+    color: #0f3d6e;
+    font-size: 0.88rem;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.search-field {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 32px;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #f8fafc;
+    padding: 0 11px;
+}
+
+.search-field:focus-within {
+    border-color: #047857;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.12);
+}
+
+.search-field i {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+.search-field input {
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #111827;
+    font: inherit;
+    font-size: 0.94rem;
+    font-weight: 800;
+}
+
+.search-field input::placeholder {
+    color: #94a3b8;
+    font-weight: 800;
+}
+
+.search-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #64748b;
+    transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.search-clear:hover {
+    border-color: #fca5a5;
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+.search-count {
+    justify-self: end;
+    color: #475569;
+    font-size: 0.86rem;
+    font-weight: 900;
+    white-space: nowrap;
 }
 
 .ranking-section {
@@ -593,6 +724,23 @@ const copyRankingLink = async () => {
 
     .summary-card strong {
         font-size: 1.06rem;
+    }
+
+    .search-panel {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-top: 10px;
+        padding: 10px;
+    }
+
+    .search-label,
+    .search-count {
+        justify-self: start;
+        font-size: 0.8rem;
+    }
+
+    .search-field {
+        min-height: 40px;
     }
 
     .section-heading {

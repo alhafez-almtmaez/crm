@@ -24,6 +24,10 @@ return new class extends Migration
                     ->where('id', $monthlyPlan->id)
                     ->update(['ulid' => (string) Str::ulid()]);
             });
+
+        Schema::table('monthly_plans', static function (Blueprint $table): void {
+            $table->string('ulid', 26)->nullable(false)->change();
+        });
     }
 
     public function down(): void

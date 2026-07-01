@@ -31,9 +31,11 @@ const monthlyPlan = computed(() => props.report.monthly_plan ?? {});
 const dates = computed(() => props.report.dates ?? []);
 const planRows = computed(() => (props.report.plans ?? []).map((plan) => ({
     ...plan,
+    student_name: String(plan.student_name ?? '').trim() || 'بدون اسم',
     dayMap: Object.fromEntries((plan.days ?? []).map((day) => [day.date, day])),
 })));
 const monthLabel = computed(() => monthNames[Number(monthlyPlan.value.month)] ?? monthlyPlan.value.month);
+const monthDisplay = computed(() => `${monthLabel.value} (${Number(monthlyPlan.value.month) || '-'})`);
 const title = computed(() => `الخطة الشهرية - ${monthlyPlan.value.group_name ?? ''}`);
 
 const cellItems = (plan, date) => plan.dayMap?.[date]?.items ?? [];
@@ -110,7 +112,7 @@ const printPage = () => {
                 </div>
                 <div>
                     <span>الشهر</span>
-                    <strong>{{ monthLabel }} {{ monthlyPlan.year }}</strong>
+                    <strong>{{ monthDisplay }} {{ monthlyPlan.year }}</strong>
                 </div>
                 <div>
                     <span>تاريخ الإنشاء</span>
@@ -406,10 +408,17 @@ const printPage = () => {
 }
 
 .student-cell {
-    display: grid;
-    gap: 5px;
     background: #ffffff !important;
     color: #111827;
+}
+
+.student-cell strong,
+.student-cell span {
+    display: block;
+}
+
+.student-cell span {
+    margin-top: 5px;
 }
 
 .plan-table td,
@@ -450,6 +459,61 @@ const printPage = () => {
     padding: 22px;
     text-align: center;
     font-weight: 900;
+}
+
+.students-list {
+    margin-top: 14px;
+    border: 1px solid #dfe7ef;
+    border-radius: 8px;
+    background: #f8fafc;
+    padding: 14px;
+}
+
+.students-list__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    color: #0f3d6e;
+    font-weight: 900;
+}
+
+.students-list ol {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style-position: inside;
+}
+
+.students-list li {
+    min-width: 0;
+    border: 1px solid #dbe5ef;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 10px 11px;
+    color: #111827;
+    font-weight: 900;
+}
+
+.students-list li::marker {
+    color: #016e3d;
+    font-weight: 900;
+}
+
+.students-list li strong,
+.students-list li span {
+    overflow-wrap: anywhere;
+}
+
+.students-list li span {
+    display: block;
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 800;
 }
 
 @media (max-width: 760px) {

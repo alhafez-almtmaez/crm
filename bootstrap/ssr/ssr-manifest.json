@@ -4,126 +4,126 @@
   ],
   "node_modules/laravel-vite-plugin/inertia-helpers/index.js": [],
   "resources/js/Pages/Admin/AbsenceRules.vue": [
-    "/build/assets/AbsenceRules-BFsVdr2o.js"
+    "/build/assets/AbsenceRules-szGXXdD9.js"
   ],
   "resources/js/Pages/Admin/AbsenceRules/Create.vue": [
-    "/build/assets/Create-D5Boss9c.js"
+    "/build/assets/Create-C3dY1DCp.js"
   ],
   "resources/js/Pages/Admin/AbsenceRules/Edit.vue": [
-    "/build/assets/Edit-f23e5zmg.js"
+    "/build/assets/Edit-kFbVVgpe.js"
   ],
   "resources/js/Pages/Admin/ActivityLogs.vue": [
-    "/build/assets/ActivityLogs-BMu5t6Dr.js"
+    "/build/assets/ActivityLogs-BVLoAI-_.js"
   ],
   "resources/js/Pages/Admin/Centers.vue": [
-    "/build/assets/Centers-Cm_tr0Ef.js"
+    "/build/assets/Centers-By6hhWS2.js"
   ],
   "resources/js/Pages/Admin/Centers/Create.vue": [
-    "/build/assets/Create-5VMcev-O.js"
+    "/build/assets/Create-B1GRD2Pa.js"
   ],
   "resources/js/Pages/Admin/Centers/Edit.vue": [
-    "/build/assets/Edit-BpVetRyz.js"
+    "/build/assets/Edit-Cysb0aX7.js"
   ],
   "resources/js/Pages/Admin/Dashboard.vue": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/Pages/Admin/Dashboard.vue?vue&type=style&index=0&scoped=94b4d540&lang.css": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/Pages/Admin/Evaluations.vue": [
-    "/build/assets/Evaluations-BoGRYeWk.js"
+    "/build/assets/Evaluations-D0acdF2h.js"
   ],
   "resources/js/Pages/Admin/Evaluations/Create.vue": [
-    "/build/assets/Create-BoICx9eV.js"
+    "/build/assets/Create-BXp3MK_v.js"
   ],
   "resources/js/Pages/Admin/Evaluations/Edit.vue": [
-    "/build/assets/Edit-DNXMHY3M.js"
+    "/build/assets/Edit-C0dFtDx9.js"
   ],
   "resources/js/Pages/Admin/Groups.vue": [
-    "/build/assets/Groups-BPP9W5iJ.js"
+    "/build/assets/Groups-Cc8NxIv-.js"
   ],
   "resources/js/Pages/Admin/Groups/Create.vue": [
-    "/build/assets/Create-D3JEkDMl.js"
+    "/build/assets/Create-B4IL8uLo.js"
   ],
   "resources/js/Pages/Admin/Groups/Edit.vue": [
-    "/build/assets/Edit-554tWaAI.js"
+    "/build/assets/Edit-CWEd7BDc.js"
   ],
   "resources/js/Pages/Admin/Homeworks.vue": [
-    "/build/assets/Homeworks-2TmZgpos.js"
+    "/build/assets/Homeworks-CZoc7CEf.js"
   ],
   "resources/js/Pages/Admin/Homeworks/Create.vue": [
-    "/build/assets/Create-CeexXdZE.js"
+    "/build/assets/Create-BMonQnuI.js"
   ],
   "resources/js/Pages/Admin/Homeworks/Edit.vue": [
-    "/build/assets/Edit-gt1Y6hx7.js"
+    "/build/assets/Edit-1p-XNFgp.js"
   ],
   "resources/js/Pages/Admin/MessageTemplates.vue": [
-    "/build/assets/MessageTemplates-BcGEh_H8.js"
+    "/build/assets/MessageTemplates-CQEGPl0f.js"
   ],
   "resources/js/Pages/Admin/MessageTemplates/Create.vue": [
-    "/build/assets/Create-DEuSAsYR.js"
+    "/build/assets/Create-Cd_t9j55.js"
   ],
   "resources/js/Pages/Admin/MessageTemplates/Edit.vue": [
-    "/build/assets/Edit-lPxmfE5U.js"
+    "/build/assets/Edit-BqUMvLI9.js"
   ],
   "resources/js/Pages/Admin/MonthlyPlans.vue": [
-    "/build/assets/MonthlyPlans-CC5pElmy.js"
+    "/build/assets/MonthlyPlans-CKh7AqVo.js"
   ],
   "resources/js/Pages/Admin/MonthlyPlans/Create.vue": [
-    "/build/assets/Create-CVQ28kqF.js"
+    "/build/assets/Create-Jx83x5iY.js"
   ],
   "resources/js/Pages/Admin/MonthlyPlans/Edit.vue": [
-    "/build/assets/Edit-CwclUqXj.js"
+    "/build/assets/Edit-CHK219R6.js"
   ],
   "resources/js/Pages/Admin/Plans.vue": [
-    "/build/assets/Plans-gxuHrM4h.js"
+    "/build/assets/Plans-CaOkuIrp.js"
   ],
   "resources/js/Pages/Admin/Plans/Create.vue": [
-    "/build/assets/Create-CqI4wpPt.js"
+    "/build/assets/Create-CaKMWTAD.js"
   ],
   "resources/js/Pages/Admin/Plans/Edit.vue": [
-    "/build/assets/Edit-Ca5yAFEv.js"
+    "/build/assets/Edit-Dv-n_F7H.js"
   ],
   "resources/js/Pages/Admin/Profile/Password.vue": [
-    "/build/assets/Password--M0XLP4M.js"
+    "/build/assets/Password-B_J6MBLg.js"
   ],
   "resources/js/Pages/Admin/Roles.vue": [
-    "/build/assets/Roles-CgEse_Oi.js"
+    "/build/assets/Roles-D9VFb1jR.js"
   ],
   "resources/js/Pages/Admin/Roles/Create.vue": [
-    "/build/assets/Create-BO1D8c97.js"
+    "/build/assets/Create-D5JL1TMk.js"
   ],
   "resources/js/Pages/Admin/Roles/Edit.vue": [
-    "/build/assets/Edit-tcAXy5SY.js"
+    "/build/assets/Edit-CbBRC7vW.js"
   ],
   "resources/js/Pages/Admin/Settings.vue": [
-    "/build/assets/Settings-C0ibr_Fi.js"
+    "/build/assets/Settings-CVdxRfU5.js"
   ],
   "resources/js/Pages/Admin/Students.vue": [
-    "/build/assets/Students-BYzauN4d.js"
+    "/build/assets/Students-CKOI6uH9.js"
   ],
   "resources/js/Pages/Admin/Students/Create.vue": [
-    "/build/assets/Create-CSXUAig9.js"
+    "/build/assets/Create-RThK0M0M.js"
   ],
   "resources/js/Pages/Admin/Students/Edit.vue": [
-    "/build/assets/Edit-DKrDeG-u.js"
+    "/build/assets/Edit-C4tb5aPs.js"
   ],
   "resources/js/Pages/Admin/Users.vue": [
-    "/build/assets/Users-DUKzYk0a.js"
+    "/build/assets/Users-Ds0ZzJMU.js"
   ],
   "resources/js/Pages/Admin/Users/Create.vue": [
-    "/build/assets/Create-BHezaAVY.js"
+    "/build/assets/Create-ehPtFJJ3.js"
   ],
   "resources/js/Pages/Admin/Users/Edit.vue": [
-    "/build/assets/Edit-B63buzz7.js"
+    "/build/assets/Edit-J9duU1gM.js"
   ],
   "resources/js/Pages/Admin/WhatsApp.vue": [
-    "/build/assets/WhatsApp-DCMPXI7p.js"
+    "/build/assets/WhatsApp-BDGzWO9A.js"
   ],
   "resources/js/Pages/Auth/Login.vue": [
-    "/build/assets/Login-CbLSJO-7.js"
+    "/build/assets/Login-8UUlwP5F.js"
   ],
   "resources/js/Pages/Error.vue": [
     "/build/assets/Error-DG2VQrdd.js"
@@ -137,39 +137,55 @@
     "/build/assets/Report-BlPbXrur.css"
   ],
   "resources/js/Pages/Groups/HomeworkReport.vue": [
-    "/build/assets/HomeworkReport-CO23BY9M.js",
-    "/build/assets/HomeworkReport-DAOL3aCc.css"
+    "/build/assets/HomeworkReport-J1bKDF4z.js",
+    "/build/assets/HomeworkReport-BkYr9u9Y.css"
   ],
-  "resources/js/Pages/Groups/HomeworkReport.vue?vue&type=style&index=0&scoped=3b814ffb&lang.css": [
-    "/build/assets/HomeworkReport-CO23BY9M.js",
-    "/build/assets/HomeworkReport-DAOL3aCc.css"
+  "resources/js/Pages/Groups/HomeworkReport.vue?vue&type=style&index=0&scoped=8ca27790&lang.css": [
+    "/build/assets/HomeworkReport-J1bKDF4z.js",
+    "/build/assets/HomeworkReport-BkYr9u9Y.css"
+  ],
+  "resources/js/Pages/Groups/PointsRanking.vue": [
+    "/build/assets/PointsRanking-Bn_sMUnl.js",
+    "/build/assets/PointsRanking-B_wdrEYJ.css"
+  ],
+  "resources/js/Pages/Groups/PointsRanking.vue?vue&type=style&index=0&scoped=a573b503&lang.css": [
+    "/build/assets/PointsRanking-Bn_sMUnl.js",
+    "/build/assets/PointsRanking-B_wdrEYJ.css"
+  ],
+  "resources/js/Pages/MonthlyPlans/PublicReport.vue": [
+    "/build/assets/PublicReport-ZAvQDrY3.js",
+    "/build/assets/PublicReport-C7ynINMd.css"
+  ],
+  "resources/js/Pages/MonthlyPlans/PublicReport.vue?vue&type=style&index=0&scoped=f0573fe3&lang.css": [
+    "/build/assets/PublicReport-ZAvQDrY3.js",
+    "/build/assets/PublicReport-C7ynINMd.css"
   ],
   "resources/js/admin/navItems.js": [
-    "/build/assets/AdminBreadcrumbs-Bhfwy0S9.js"
+    "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
   ],
   "resources/js/components/admin/AbsenceRuleFormCard.vue": [
     "/build/assets/AbsenceRuleFormCard-DDZWHgfG.js"
   ],
   "resources/js/components/admin/AdminBreadcrumbs.vue": [
-    "/build/assets/AdminBreadcrumbs-Bhfwy0S9.js"
+    "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
   ],
   "resources/js/components/admin/AdminLayout.vue": [
-    "/build/assets/AdminBreadcrumbs-Bhfwy0S9.js"
+    "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
   ],
   "resources/js/components/admin/AdminSidebar.vue": [
-    "/build/assets/AdminBreadcrumbs-Bhfwy0S9.js"
+    "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
   ],
   "resources/js/components/admin/AdminTopbar.vue": [
-    "/build/assets/AdminBreadcrumbs-Bhfwy0S9.js"
+    "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
   ],
   "resources/js/components/admin/CenterFormCard.vue": [
     "/build/assets/CenterFormCard-Zc1AzZZF.js"
   ],
   "resources/js/components/admin/DataTable.vue": [
-    "/build/assets/useServerTable-DnBd-Dy1.js"
+    "/build/assets/useServerTable-DAt6M9Df.js"
   ],
   "resources/js/components/admin/EntityActivityDrawer.vue": [
-    "/build/assets/EntityActivityDrawer-BbeDmUY8.js"
+    "/build/assets/EntityActivityDrawer-Dus7pbGe.js"
   ],
   "resources/js/components/admin/EvaluationFormCard.vue": [
     "/build/assets/EvaluationFormCard-bP8fNP-A.js"
@@ -178,13 +194,13 @@
     "/build/assets/GroupFormCard-DrXz0_MB.js"
   ],
   "resources/js/components/admin/HomeworkFormCard.vue": [
-    "/build/assets/HomeworkFormCard-BLia9wkq.js"
+    "/build/assets/HomeworkFormCard-_lVUrzTw.js"
   ],
   "resources/js/components/admin/MessageTemplateFormCard.vue": [
     "/build/assets/MessageTemplateFormCard-DfQg9fL7.js"
   ],
   "resources/js/components/admin/MonthlyPlanGrid.vue": [
-    "/build/assets/Edit-CwclUqXj.js"
+    "/build/assets/Edit-CHK219R6.js"
   ],
   "resources/js/components/admin/PlanFormCard.vue": [
     "/build/assets/PlanFormCard-Cq6F5U7g.js"
@@ -199,53 +215,61 @@
     "/build/assets/UserFormCard-BiU6NAq3.js"
   ],
   "resources/js/components/admin/dashboard/DashboardChartCard.vue": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardChartCard.vue?vue&type=style&index=0&scoped=cc79b318&lang.css": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardListCard.vue": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardListCard.vue?vue&type=style&index=0&scoped=f3f18072&lang.css": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardMetricCard.vue": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/admin/dashboard/DashboardMetricCard.vue?vue&type=style&index=0&scoped=5ed71623&lang.css": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/components/form/FormFieldLabel.vue": [
     "/build/assets/FormFieldLabel-DJcO6mnn.js"
   ],
   "resources/js/components/form/ImageUploadModal.vue": [
-    "/build/assets/Settings-C0ibr_Fi.js"
+    "/build/assets/Settings-CVdxRfU5.js"
   ],
   "resources/js/components/form/PrimeFloatField.vue": [
     "/build/assets/PrimeFloatField-CtUrWq5u.js"
   ],
+  "resources/js/components/groups/StudentRankingCard.vue": [
+    "/build/assets/PointsRanking-Bn_sMUnl.js",
+    "/build/assets/PointsRanking-B_wdrEYJ.css"
+  ],
+  "resources/js/components/groups/StudentRankingCard.vue?vue&type=style&index=0&scoped=61edec9f&lang.css": [
+    "/build/assets/PointsRanking-Bn_sMUnl.js",
+    "/build/assets/PointsRanking-B_wdrEYJ.css"
+  ],
   "resources/js/composables/useAppToast.js": [
-    "/build/assets/useSystemSettings-CcgUEggp.js"
+    "/build/assets/useSystemSettings-D9SYLM6G.js"
   ],
   "resources/js/composables/useDashboardCharts.js": [
-    "/build/assets/Dashboard-CwQ-VOGX.js",
+    "/build/assets/Dashboard-LeQea_1P.js",
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/composables/useServerTable.js": [
-    "/build/assets/useServerTable-DnBd-Dy1.js"
+    "/build/assets/useServerTable-DAt6M9Df.js"
   ],
   "resources/js/composables/useSystemSettings.js": [
-    "/build/assets/useSystemSettings-CcgUEggp.js"
+    "/build/assets/useSystemSettings-D9SYLM6G.js"
   ],
   "resources/js/composables/useThemeMode.js": [
-    "/build/assets/useSystemSettings-CcgUEggp.js"
+    "/build/assets/useSystemSettings-D9SYLM6G.js"
   ],
   "resources/js/i18n/index.js": [],
   "resources/js/locales/ar.json": [],
