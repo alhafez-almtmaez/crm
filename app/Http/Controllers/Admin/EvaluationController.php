@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -76,7 +77,12 @@ class EvaluationController extends Controller implements HasMiddleware
     public function create(Request $request): Response
     {
         $query = $request->validate([
-            'center_id' => ['nullable', 'integer', 'exists:centers,id'],
+            'center_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers')),
+            ],
             'date' => ['nullable', 'date_format:Y-m-d'],
             'evaluation_type' => ['nullable', 'integer', 'in:1,2'],
         ]);

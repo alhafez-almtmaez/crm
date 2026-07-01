@@ -9,20 +9,23 @@ use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
 use App\Models\Group;
 use App\Models\Homework;
+use App\Models\HomeworkStudent;
 use App\Models\HomeworkStudentPoint;
 use App\Models\Plan;
 use App\Models\Student;
 use App\Services\System\DateTimeFormatterService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(
+        private readonly DateTimeFormatterService $dateTimeFormatter,
+        private readonly AdminDataScopeService $dataScope,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -51,11 +54,13 @@ class DashboardService
         $monthStart = $today->startOfMonth();
 
         $attendanceBase = EvaluationStudent::query()
+            ->join('students', 'evaluations_users.student_id', '=', 'students.id')
             ->whereIn('attendances', [
                 EvaluationStudent::ATTENDANCE_PRESENT,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
             ])
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->whereHas('evaluation', function ($query) use ($lastThirtyStart, $today): void {
                 $query->whereBetween('date', [$lastThirtyStart->toDateString(), $today->toDateString()]);
             });
@@ -66,31 +71,33 @@ class DashboardService
             ->count();
 
         $homeworkPointsBase = HomeworkStudentPoint::query()
+            ->join('students', 'homework_student_points.student_id', '=', 'students.id')
             ->where('is_done', true)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->whereHas('homework', function ($query) use ($monthStart, $today): void {
                 $query->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]);
             });
 
         return [
-            'students_total' => Student::query()->count(),
-            'active_students' => Student::query()->where('is_active', Student::STATUS_ACTIVE)->count(),
-            'frozen_students' => Student::query()->where('is_active', Student::STATUS_FROZEN)->count(),
-            'centers_total' => Center::query()->count(),
-            'groups_total' => Group::query()->count(),
-            'plans_total' => Plan::query()->count(),
-            'evaluations_this_month' => Evaluation::query()
+            'students_total' => $this->studentsQuery()->count(),
+            'active_students' => $this->studentsQuery()->where('is_active', Student::STATUS_ACTIVE)->count(),
+            'frozen_students' => $this->studentsQuery()->where('is_active', Student::STATUS_FROZEN)->count(),
+            'centers_total' => $this->centersQuery()->count(),
+            'groups_total' => $this->groupsQuery()->count(),
+            'plans_total' => $this->plansCount(),
+            'evaluations_this_month' => $this->evaluationsQuery()
                 ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()])
                 ->count(),
-            'homeworks_this_month' => Homework::query()
+            'homeworks_this_month' => $this->homeworksQuery()
                 ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()])
                 ->count(),
             'homework_points_completed_month' => (clone $homeworkPointsBase)->count(),
-            'homework_points_awarded_month' => (int) (clone $homeworkPointsBase)->sum('awarded_points'),
+            'homework_points_awarded_month' => (int) (clone $homeworkPointsBase)->sum('homework_student_points.awarded_points'),
             'attendance_present_last_30' => $attendancePresent,
             'attendance_total_last_30' => $attendanceTotal,
             'attendance_rate_last_30' => $this->percentage($attendancePresent, $attendanceTotal),
-            'whatsapp_connected_devices' => Device::query()->where('status', 'CONNECTED')->count(),
-            'whatsapp_devices_total' => Device::query()->count(),
+            'whatsapp_connected_devices' => $this->dataScope->shouldScope() ? 0 : Device::query()->where('status', 'CONNECTED')->count(),
+            'whatsapp_devices_total' => $this->dataScope->shouldScope() ? 0 : Device::query()->count(),
         ];
     }
 
@@ -102,15 +109,15 @@ class DashboardService
         return [
             [
                 'key' => 'active',
-                'count' => Student::query()->where('is_active', Student::STATUS_ACTIVE)->count(),
+                'count' => $this->studentsQuery()->where('is_active', Student::STATUS_ACTIVE)->count(),
             ],
             [
                 'key' => 'frozen',
-                'count' => Student::query()->where('is_active', Student::STATUS_FROZEN)->count(),
+                'count' => $this->studentsQuery()->where('is_active', Student::STATUS_FROZEN)->count(),
             ],
             [
                 'key' => 'inactive',
-                'count' => Student::query()->where('is_active', Student::STATUS_INACTIVE)->count(),
+                'count' => $this->studentsQuery()->where('is_active', Student::STATUS_INACTIVE)->count(),
             ],
         ];
     }
@@ -126,12 +133,14 @@ class DashboardService
 
         $rows = EvaluationStudent::query()
             ->join('evaluations', 'evaluations_users.evaluation_id', '=', 'evaluations.id')
+            ->join('students', 'evaluations_users.student_id', '=', 'students.id')
             ->whereBetween('evaluations.date', [$startDate, $today->toDateString()])
             ->whereIn('evaluations_users.attendances', [
                 EvaluationStudent::ATTENDANCE_PRESENT,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
             ])
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->get([
                 'evaluations.date',
                 'evaluations_users.attendances',
@@ -160,13 +169,8 @@ class DashboardService
      */
     private function homeworkProgress(): array
     {
-        return Homework::query()
+        return $this->homeworksQuery()
             ->with('center:id,name')
-            ->withCount([
-                'students as students_count',
-                'points as total_points_count',
-                'points as completed_points_count' => fn ($query) => $query->where('is_done', true),
-            ])
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->limit(8)
@@ -174,15 +178,18 @@ class DashboardService
             ->sortBy('date')
             ->values()
             ->map(function (Homework $homework): array {
-                $total = (int) ($homework->total_points_count ?? 0);
-                $completed = (int) ($homework->completed_points_count ?? 0);
+                $studentsCount = $this->homeworkStudentsQuery($homework)->count();
+                $total = $this->homeworkPointsQuery($homework)->count();
+                $completed = $this->homeworkPointsQuery($homework)
+                    ->where('homework_student_points.is_done', true)
+                    ->count();
 
                 return [
                     'id' => $homework->id,
                     'label' => $this->shortDateLabel($homework->date),
                     'date' => $homework->date?->format('Y-m-d'),
                     'center_name' => $homework->center?->name ?? '-',
-                    'students_count' => (int) ($homework->students_count ?? 0),
+                    'students_count' => $studentsCount,
                     'completed' => $completed,
                     'pending' => max($total - $completed, 0),
                     'total' => $total,
@@ -198,19 +205,23 @@ class DashboardService
     private function centerPerformance(CarbonImmutable $today): array
     {
         $monthStart = $today->startOfMonth();
-        $homeworksByCenter = Homework::query()
+        $homeworksByCenter = $this->homeworksQuery()
             ->select('center_id', DB::raw('COUNT(*) as aggregate'))
             ->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()])
             ->groupBy('center_id')
             ->pluck('aggregate', 'center_id');
 
-        return Center::query()
+        return $this->centersQuery()
             ->withCount([
-                'students as students_count',
-                'students as active_students_count' => fn ($query) => $query->where('is_active', Student::STATUS_ACTIVE),
-                'groups as groups_count',
+                'students as students_count' => fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'),
+                'students as active_students_count' => function ($query): void {
+                    $query->where('is_active', Student::STATUS_ACTIVE);
+                    $this->dataScope->applyStudentAccess($query, 'students');
+                },
+                'groups as groups_count' => fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'),
                 'evaluations as evaluations_count' => function ($query) use ($monthStart, $today): void {
                     $query->whereBetween('date', [$monthStart->toDateString(), $today->toDateString()]);
+                    $this->dataScope->applyEvaluationAccess($query, 'evaluations');
                 },
             ])
             ->orderByDesc('students_count')
@@ -236,9 +247,9 @@ class DashboardService
     {
         $lastSevenStart = $today->subDays(6);
         $lastThirtyStart = $today->subDays(29);
-        $studentsWithoutPlan = Student::query()->whereNull('plan_type_id')->count();
-        $studentsWithoutGroup = Student::query()->whereNull('group_id')->count();
-        $failedAbsenceMessages = AbsenceRuleExecutionLog::query()
+        $studentsWithoutPlan = $this->studentsQuery()->whereNull('plan_type_id')->count();
+        $studentsWithoutGroup = $this->studentsQuery()->whereNull('group_id')->count();
+        $failedAbsenceMessages = $this->absenceLogsQuery()
             ->where('was_message_sent', false)
             ->where(function ($query) use ($lastThirtyStart, $today): void {
                 $query
@@ -250,13 +261,11 @@ class DashboardService
                     });
             })
             ->count();
-        $recentEvaluations = Evaluation::query()
+        $recentEvaluations = $this->evaluationsQuery()
             ->whereBetween('date', [$lastSevenStart->toDateString(), $today->toDateString()])
             ->count();
-        $connectedDevices = Device::query()->where('status', 'CONNECTED')->count();
-        $totalDevices = Device::query()->count();
 
-        return [
+        $alerts = [
             [
                 'key' => 'studentsWithoutPlan',
                 'count' => $studentsWithoutPlan,
@@ -281,14 +290,22 @@ class DashboardService
                 'tone' => $recentEvaluations > 0 ? 'success' : 'warning',
                 'href' => '/admin/evaluations',
             ],
-            [
+        ];
+
+        if (! $this->dataScope->shouldScope()) {
+            $connectedDevices = Device::query()->where('status', 'CONNECTED')->count();
+            $totalDevices = Device::query()->count();
+
+            $alerts[] = [
                 'key' => 'whatsappDevices',
                 'count' => $connectedDevices,
                 'total' => $totalDevices,
                 'tone' => $connectedDevices > 0 ? 'success' : 'warning',
                 'href' => '/admin/whatsapp',
-            ],
-        ];
+            ];
+        }
+
+        return $alerts;
     }
 
     /**
@@ -296,7 +313,7 @@ class DashboardService
      */
     private function recentActivity(): array
     {
-        $evaluations = Evaluation::query()
+        $evaluations = $this->evaluationsQuery()
             ->with('center:id,name')
             ->orderByDesc('created_at')
             ->limit(4)
@@ -311,7 +328,7 @@ class DashboardService
                 'href' => "/admin/evaluations/{$evaluation->id}/edit",
             ]);
 
-        $homeworks = Homework::query()
+        $homeworks = $this->homeworksQuery()
             ->with('center:id,name')
             ->orderByDesc('created_at')
             ->limit(4)
@@ -326,7 +343,7 @@ class DashboardService
                 'href' => "/admin/homeworks/{$homework->id}/edit",
             ]);
 
-        $absenceLogs = AbsenceRuleExecutionLog::query()
+        $absenceLogs = $this->absenceLogsQuery()
             ->with(['student:id,full_name', 'center:id,name'])
             ->orderByDesc('created_at')
             ->limit(4)
@@ -354,6 +371,64 @@ class DashboardService
             })
             ->values()
             ->all();
+    }
+
+    private function studentsQuery(): Builder
+    {
+        return $this->dataScope->applyStudentAccess(Student::query());
+    }
+
+    private function centersQuery(): Builder
+    {
+        return $this->dataScope->applyCenterAccess(Center::query());
+    }
+
+    private function groupsQuery(): Builder
+    {
+        return $this->dataScope->applyGroupAccess(Group::query());
+    }
+
+    private function evaluationsQuery(): Builder
+    {
+        return $this->dataScope->applyEvaluationAccess(Evaluation::query());
+    }
+
+    private function homeworksQuery(): Builder
+    {
+        return $this->dataScope->applyHomeworkAccess(Homework::query());
+    }
+
+    private function absenceLogsQuery(): Builder
+    {
+        return $this->dataScope->applyAbsenceExecutionLogAccess(AbsenceRuleExecutionLog::query());
+    }
+
+    private function homeworkStudentsQuery(Homework $homework): Builder
+    {
+        return HomeworkStudent::query()
+            ->join('students', 'homework_students.student_id', '=', 'students.id')
+            ->where('homework_students.homework_id', $homework->id)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'));
+    }
+
+    private function homeworkPointsQuery(Homework $homework): Builder
+    {
+        return HomeworkStudentPoint::query()
+            ->join('students', 'homework_student_points.student_id', '=', 'students.id')
+            ->where('homework_student_points.homework_id', $homework->id)
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'));
+    }
+
+    private function plansCount(): int
+    {
+        if (! $this->dataScope->shouldScope()) {
+            return Plan::query()->count();
+        }
+
+        return $this->studentsQuery()
+            ->whereNotNull('plan_type_id')
+            ->distinct('plan_type_id')
+            ->count('plan_type_id');
     }
 
     private function attendanceCount(Collection $rows, int $attendanceValue): int

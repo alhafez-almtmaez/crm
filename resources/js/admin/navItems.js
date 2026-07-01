@@ -3,6 +3,7 @@ export const adminNavItems = [
         labelKey: 'nav.dashboard',
         href: '/admin/dashboard',
         icon: 'pi pi-th-large',
+        permissions: ['dashboard.view'],
     },
     {
         groupId: 'student-tools',
