@@ -16,6 +16,7 @@ class StudentMonthlyPlanDay extends Model
         'date',
         'day_number',
         'total_weight',
+        'daily_weight_limit',
     ];
 
     protected $casts = [
@@ -23,6 +24,7 @@ class StudentMonthlyPlanDay extends Model
         'date' => 'date',
         'day_number' => 'int',
         'total_weight' => 'decimal:2',
+        'daily_weight_limit' => 'int',
     ];
 
     public function monthlyPlan(): BelongsTo

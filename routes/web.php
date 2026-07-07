@@ -76,6 +76,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::resource('plans', PlanController::class)->except(['show']);
 
         Route::get('monthly-plans/records', [StudentMonthlyPlanController::class, 'records'])->name('monthly-plans.records');
+        Route::post('monthly-plans/{monthlyPlan}/refresh-future', [StudentMonthlyPlanController::class, 'refreshFuture'])->name('monthly-plans.refresh-future');
         Route::resource('monthly-plans', StudentMonthlyPlanController::class)->only(['index', 'create', 'store', 'edit', 'destroy']);
 
         Route::get('centers/records', [CenterController::class, 'records'])->name('centers.records');

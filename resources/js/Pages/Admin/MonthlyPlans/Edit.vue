@@ -1,12 +1,15 @@
 <script setup>
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import Button from 'primevue/button';
+import DatePicker from 'primevue/datepicker';
+import FloatLabel from 'primevue/floatlabel';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../../admin/navItems';
 import AdminBreadcrumbs from '../../../components/admin/AdminBreadcrumbs.vue';
 import AdminLayout from '../../../components/admin/AdminLayout.vue';
 import MonthlyPlanGrid from '../../../components/admin/MonthlyPlanGrid.vue';
+import FormFieldLabel from '../../../components/form/FormFieldLabel.vue';
 
 const props = defineProps({
     monthly_plan: {
@@ -24,11 +27,56 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+const refreshForm = useForm({
+    from_date: props.monthly_plan.refresh_from_date ?? '',
+});
 
 const title = computed(() => `${props.monthly_plan.group_name} / ${t(`monthlyPlans.months.${props.monthly_plan.month}`)} ${props.monthly_plan.year}`);
+const parseYmdDate = (value) => {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    const parts = value.split('-').map((segment) => Number(segment));
+    if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+        return null;
+    }
+
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+};
+const formatYmdDate = (value) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+const refreshDateValue = computed({
+    get: () => parseYmdDate(refreshForm.from_date),
+    set: (value) => {
+        if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            refreshForm.from_date = '';
+            return;
+        }
+
+        refreshForm.from_date = formatYmdDate(value);
+    },
+});
+const refreshMinDate = computed(() => parseYmdDate(props.monthly_plan.refresh_min_date));
+const refreshMaxDate = computed(() => parseYmdDate(props.monthly_plan.refresh_max_date));
 
 const goBack = () => {
     router.get('/admin/monthly-plans');
+};
+
+const refreshFuturePlan = () => {
+    if (!window.confirm(t('monthlyPlans.refreshFutureConfirm', { date: refreshForm.from_date }))) {
+        return;
+    }
+
+    refreshForm.post(`/admin/monthly-plans/${props.monthly_plan.id}/refresh-future`, {
+        preserveScroll: true,
+    });
 };
 </script>
 
@@ -68,6 +116,44 @@ const goBack = () => {
                         <span class="mt-1 block font-semibold">{{ monthly_plan.generated_at }}</span>
                     </div>
                 </div>
+
+                <form class="mt-5 border-t border-(--border) pt-5" @submit.prevent="refreshFuturePlan">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-sm font-semibold">{{ t('monthlyPlans.refreshFutureTitle') }}</h3>
+                            <p class="mt-1 text-sm text-(--muted-foreground)">
+                                {{ t('monthlyPlans.refreshFutureHint') }}
+                            </p>
+                        </div>
+
+                        <div class="flex w-full flex-wrap items-start gap-3 md:w-auto">
+                            <div class="flex w-full min-w-64 flex-col gap-1 md:w-72">
+                                <FloatLabel variant="on">
+                                    <DatePicker
+                                        input-id="monthly-plan-refresh-from-date"
+                                        v-model="refreshDateValue"
+                                        show-icon
+                                        icon-display="input"
+                                        date-format="yy-mm-dd"
+                                        :min-date="refreshMinDate"
+                                        :max-date="refreshMaxDate"
+                                        :manual-input="false"
+                                        class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                    />
+                                    <FormFieldLabel for-id="monthly-plan-refresh-from-date" :text="t('monthlyPlans.refreshFromDate')" required />
+                                </FloatLabel>
+                                <small v-if="refreshForm.errors.from_date" class="text-sm text-red-600">{{ refreshForm.errors.from_date }}</small>
+                            </div>
+
+                            <Button
+                                type="submit"
+                                icon="pi pi-refresh"
+                                :label="t('monthlyPlans.refreshFuture')"
+                                :loading="refreshForm.processing"
+                            />
+                        </div>
+                    </div>
+                </form>
             </article>
 
             <MonthlyPlanGrid :dates="dates" :plans="plans" />

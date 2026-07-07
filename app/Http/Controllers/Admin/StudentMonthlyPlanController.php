@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StudentMonthlyPlanGenerateRequest;
 use App\Http\Requests\Admin\StudentMonthlyPlanIndexRequest;
+use App\Http\Requests\Admin\StudentMonthlyPlanRefreshFutureRequest;
 use App\Models\Center;
 use App\Models\Group;
 use App\Models\MonthlyPlan;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -31,6 +33,7 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
         return [
             new Middleware('can:monthly_plans.view', only: ['index', 'records', 'edit']),
             new Middleware('can:monthly_plans.create', only: ['create', 'store']),
+            new Middleware('can:monthly_plans.update', only: ['refreshFuture']),
             new Middleware('can:monthly_plans.delete', only: ['destroy']),
         ];
     }
@@ -137,6 +140,23 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
             ->route('admin.monthly-plans.index')
             ->with('success', __('monthly_plans.generated_successfully', [
                 'count' => $result['generated'],
+            ]));
+    }
+
+    public function refreshFuture(StudentMonthlyPlanRefreshFutureRequest $request, MonthlyPlan $monthlyPlan): RedirectResponse
+    {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+
+        $result = $this->generator->regenerateFutureForMonthlyPlan(
+            monthlyPlan: $monthlyPlan,
+            fromDate: CarbonImmutable::parse((string) $request->validated('from_date')),
+        );
+
+        return redirect()
+            ->route('admin.monthly-plans.edit', $monthlyPlan)
+            ->with('success', __('monthly_plans.future_refreshed_successfully', [
+                'students' => $result['student_plans'],
+                'items' => $result['generated_items'],
             ]));
     }
 

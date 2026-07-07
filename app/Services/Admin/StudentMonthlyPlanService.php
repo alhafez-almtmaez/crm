@@ -236,6 +236,9 @@ class StudentMonthlyPlanService
                 'generated_items_count' => $generatedItemsCount,
                 'skipped_items_count' => $skippedItemsCount,
                 'generated_at' => $this->dateTimeFormatter->formatForAdmin($monthlyPlan->generated_at),
+                'refresh_from_date' => $this->defaultRefreshDate((int) $monthlyPlan->month, (int) $monthlyPlan->year),
+                'refresh_min_date' => CarbonImmutable::create((int) $monthlyPlan->year, (int) $monthlyPlan->month, 1)->toDateString(),
+                'refresh_max_date' => CarbonImmutable::create((int) $monthlyPlan->year, (int) $monthlyPlan->month, 1)->endOfMonth()->toDateString(),
             ],
             'dates' => $monthlyPlan->center !== null
                 ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year)
@@ -327,9 +330,11 @@ class StudentMonthlyPlanService
                 'date' => $day->date?->format('Y-m-d'),
                 'day_number' => (int) $day->day_number,
                 'total_weight' => (float) $day->total_weight,
-                'daily_weight_limit' => $day->date !== null
-                    ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
-                    : (int) $plan->max_daily_weight,
+                'daily_weight_limit' => $day->daily_weight_limit !== null
+                    ? (int) $day->daily_weight_limit
+                    : ($day->date !== null
+                        ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
+                        : (int) $plan->max_daily_weight),
                 'items' => $day->items->map(static fn ($item): array => [
                     'id' => (int) $item->id,
                     'plan_point_id' => (int) $item->plan_point_id,
@@ -357,9 +362,11 @@ class StudentMonthlyPlanService
                 'id' => (int) $day->id,
                 'date' => $day->date?->format('Y-m-d'),
                 'day_number' => (int) $day->day_number,
-                'daily_weight_limit' => $day->date !== null
-                    ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
-                    : (int) $plan->max_daily_weight,
+                'daily_weight_limit' => $day->daily_weight_limit !== null
+                    ? (int) $day->daily_weight_limit
+                    : ($day->date !== null
+                        ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
+                        : (int) $plan->max_daily_weight),
                 'items' => $day->items->map(static fn ($item): array => [
                     'id' => (int) $item->id,
                     'plan_point_id' => (int) $item->plan_point_id,
@@ -407,6 +414,19 @@ class StudentMonthlyPlanService
             'skipped_items_count' => $summary['skipped_items_count'],
             'generated_at' => $summary['generated_at'] ?? $monthlyPlan->generated_at,
         ]);
+    }
+
+    private function defaultRefreshDate(int $month, int $year): string
+    {
+        $start = CarbonImmutable::create($year, $month, 1)->startOfDay();
+        $end = $start->endOfMonth();
+        $today = CarbonImmutable::now()->startOfDay();
+
+        if ($today->gte($start) && $today->lte($end)) {
+            return $today->toDateString();
+        }
+
+        return $start->toDateString();
     }
 
     /**

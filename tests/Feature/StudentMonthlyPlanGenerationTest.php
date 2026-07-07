@@ -11,6 +11,7 @@ use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanItem;
 use App\Models\User;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -132,6 +133,49 @@ test('weekday daily limits control monthly plan distribution', function () {
         ->and($days[1]->date->format('Y-m-d'))->toBe('2026-06-02')
         ->and($days[1]->items_count)->toBe(2)
         ->and((float) $days[1]->total_weight)->toBe(2.0);
+});
+
+test('regenerating a saved monthly plan from a date leaves previous days untouched', function () {
+    [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+
+    $first = createPlanPoint($plan, 'تسميع 1', 1, ['weight' => 1]);
+    $second = createPlanPoint($plan, 'تسميع 2', 2, ['weight' => 1]);
+    $third = createPlanPoint($plan, 'تسميع 3', 3, ['weight' => 1]);
+    $fourth = createPlanPoint($plan, 'تسميع 4', 4, ['weight' => 1]);
+    $fifth = createPlanPoint($plan, 'تسميع 5', 5, ['weight' => 1]);
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent($student, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+    $preservedItems = $studentPlan->items()
+        ->join('student_monthly_plan_days', 'student_monthly_plan_items.student_monthly_plan_day_id', '=', 'student_monthly_plan_days.id')
+        ->whereDate('student_monthly_plan_days.date', '<', '2026-06-03')
+        ->orderBy('student_monthly_plan_items.sort_order')
+        ->pluck('student_monthly_plan_items.id', 'student_monthly_plan_items.plan_point_id')
+        ->all();
+
+    $student->update(['max_daily_weight' => 2]);
+
+    $result = app(StudentMonthlyPlanGenerator::class)
+        ->regenerateFutureForMonthlyPlan($monthlyPlan, CarbonImmutable::create(2026, 6, 3));
+
+    $studentPlan->refresh();
+    $days = $studentPlan->days()->with('items')->orderBy('date')->get();
+
+    expect($result['student_plans'])->toBe(1)
+        ->and($preservedItems)->toHaveKeys([$first->id, $second->id])
+        ->and($days->pluck('date')->map(fn ($date) => $date->format('Y-m-d'))->all())->toBe([
+            '2026-06-01',
+            '2026-06-02',
+            '2026-06-03',
+            '2026-06-04',
+        ])
+        ->and($days[0]->items->pluck('plan_point_id')->all())->toBe([$first->id])
+        ->and($days[1]->items->pluck('plan_point_id')->all())->toBe([$second->id])
+        ->and($days[0]->items->first()->id)->toBe($preservedItems[$first->id])
+        ->and($days[1]->items->first()->id)->toBe($preservedItems[$second->id])
+        ->and($days[2]->items->pluck('plan_point_id')->all())->toBe([$third->id, $fourth->id])
+        ->and((int) $days[2]->daily_weight_limit)->toBe(2)
+        ->and($days[3]->items->pluck('plan_point_id')->all())->toBe([$fifth->id]);
 });
 
 test('standalone item is placed by itself', function () {

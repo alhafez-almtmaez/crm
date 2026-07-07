@@ -167,6 +167,70 @@ class StudentMonthlyPlanGenerator
         });
     }
 
+    /**
+     * @return array{student_plans: int, generated_items: int}
+     */
+    public function regenerateFutureForMonthlyPlan(MonthlyPlan $monthlyPlan, CarbonImmutable $fromDate): array
+    {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+        $fromDate = $fromDate->startOfDay();
+
+        return DB::transaction(function () use ($monthlyPlan, $fromDate): array {
+            /** @var MonthlyPlan $lockedMonthlyPlan */
+            $lockedMonthlyPlan = MonthlyPlan::query()
+                ->with('center:id,working_days')
+                ->whereKey($monthlyPlan->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $dates = $this->workingDatesForPeriod(
+                $lockedMonthlyPlan->center?->working_days,
+                (int) $lockedMonthlyPlan->month,
+                (int) $lockedMonthlyPlan->year,
+                $fromDate,
+            );
+
+            $studentPlanIds = StudentMonthlyPlan::query()
+                ->join('students', 'student_monthly_plans.student_id', '=', 'students.id')
+                ->where('student_monthly_plans.monthly_plan_id', $lockedMonthlyPlan->id)
+                ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
+                ->orderBy('student_monthly_plans.student_id')
+                ->pluck('student_monthly_plans.id')
+                ->all();
+
+            $generatedItems = 0;
+
+            foreach ($studentPlanIds as $studentPlanId) {
+                /** @var StudentMonthlyPlan $studentPlan */
+                $studentPlan = StudentMonthlyPlan::query()
+                    ->whereKey($studentPlanId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                /** @var Student $student */
+                $student = Student::query()
+                    ->whereKey($studentPlan->student_id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $generatedItems += $this->regenerateFutureForStudentPlan(
+                    plan: $studentPlan,
+                    student: $student,
+                    dates: $dates,
+                    fromDate: $fromDate,
+                    workingDays: $lockedMonthlyPlan->center?->working_days,
+                );
+            }
+
+            $this->refreshMonthlyPlanTotals($lockedMonthlyPlan);
+
+            return [
+                'student_plans' => count($studentPlanIds),
+                'generated_items' => $generatedItems,
+            ];
+        });
+    }
+
     private function monthlyPlanForStudent(Student $student, int $month, int $year): MonthlyPlan
     {
         $attributes = [
@@ -205,6 +269,95 @@ class StudentMonthlyPlanGenerator
     }
 
     /**
+     * @param  Collection<int, CarbonImmutable>  $dates
+     */
+    private function regenerateFutureForStudentPlan(
+        StudentMonthlyPlan $plan,
+        Student $student,
+        Collection $dates,
+        CarbonImmutable $fromDate,
+        mixed $workingDays,
+    ): int {
+        $planId = (int) ($plan->plan_id ?? $student->plan_type_id);
+        $lastPreservedPlanPointId = $this->lastPlanPointIdBefore($plan, $fromDate)
+            ?? $plan->starts_after_plan_point_id;
+
+        $futureDayIds = StudentMonthlyPlanDay::query()
+            ->where('student_monthly_plan_id', $plan->id)
+            ->whereDate('date', '>=', $fromDate->toDateString())
+            ->pluck('id')
+            ->all();
+
+        if ($futureDayIds !== []) {
+            StudentMonthlyPlanItem::query()
+                ->whereIn('student_monthly_plan_day_id', $futureDayIds)
+                ->delete();
+
+            StudentMonthlyPlanDay::query()
+                ->whereIn('id', $futureDayIds)
+                ->delete();
+        }
+
+        $maxDailyWeight = DailyWeightLimits::normalizeLimit($student->max_daily_weight ?? $plan->max_daily_weight ?? 2);
+        $dailyWeightLimits = DailyWeightLimits::normalize(
+            $student->daily_weight_limits,
+            $maxDailyWeight,
+            $workingDays,
+        );
+
+        $plan->forceFill([
+            'max_daily_weight' => $maxDailyWeight,
+            'daily_weight_limits' => $dailyWeightLimits,
+        ])->save();
+
+        $startPoint = $this->planPointByIdForPlan($lastPreservedPlanPointId, $planId);
+        $points = $this->planPointsAfter($student, $startPoint, $planId);
+        $startingSortOrder = ((int) $plan->items()->max('sort_order')) + 1;
+        $result = $this->fillMonthlyPlan($plan, $student, $points, $dates, $startingSortOrder);
+
+        $totalItems = $plan->items()->count();
+        $lastPlanPointId = $result['last_plan_point_id'] ?? $lastPreservedPlanPointId;
+
+        $plan->update([
+            'ends_at_plan_point_id' => $lastPlanPointId,
+            'generated_items_count' => $totalItems,
+            'skipped_items_count' => 0,
+            'status' => $totalItems > 0
+                ? StudentMonthlyPlan::STATUS_GENERATED
+                : StudentMonthlyPlan::STATUS_EXHAUSTED,
+            'generated_at' => now(),
+        ]);
+
+        return $result['generated_items_count'];
+    }
+
+    private function lastPlanPointIdBefore(StudentMonthlyPlan $plan, CarbonImmutable $fromDate): ?int
+    {
+        $item = StudentMonthlyPlanItem::query()
+            ->join('student_monthly_plan_days', 'student_monthly_plan_items.student_monthly_plan_day_id', '=', 'student_monthly_plan_days.id')
+            ->where('student_monthly_plan_items.student_monthly_plan_id', $plan->id)
+            ->whereDate('student_monthly_plan_days.date', '<', $fromDate->toDateString())
+            ->whereNotNull('student_monthly_plan_items.plan_point_id')
+            ->orderByDesc('student_monthly_plan_items.sort_order')
+            ->select('student_monthly_plan_items.plan_point_id')
+            ->first();
+
+        return $item?->plan_point_id !== null ? (int) $item->plan_point_id : null;
+    }
+
+    private function planPointByIdForPlan(?int $planPointId, int $planId): ?PlanPoint
+    {
+        if ($planPointId === null || $planId <= 0) {
+            return null;
+        }
+
+        return PlanPoint::query()
+            ->whereKey($planPointId)
+            ->where('plan_id', $planId)
+            ->first();
+    }
+
+    /**
      * @param  EloquentCollection<int, PlanPoint>  $points
      * @param  Collection<int, CarbonImmutable>  $dates
      * @return array{last_plan_point_id: ?int, generated_items_count: int, skipped_items_count: int}
@@ -214,9 +367,10 @@ class StudentMonthlyPlanGenerator
         Student $student,
         EloquentCollection $points,
         Collection $dates,
+        int $startingSortOrder = 1,
     ): array {
         $dateIndex = 0;
-        $sortOrder = 1;
+        $sortOrder = $startingSortOrder;
         $generatedCount = 0;
         $lastPlanPointId = null;
         $currentDay = null;
@@ -384,13 +538,21 @@ class StudentMonthlyPlanGenerator
             return null;
         }
 
-        return StudentMonthlyPlanDay::query()->firstOrCreate([
+        $dailyLimit = $this->dailyLimitAt($plan, $dates, $index);
+        $day = StudentMonthlyPlanDay::query()->firstOrCreate([
             'student_monthly_plan_id' => $plan->id,
             'date' => $date->toDateString(),
         ], [
             'day_number' => $date->day,
             'total_weight' => 0,
+            'daily_weight_limit' => $dailyLimit,
         ]);
+
+        if ($day->daily_weight_limit === null) {
+            $day->update(['daily_weight_limit' => $dailyLimit]);
+        }
+
+        return $day;
     }
 
     /**
@@ -432,10 +594,12 @@ class StudentMonthlyPlanGenerator
     /**
      * @return EloquentCollection<int, PlanPoint>
      */
-    private function planPointsAfter(Student $student, ?PlanPoint $startPoint): EloquentCollection
+    private function planPointsAfter(Student $student, ?PlanPoint $startPoint, ?int $planId = null): EloquentCollection
     {
+        $planId ??= (int) $student->plan_type_id;
+
         return PlanPoint::query()
-            ->where('plan_id', $student->plan_type_id)
+            ->where('plan_id', $planId)
             ->when($startPoint !== null, function ($query) use ($startPoint): void {
                 $query->where(function ($inner) use ($startPoint): void {
                     $inner->where('sort_order', '>', $startPoint->sort_order)
@@ -455,7 +619,14 @@ class StudentMonthlyPlanGenerator
      */
     private function workingDatesForMonth(Student $student, int $month, int $year): Collection
     {
-        $workingDays = $student->center?->working_days;
+        return $this->workingDatesForPeriod($student->center?->working_days, $month, $year);
+    }
+
+    /**
+     * @return Collection<int, CarbonImmutable>
+     */
+    private function workingDatesForPeriod(mixed $workingDays, int $month, int $year, ?CarbonImmutable $fromDate = null): Collection
+    {
         if (! is_array($workingDays) || $workingDays === []) {
             $workingDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         }
@@ -467,6 +638,10 @@ class StudentMonthlyPlanGenerator
         $dates = collect();
 
         for ($date = $start; $date->lte($end); $date = $date->addDay()) {
+            if ($fromDate !== null && $date->lt($fromDate)) {
+                continue;
+            }
+
             if (isset($workingDayLookup[$dayNames[$date->dayOfWeek]])) {
                 $dates->push($date);
             }
