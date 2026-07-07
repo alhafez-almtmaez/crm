@@ -2,8 +2,10 @@
 
 namespace App\Imports;
 
+use App\Models\Center;
 use App\Models\Student;
 use App\Services\Admin\AdminDataScopeService;
+use App\Support\DailyWeightLimits;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -44,6 +46,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         $hasPlanPointColumn = array_key_exists('plan_point_id', $rowData) || array_key_exists('current_plan_point_id', $rowData);
         $hasPointsBalanceColumn = array_key_exists('points_balance', $rowData);
         $hasMaxDailyWeightColumn = array_key_exists('max_daily_weight', $rowData);
+        $hasDailyWeightLimitsColumn = array_key_exists('daily_weight_limits', $rowData);
 
         $student = null;
         if ($studentId !== null) {
@@ -85,6 +88,10 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
         if ($hasMaxDailyWeightColumn) {
             $payload['max_daily_weight'] = $this->nullIfEmpty(Arr::get($rowData, 'max_daily_weight'));
+        }
+
+        if ($hasDailyWeightLimitsColumn) {
+            $payload['daily_weight_limits'] = $this->dailyWeightLimitsOrNull(Arr::get($rowData, 'daily_weight_limits'));
         }
 
         $rules = [
@@ -144,6 +151,11 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             $rules['max_daily_weight'] = ['nullable', 'integer', 'min:1', 'max:99'];
         }
 
+        if ($hasDailyWeightLimitsColumn) {
+            $rules['daily_weight_limits'] = ['nullable', 'array'];
+            $rules['daily_weight_limits.*'] = ['nullable', 'integer', 'min:1', 'max:99'];
+        }
+
         $validator = Validator::make($payload, $rules);
 
         if ($validator->fails()) {
@@ -192,6 +204,15 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
 
         if ($hasMaxDailyWeightColumn) {
             $payload['max_daily_weight'] = (int) ($validated['max_daily_weight'] ?? 2);
+        }
+
+        if ($hasDailyWeightLimitsColumn) {
+            $maxDailyWeight = (int) ($payload['max_daily_weight'] ?? $student?->max_daily_weight ?? 2);
+            $payload['daily_weight_limits'] = DailyWeightLimits::normalize(
+                $validated['daily_weight_limits'] ?? null,
+                $maxDailyWeight,
+                $this->workingDaysForCenter((int) $validated['center_id']),
+            );
         }
 
         if ($student) {
@@ -296,6 +317,31 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         return (int) $trimmed;
+    }
+
+    /**
+     * @return array<string, int>|null
+     */
+    private function dailyWeightLimitsOrNull(mixed $value): ?array
+    {
+        $raw = $this->nullIfEmpty($value);
+        if ($raw === null) {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function workingDaysForCenter(int $centerId): array
+    {
+        $center = Center::query()->find($centerId, ['id', 'working_days']);
+
+        return DailyWeightLimits::normalizeWorkingDays($center?->working_days);
     }
 
     private function normalizeDateValue(mixed $value): ?string

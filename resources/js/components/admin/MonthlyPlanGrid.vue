@@ -24,6 +24,7 @@ const rowsWithSkippedItems = computed(() => planRows.value.filter((row) => row.s
 
 const cellItems = (plan, date) => plan.dayMap?.[date]?.items ?? [];
 const cellTotalWeight = (plan, date) => plan.dayMap?.[date]?.total_weight ?? 0;
+const cellDailyLimit = (plan, date) => plan.dayMap?.[date]?.daily_weight_limit ?? plan.max_daily_weight ?? 0;
 
 const shortDate = (date) => {
     const [, month, day] = String(date).split('-').map((segment) => Number(segment));
@@ -107,6 +108,7 @@ const shortDate = (date) => {
                                     </div>
                                     <div class="text-[11px] font-semibold text-(--muted-foreground)">
                                         {{ t('monthlyPlans.totalWeight') }}: {{ cellTotalWeight(plan, date.date) }}
+                                        / {{ t('monthlyPlans.dailyWeightLimit') }}: {{ cellDailyLimit(plan, date.date) }}
                                     </div>
                                 </div>
                             </td>

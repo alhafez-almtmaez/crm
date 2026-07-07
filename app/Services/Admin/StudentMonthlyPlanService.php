@@ -7,6 +7,7 @@ use App\Models\Group;
 use App\Models\MonthlyPlan;
 use App\Models\StudentMonthlyPlan;
 use App\Services\System\DateTimeFormatterService;
+use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
@@ -307,6 +308,7 @@ class StudentMonthlyPlanService
             'month' => (int) $plan->month,
             'year' => (int) $plan->year,
             'max_daily_weight' => (int) $plan->max_daily_weight,
+            'daily_weight_limits' => DailyWeightLimits::normalize($plan->daily_weight_limits, $plan->max_daily_weight),
             'starts_after_plan_point_name' => $plan->startsAfterPlanPoint?->name,
             'ends_at_plan_point_name' => $plan->endsAtPlanPoint?->name,
             'generated_items_count' => (int) $plan->generated_items_count,
@@ -320,11 +322,14 @@ class StudentMonthlyPlanService
                 'is_standalone' => (bool) $item->is_standalone,
                 'status' => (string) $item->status,
             ])->all(),
-            'days' => $plan->days->map(static fn ($day): array => [
+            'days' => $plan->days->map(fn ($day): array => [
                 'id' => (int) $day->id,
                 'date' => $day->date?->format('Y-m-d'),
                 'day_number' => (int) $day->day_number,
                 'total_weight' => (float) $day->total_weight,
+                'daily_weight_limit' => $day->date !== null
+                    ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
+                    : (int) $plan->max_daily_weight,
                 'items' => $day->items->map(static fn ($item): array => [
                     'id' => (int) $item->id,
                     'plan_point_id' => (int) $item->plan_point_id,
@@ -348,10 +353,13 @@ class StudentMonthlyPlanService
             'student_name' => (string) ($plan->student?->full_name ?? ''),
             'plan_name' => (string) ($plan->plan?->name ?? ''),
             'generated_items_count' => (int) $plan->generated_items_count,
-            'days' => $plan->days->map(static fn ($day): array => [
+            'days' => $plan->days->map(fn ($day): array => [
                 'id' => (int) $day->id,
                 'date' => $day->date?->format('Y-m-d'),
                 'day_number' => (int) $day->day_number,
+                'daily_weight_limit' => $day->date !== null
+                    ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
+                    : (int) $plan->max_daily_weight,
                 'items' => $day->items->map(static fn ($item): array => [
                     'id' => (int) $item->id,
                     'plan_point_id' => (int) $item->plan_point_id,
@@ -402,7 +410,7 @@ class StudentMonthlyPlanService
     }
 
     /**
-     * @return array<int, array{date: string, day_number: int, day_label: string}>
+     * @return array<int, array{date: string, day_number: int, day_name: string, day_label: string}>
      */
     private function workingDatesForMonth(Center $center, int $month, int $year): array
     {
@@ -426,6 +434,7 @@ class StudentMonthlyPlanService
             $dates[] = [
                 'date' => $date->toDateString(),
                 'day_number' => $date->day,
+                'day_name' => $dayName,
                 'day_label' => __('days.'.$dayName),
             ];
         }

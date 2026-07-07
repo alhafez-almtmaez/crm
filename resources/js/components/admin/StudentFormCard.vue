@@ -7,6 +7,7 @@ import IntlTelInput from 'intl-tel-input/vueWithUtils';
 import Select from 'primevue/select';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import DailyWeightLimitFields from './DailyWeightLimitFields.vue';
 import FormFieldLabel from '../form/FormFieldLabel.vue';
 import PrimeFloatField from '../form/PrimeFloatField.vue';
 
@@ -93,6 +94,21 @@ const statusOptions = computed(() => [
     { value: 0, label: t('students.statusInactive') },
     { value: 2, label: t('students.statusFrozen') },
 ]);
+const dayOptions = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const selectedCenter = computed(() => {
+    const centerId = props.form.center_id ? Number(props.form.center_id) : null;
+
+    return props.centers.find((center) => Number(center.id) === centerId) ?? null;
+});
+const selectedCenterWorkingDays = computed(() => {
+    if (!props.form.center_id) {
+        return [];
+    }
+
+    const workingDays = selectedCenter.value?.working_days;
+
+    return Array.isArray(workingDays) && workingDays.length > 0 ? workingDays : dayOptions;
+});
 const currentPlanPointOptions = computed(() => {
     const planId = props.form.plan_type_id ? Number(props.form.plan_type_id) : null;
 
@@ -485,6 +501,13 @@ watch(
                     required
                     :invalid="Boolean(form.errors.max_daily_weight)"
                     :error="form.errors.max_daily_weight"
+                />
+
+                <DailyWeightLimitFields
+                    v-model="form.daily_weight_limits"
+                    :default-limit="form.max_daily_weight"
+                    :working-days="selectedCenterWorkingDays"
+                    :errors="form.errors"
                 />
 
                 <PrimeFloatField

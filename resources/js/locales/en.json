@@ -197,6 +197,7 @@
     "weight": "Weight",
     "totalWeight": "Total Weight",
     "maxDailyWeight": "Daily Limit",
+    "dailyWeightLimit": "Day Limit",
     "standalone": "Standalone",
     "months": {
       "1": "January",
@@ -281,7 +282,8 @@
     "group": "Group",
     "plan": "Plan",
     "currentPlanPoint": "Current Plan Point",
-    "maxDailyWeight": "Daily Weight Limit",
+    "maxDailyWeight": "Default Weight Limit",
+    "dailyWeightLimits": "Working Day Weight Limits",
     "pointsBalance": "Points Balance",
     "admin": "Responsible",
     "status": "Status",

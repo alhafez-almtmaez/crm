@@ -38,6 +38,9 @@ class StudentsExport implements FromCollection, ShouldAutoSize, WithEvents, With
             $row->plan_point_id,
             $row->points_balance,
             $row->max_daily_weight,
+            is_array($row->daily_weight_limits ?? null)
+                ? json_encode($row->daily_weight_limits)
+                : ($row->daily_weight_limits ?? null),
             $row->admin_name,
             $row->admin_id,
             $row->is_active,
@@ -71,6 +74,7 @@ class StudentsExport implements FromCollection, ShouldAutoSize, WithEvents, With
             'plan_point_id',
             'points_balance',
             'max_daily_weight',
+            'daily_weight_limits',
             'admin_name',
             'admin_id',
             'is_active',

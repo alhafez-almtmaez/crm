@@ -44,6 +44,7 @@ class StudentFactory extends Factory
             'group_id' => Group::factory(),
             'plan_type_id' => Plan::factory(),
             'max_daily_weight' => 2,
+            'daily_weight_limits' => null,
             'admin_id' => User::factory(),
             'is_active' => fake()->randomElement([
                 Student::STATUS_ACTIVE,

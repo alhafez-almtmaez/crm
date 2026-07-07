@@ -3,9 +3,11 @@
 namespace App\Http\Requests\Admin;
 
 use App\Services\Admin\AdminDataScopeService;
+use App\Support\DailyWeightLimits;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StudentStoreRequest extends FormRequest
 {
@@ -62,6 +64,8 @@ class StudentStoreRequest extends FormRequest
                 Rule::exists('plan_points', 'id')->where('plan_id', (int) $this->input('plan_type_id')),
             ],
             'max_daily_weight' => ['required', 'integer', 'min:1', 'max:99'],
+            'daily_weight_limits' => ['nullable', 'array'],
+            'daily_weight_limits.*' => ['nullable', 'integer', 'min:1', 'max:99'],
             'points_balance' => ['nullable', 'integer'],
             'admin_id' => [
                 Rule::requiredIf((bool) $this->user()?->hasRole('admin')),
@@ -84,9 +88,27 @@ class StudentStoreRequest extends FormRequest
             'current_plan_point_id' => $this->emptyToNull($this->input('current_plan_point_id')),
             'admin_id' => $this->emptyToNull($this->input('admin_id')),
             'max_daily_weight' => $this->input('max_daily_weight', 2),
+            'daily_weight_limits' => $this->input('daily_weight_limits', []),
             'points_balance' => $this->input('points_balance', 0),
             'is_active' => $this->input('is_active', 1),
         ]);
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $limits = $this->input('daily_weight_limits', []);
+            if (! is_array($limits)) {
+                return;
+            }
+
+            $validDays = DailyWeightLimits::days();
+            foreach (array_keys($limits) as $day) {
+                if (! in_array((string) $day, $validDays, true)) {
+                    $validator->errors()->add("daily_weight_limits.{$day}", __('validation.in', ['attribute' => "daily_weight_limits.{$day}"]));
+                }
+            }
+        });
     }
 
     private function emptyToNull(mixed $value): mixed

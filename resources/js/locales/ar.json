@@ -197,6 +197,7 @@
     "weight": "الوزن",
     "totalWeight": "مجموع الوزن",
     "maxDailyWeight": "الحد اليومي",
+    "dailyWeightLimit": "حد اليوم",
     "standalone": "منفرد",
     "months": {
       "1": "كانون الثاني",
@@ -281,7 +282,8 @@
     "group": "المجموعة",
     "plan": "الخطة",
     "currentPlanPoint": "نقطة الخطة الحالية",
-    "maxDailyWeight": "الحد اليومي للوزن",
+    "maxDailyWeight": "الحد الافتراضي للوزن",
+    "dailyWeightLimits": "حدود الوزن حسب أيام الدوام",
     "pointsBalance": "رصيد النقاط",
     "admin": "المسؤول",
     "status": "الحالة",

@@ -213,6 +213,7 @@ var ar_default = {
 		"weight": "الوزن",
 		"totalWeight": "مجموع الوزن",
 		"maxDailyWeight": "الحد اليومي",
+		"dailyWeightLimit": "حد اليوم",
 		"standalone": "منفرد",
 		"months": {
 			"1": "كانون الثاني",
@@ -297,7 +298,8 @@ var ar_default = {
 		"group": "المجموعة",
 		"plan": "الخطة",
 		"currentPlanPoint": "نقطة الخطة الحالية",
-		"maxDailyWeight": "الحد اليومي للوزن",
+		"maxDailyWeight": "الحد الافتراضي للوزن",
+		"dailyWeightLimits": "حدود الوزن حسب أيام الدوام",
 		"pointsBalance": "رصيد النقاط",
 		"admin": "المسؤول",
 		"status": "الحالة",
@@ -963,6 +965,7 @@ var en_default = {
 		"weight": "Weight",
 		"totalWeight": "Total Weight",
 		"maxDailyWeight": "Daily Limit",
+		"dailyWeightLimit": "Day Limit",
 		"standalone": "Standalone",
 		"months": {
 			"1": "January",
@@ -1047,7 +1050,8 @@ var en_default = {
 		"group": "Group",
 		"plan": "Plan",
 		"currentPlanPoint": "Current Plan Point",
-		"maxDailyWeight": "Daily Weight Limit",
+		"maxDailyWeight": "Default Weight Limit",
+		"dailyWeightLimits": "Working Day Weight Limits",
 		"pointsBalance": "Points Balance",
 		"admin": "Responsible",
 		"status": "Status",
@@ -1563,7 +1567,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/MessageTemplates/Edit.vue": () => import("./assets/Edit-BqUMvLI9.js"),
 		"./Pages/Admin/MessageTemplates.vue": () => import("./assets/MessageTemplates-CQEGPl0f.js"),
 		"./Pages/Admin/MonthlyPlans/Create.vue": () => import("./assets/Create-Jx83x5iY.js"),
-		"./Pages/Admin/MonthlyPlans/Edit.vue": () => import("./assets/Edit-CHK219R6.js"),
+		"./Pages/Admin/MonthlyPlans/Edit.vue": () => import("./assets/Edit-CfhjB8Tm.js"),
 		"./Pages/Admin/MonthlyPlans.vue": () => import("./assets/MonthlyPlans-CKh7AqVo.js"),
 		"./Pages/Admin/Plans/Create.vue": () => import("./assets/Create-CaKMWTAD.js"),
 		"./Pages/Admin/Plans/Edit.vue": () => import("./assets/Edit-Dv-n_F7H.js"),
@@ -1573,8 +1577,8 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/Roles/Edit.vue": () => import("./assets/Edit-CbBRC7vW.js"),
 		"./Pages/Admin/Roles.vue": () => import("./assets/Roles-D9VFb1jR.js"),
 		"./Pages/Admin/Settings.vue": () => import("./assets/Settings-CVdxRfU5.js"),
-		"./Pages/Admin/Students/Create.vue": () => import("./assets/Create-RThK0M0M.js"),
-		"./Pages/Admin/Students/Edit.vue": () => import("./assets/Edit-C4tb5aPs.js"),
+		"./Pages/Admin/Students/Create.vue": () => import("./assets/Create-o3zW3Nqb.js"),
+		"./Pages/Admin/Students/Edit.vue": () => import("./assets/Edit-v-DRHRNR.js"),
 		"./Pages/Admin/Students.vue": () => import("./assets/Students-CKOI6uH9.js"),
 		"./Pages/Admin/Users/Create.vue": () => import("./assets/Create-ehPtFJJ3.js"),
 		"./Pages/Admin/Users/Edit.vue": () => import("./assets/Edit-J9duU1gM.js"),
@@ -1585,7 +1589,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Evaluations/Report.vue": () => import("./assets/Report-Ctsmwl-X.js"),
 		"./Pages/Groups/HomeworkReport.vue": () => import("./assets/HomeworkReport-J1bKDF4z.js"),
 		"./Pages/Groups/PointsRanking.vue": () => import("./assets/PointsRanking-Bn_sMUnl.js"),
-		"./Pages/MonthlyPlans/PublicReport.vue": () => import("./assets/PublicReport-ZAvQDrY3.js")
+		"./Pages/MonthlyPlans/PublicReport.vue": () => import("./assets/PublicReport-B5uRYI2n.js")
 	})),
 	setup({ App, props, plugin }) {
 		const i18n = createAppI18n(props.initialPage?.props?.systemSettings?.language ?? "en");

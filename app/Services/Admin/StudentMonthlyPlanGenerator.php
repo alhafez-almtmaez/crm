@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanDay;
 use App\Models\StudentMonthlyPlanItem;
+use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -122,9 +123,16 @@ class StudentMonthlyPlanGenerator
                 ->whereKey($student->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $lockedStudent->loadMissing('center:id,working_days');
             $startPoint = $this->startPoint($lockedStudent);
 
             $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year);
+            $maxDailyWeight = DailyWeightLimits::normalizeLimit($lockedStudent->max_daily_weight ?? 2);
+            $dailyWeightLimits = DailyWeightLimits::normalize(
+                $lockedStudent->daily_weight_limits,
+                $maxDailyWeight,
+                $lockedStudent->center?->working_days,
+            );
 
             $plan = StudentMonthlyPlan::query()->create([
                 'monthly_plan_id' => $monthlyPlan->id,
@@ -134,7 +142,8 @@ class StudentMonthlyPlanGenerator
                 'plan_id' => $lockedStudent->plan_type_id,
                 'month' => $month,
                 'year' => $year,
-                'max_daily_weight' => max(1, (int) ($lockedStudent->max_daily_weight ?? 2)),
+                'max_daily_weight' => $maxDailyWeight,
+                'daily_weight_limits' => $dailyWeightLimits,
                 'starts_after_plan_point_id' => $startPoint?->id,
                 'status' => StudentMonthlyPlan::STATUS_GENERATED,
                 'generated_at' => now(),
@@ -214,7 +223,7 @@ class StudentMonthlyPlanGenerator
         $lastGeneratedDay = null;
         $currentWeight = 0.0;
         $pendingZeroPoints = [];
-        $maxDailyWeight = max(1, (int) $plan->max_daily_weight);
+        $currentDailyLimit = DailyWeightLimits::normalizeLimit($plan->max_daily_weight);
 
         foreach ($points as $point) {
             $weightData = $this->weightDataForPoint($point);
@@ -235,7 +244,7 @@ class StudentMonthlyPlanGenerator
                 continue;
             }
 
-            if ($isStandalone || $weight > $maxDailyWeight) {
+            if ($isStandalone) {
                 if ($currentDay !== null && $currentWeight > 0) {
                     $dateIndex++;
                     $currentDay = null;
@@ -246,6 +255,7 @@ class StudentMonthlyPlanGenerator
                 if ($day === null) {
                     break;
                 }
+                $currentDailyLimit = $this->dailyLimitAt($plan, $dates, $dateIndex);
 
                 foreach ($pendingZeroPoints as [$zeroPoint, $zeroWeightData]) {
                     $this->createItem($plan, $day, $student, $zeroPoint, $zeroWeightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
@@ -261,7 +271,7 @@ class StudentMonthlyPlanGenerator
                     $point,
                     $weightData,
                     $sortOrder++,
-                    $weight > $maxDailyWeight ? StudentMonthlyPlanItem::STATUS_SPECIAL : StudentMonthlyPlanItem::STATUS_GENERATED,
+                    $weight > $currentDailyLimit ? StudentMonthlyPlanItem::STATUS_SPECIAL : StudentMonthlyPlanItem::STATUS_GENERATED,
                 );
                 $day->update(['total_weight' => $weight]);
                 $generatedCount++;
@@ -277,20 +287,42 @@ class StudentMonthlyPlanGenerator
             if ($currentDay === null) {
                 $currentDay = $this->dayAt($plan, $dates, $dateIndex);
                 $currentWeight = 0.0;
+                $currentDailyLimit = $this->dailyLimitAt($plan, $dates, $dateIndex);
             }
 
             if ($currentDay === null) {
                 break;
             }
 
-            if ($currentWeight > 0 && $currentWeight + $weight > $maxDailyWeight) {
+            if ($currentWeight > 0 && $currentWeight + $weight > $currentDailyLimit) {
                 $dateIndex++;
                 $currentDay = $this->dayAt($plan, $dates, $dateIndex);
                 $currentWeight = 0.0;
+                $currentDailyLimit = $this->dailyLimitAt($plan, $dates, $dateIndex);
             }
 
             if ($currentDay === null) {
                 break;
+            }
+
+            if ($weight > $currentDailyLimit) {
+                foreach ($pendingZeroPoints as [$zeroPoint, $zeroWeightData]) {
+                    $this->createItem($plan, $currentDay, $student, $zeroPoint, $zeroWeightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_ATTACHED);
+                    $generatedCount++;
+                    $lastPlanPointId = (int) $zeroPoint->id;
+                }
+                $pendingZeroPoints = [];
+
+                $this->createItem($plan, $currentDay, $student, $point, $weightData, $sortOrder++, StudentMonthlyPlanItem::STATUS_SPECIAL);
+                $currentDay->update(['total_weight' => $weight]);
+                $generatedCount++;
+                $lastPlanPointId = (int) $point->id;
+                $lastGeneratedDay = $currentDay;
+                $dateIndex++;
+                $currentDay = null;
+                $currentWeight = 0.0;
+
+                continue;
             }
 
             foreach ($pendingZeroPoints as [$zeroPoint, $zeroWeightData]) {
@@ -314,6 +346,20 @@ class StudentMonthlyPlanGenerator
             'generated_items_count' => $generatedCount,
             'skipped_items_count' => 0,
         ];
+    }
+
+    /**
+     * @param  Collection<int, CarbonImmutable>  $dates
+     */
+    private function dailyLimitAt(StudentMonthlyPlan $plan, Collection $dates, int $index): int
+    {
+        /** @var CarbonImmutable|null $date */
+        $date = $dates->get($index);
+        if ($date === null) {
+            return DailyWeightLimits::normalizeLimit($plan->max_daily_weight);
+        }
+
+        return DailyWeightLimits::limitForDate($plan->daily_weight_limits, $date, $plan->max_daily_weight);
     }
 
     /**

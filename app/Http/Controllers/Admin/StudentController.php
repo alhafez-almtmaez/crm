@@ -91,6 +91,7 @@ class StudentController extends Controller implements HasMiddleware
                 'plan_type_id' => $student->plan_type_id,
                 'current_plan_point_id' => $student->current_plan_point_id,
                 'max_daily_weight' => $student->max_daily_weight,
+                'daily_weight_limits' => is_array($student->daily_weight_limits) ? $student->daily_weight_limits : [],
                 'points_balance' => $student->points_balance,
                 'admin_id' => $student->admin_id,
                 'is_active' => $student->is_active,

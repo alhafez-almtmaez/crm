@@ -9,6 +9,7 @@ use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\System\DateTimeFormatterService;
+use App\Support\DailyWeightLimits;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
@@ -122,17 +123,18 @@ class StudentService
     }
 
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, working_days: array<int, string>}>
      */
     public function centerOptions(): array
     {
         return Center::query()
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'working_days'])
             ->map(static fn (Center $center): array => [
-                'id' => $center->id,
-                'name' => $center->name,
+                'id' => (int) $center->id,
+                'name' => (string) $center->name,
+                'working_days' => is_array($center->working_days) ? $center->working_days : [],
             ])
             ->all();
     }
@@ -228,6 +230,7 @@ class StudentService
                 'students.current_plan_point_id as plan_point_id',
                 'students.points_balance',
                 'students.max_daily_weight',
+                'students.daily_weight_limits',
                 'admins.name as admin_name',
                 'students.admin_id',
                 'students.is_active',
@@ -256,6 +259,9 @@ class StudentService
      */
     private function buildPayload(array $data): array
     {
+        $maxDailyWeight = isset($data['max_daily_weight']) ? (int) $data['max_daily_weight'] : 2;
+        $workingDays = $this->workingDaysForCenter(isset($data['center_id']) ? (int) $data['center_id'] : null);
+
         return [
             'first_name' => (string) $data['first_name'],
             'second_name' => (string) $data['second_name'],
@@ -271,7 +277,8 @@ class StudentService
             'group_id' => isset($data['group_id']) ? (int) $data['group_id'] : null,
             'plan_type_id' => isset($data['plan_type_id']) ? (int) $data['plan_type_id'] : null,
             'current_plan_point_id' => isset($data['current_plan_point_id']) ? (int) $data['current_plan_point_id'] : null,
-            'max_daily_weight' => isset($data['max_daily_weight']) ? (int) $data['max_daily_weight'] : 2,
+            'max_daily_weight' => $maxDailyWeight,
+            'daily_weight_limits' => DailyWeightLimits::normalize($data['daily_weight_limits'] ?? null, $maxDailyWeight, $workingDays),
             'points_balance' => (int) ($data['points_balance'] ?? 0),
             'admin_id' => $this->resolveAdminId($data),
             'is_active' => (int) ($data['is_active'] ?? 1),
@@ -308,5 +315,19 @@ class StudentService
         }
 
         return $currentUserId;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function workingDaysForCenter(?int $centerId): array
+    {
+        if ($centerId === null) {
+            return DailyWeightLimits::days();
+        }
+
+        $center = Center::query()->find($centerId, ['id', 'working_days']);
+
+        return DailyWeightLimits::normalizeWorkingDays($center?->working_days);
     }
 }

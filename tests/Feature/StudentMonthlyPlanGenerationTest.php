@@ -104,6 +104,36 @@ test('weight one items are combined until the daily limit', function () {
         ->and($days[1]->items_count)->toBe(1);
 });
 
+test('weekday daily limits control monthly plan distribution', function () {
+    [$center, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 2);
+    $center->update(['working_days' => ['monday', 'tuesday']]);
+    $student->update([
+        'daily_weight_limits' => [
+            'monday' => 1,
+            'tuesday' => 2,
+        ],
+    ]);
+
+    createPlanPoint($plan, 'تسميع صفحة 1', 1, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع صفحة 2', 2, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع صفحة 3', 3, ['weight' => 1]);
+
+    $monthlyPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent($student->refresh(), 6, 2026);
+    $days = $monthlyPlan->days()->withCount('items')->orderBy('date')->get();
+
+    expect($monthlyPlan->daily_weight_limits)->toBe([
+        'monday' => 1,
+        'tuesday' => 2,
+    ])
+        ->and($days)->toHaveCount(2)
+        ->and($days[0]->date->format('Y-m-d'))->toBe('2026-06-01')
+        ->and($days[0]->items_count)->toBe(1)
+        ->and((float) $days[0]->total_weight)->toBe(1.0)
+        ->and($days[1]->date->format('Y-m-d'))->toBe('2026-06-02')
+        ->and($days[1]->items_count)->toBe(2)
+        ->and((float) $days[1]->total_weight)->toBe(2.0);
+});
+
 test('standalone item is placed by itself', function () {
     [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 5);
     createPlanPoint($plan, 'تسميع صفحة 1', 1);

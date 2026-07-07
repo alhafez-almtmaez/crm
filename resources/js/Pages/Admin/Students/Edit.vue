@@ -52,6 +52,7 @@ const form = useForm({
     plan_type_id: props.student.plan_type_id ?? null,
     current_plan_point_id: props.student.current_plan_point_id ?? null,
     max_daily_weight: Number(props.student.max_daily_weight ?? 2),
+    daily_weight_limits: props.student.daily_weight_limits ?? {},
     points_balance: Number(props.student.points_balance ?? 0),
     admin_id: props.student.admin_id ?? null,
     is_active: props.student.is_active ?? 1,

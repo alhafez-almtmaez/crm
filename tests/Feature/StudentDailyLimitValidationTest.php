@@ -62,3 +62,15 @@ test('student daily limit accepts integer values', function () {
 
     expect(Student::query()->firstOrFail()->max_daily_weight)->toBe(2);
 });
+
+test('student daily limits reject invalid weekday keys', function () {
+    $this->actingAs(studentDailyLimitUserWithCreatePermission(), 'web')
+        ->from('/admin/students/create')
+        ->post('/admin/students', studentDailyLimitPayload([
+            'daily_weight_limits' => [
+                'not-a-day' => 2,
+            ],
+        ]))
+        ->assertRedirect('/admin/students/create')
+        ->assertSessionHasErrors('daily_weight_limits.not-a-day');
+});

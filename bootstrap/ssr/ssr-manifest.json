@@ -75,7 +75,7 @@
     "/build/assets/Create-Jx83x5iY.js"
   ],
   "resources/js/Pages/Admin/MonthlyPlans/Edit.vue": [
-    "/build/assets/Edit-CHK219R6.js"
+    "/build/assets/Edit-CfhjB8Tm.js"
   ],
   "resources/js/Pages/Admin/Plans.vue": [
     "/build/assets/Plans-CaOkuIrp.js"
@@ -105,10 +105,10 @@
     "/build/assets/Students-CKOI6uH9.js"
   ],
   "resources/js/Pages/Admin/Students/Create.vue": [
-    "/build/assets/Create-RThK0M0M.js"
+    "/build/assets/Create-o3zW3Nqb.js"
   ],
   "resources/js/Pages/Admin/Students/Edit.vue": [
-    "/build/assets/Edit-C4tb5aPs.js"
+    "/build/assets/Edit-v-DRHRNR.js"
   ],
   "resources/js/Pages/Admin/Users.vue": [
     "/build/assets/Users-Ds0ZzJMU.js"
@@ -153,12 +153,12 @@
     "/build/assets/PointsRanking-B_wdrEYJ.css"
   ],
   "resources/js/Pages/MonthlyPlans/PublicReport.vue": [
-    "/build/assets/PublicReport-ZAvQDrY3.js",
-    "/build/assets/PublicReport-C7ynINMd.css"
+    "/build/assets/PublicReport-B5uRYI2n.js",
+    "/build/assets/PublicReport-CyHtH6fT.css"
   ],
-  "resources/js/Pages/MonthlyPlans/PublicReport.vue?vue&type=style&index=0&scoped=f0573fe3&lang.css": [
-    "/build/assets/PublicReport-ZAvQDrY3.js",
-    "/build/assets/PublicReport-C7ynINMd.css"
+  "resources/js/Pages/MonthlyPlans/PublicReport.vue?vue&type=style&index=0&scoped=498fb7b5&lang.css": [
+    "/build/assets/PublicReport-B5uRYI2n.js",
+    "/build/assets/PublicReport-CyHtH6fT.css"
   ],
   "resources/js/admin/navItems.js": [
     "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
@@ -181,6 +181,9 @@
   "resources/js/components/admin/CenterFormCard.vue": [
     "/build/assets/CenterFormCard-Zc1AzZZF.js"
   ],
+  "resources/js/components/admin/DailyWeightLimitFields.vue": [
+    "/build/assets/StudentFormCard-C7KPjFMO.js"
+  ],
   "resources/js/components/admin/DataTable.vue": [
     "/build/assets/useServerTable-DAt6M9Df.js"
   ],
@@ -200,7 +203,7 @@
     "/build/assets/MessageTemplateFormCard-DfQg9fL7.js"
   ],
   "resources/js/components/admin/MonthlyPlanGrid.vue": [
-    "/build/assets/Edit-CHK219R6.js"
+    "/build/assets/Edit-CfhjB8Tm.js"
   ],
   "resources/js/components/admin/PlanFormCard.vue": [
     "/build/assets/PlanFormCard-Cq6F5U7g.js"
@@ -209,7 +212,7 @@
     "/build/assets/RoleFormCard-EzgdZmiK.js"
   ],
   "resources/js/components/admin/StudentFormCard.vue": [
-    "/build/assets/StudentFormCard-CUDdksKq.js"
+    "/build/assets/StudentFormCard-C7KPjFMO.js"
   ],
   "resources/js/components/admin/UserFormCard.vue": [
     "/build/assets/UserFormCard-BiU6NAq3.js"
