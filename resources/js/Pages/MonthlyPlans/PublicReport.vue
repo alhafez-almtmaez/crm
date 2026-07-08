@@ -66,6 +66,7 @@ const tableStudentsCount = computed(() => {
 });
 const monthLabel = computed(() => monthNames[Number(monthlyPlan.value.month)] ?? monthlyPlan.value.month);
 const monthDisplay = computed(() => `${monthLabel.value} (${Number(monthlyPlan.value.month) || '-'})`);
+const periodDisplay = computed(() => monthlyPlan.value.period_label || `${monthDisplay.value} ${monthlyPlan.value.year}`);
 const title = computed(() => `الخطة الشهرية ${monthlyPlan.value.month}/${monthlyPlan.value.year} - ${monthlyPlan.value.group_name ?? ''}`);
 
 const cellItems = (plan, date) => plan.dayMap?.[date]?.items ?? [];
@@ -157,8 +158,8 @@ const clearStudentSearch = () => {
                     <strong>{{ monthlyPlan.group_name || '-' }}</strong>
                 </div>
                 <div>
-                    <span>الشهر</span>
-                    <strong>{{ monthDisplay }} {{ monthlyPlan.year }}</strong>
+                    <span>الفترة</span>
+                    <strong>{{ periodDisplay }}</strong>
                 </div>
                 <div>
                     <span>تاريخ الإنشاء</span>

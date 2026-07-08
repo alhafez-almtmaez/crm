@@ -98,7 +98,15 @@ const refreshFuturePlan = () => {
                     <Button type="button" icon="pi pi-arrow-left" :label="t('monthlyPlans.backToSavedPlans')" severity="secondary" outlined @click="goBack" />
                 </div>
 
-                <div class="mt-4 grid gap-3 md:grid-cols-4">
+                <div class="mt-4 grid gap-3 md:grid-cols-6">
+                    <div class="rounded-md border border-(--border) px-3 py-2">
+                        <span class="block text-xs text-(--muted-foreground)">{{ t('monthlyPlans.period') }}</span>
+                        <span class="mt-1 block font-semibold">{{ monthly_plan.period_label }}</span>
+                    </div>
+                    <div class="rounded-md border border-(--border) px-3 py-2">
+                        <span class="block text-xs text-(--muted-foreground)">{{ t('monthlyPlans.holidayDates') }}</span>
+                        <span class="mt-1 block font-semibold">{{ monthly_plan.holidays_count }}</span>
+                    </div>
                     <div class="rounded-md border border-(--border) px-3 py-2">
                         <span class="block text-xs text-(--muted-foreground)">{{ t('monthlyPlans.studentsCount') }}</span>
                         <span class="mt-1 block font-semibold">{{ monthly_plan.students_count }}</span>

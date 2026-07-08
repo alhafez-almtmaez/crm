@@ -10,9 +10,7 @@ use App\Services\Admin\AbsenceRules\RuleExecutionSupport;
 
 class SendMessageAction implements RuleActionHandler
 {
-    public function __construct(private readonly RuleExecutionSupport $support)
-    {
-    }
+    public function __construct(private readonly RuleExecutionSupport $support) {}
 
     public function key(): string
     {
@@ -22,10 +20,12 @@ class SendMessageAction implements RuleActionHandler
     public function execute(RuleExecutionContext $context): RuleExecutionResult
     {
         $sent = $this->support->sendMessage($context);
+        $deductedPoints = $this->support->deductPoints($context);
 
         return new RuleExecutionResult(
             wasMessageSent: $sent,
             studentWasFrozen: false,
+            deductedPointsCount: $deductedPoints,
         );
     }
 }

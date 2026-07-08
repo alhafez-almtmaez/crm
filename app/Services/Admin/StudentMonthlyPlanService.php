@@ -9,6 +9,7 @@ use App\Models\StudentMonthlyPlan;
 use App\Services\System\DateTimeFormatterService;
 use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class StudentMonthlyPlanService
@@ -33,6 +34,8 @@ class StudentMonthlyPlanService
             'group_name' => 'groups.name',
             'month' => 'monthly_plans.month',
             'year' => 'monthly_plans.year',
+            'start_date' => 'monthly_plans.start_date',
+            'end_date' => 'monthly_plans.end_date',
             'students_count' => 'monthly_plans.students_count',
             'generated_items_count' => 'monthly_plans.generated_items_count',
             'generated_at' => 'monthly_plans.generated_at',
@@ -51,6 +54,9 @@ class StudentMonthlyPlanService
                 'monthly_plans.group_id',
                 'monthly_plans.month',
                 'monthly_plans.year',
+                'monthly_plans.start_date',
+                'monthly_plans.end_date',
+                'monthly_plans.holiday_dates',
                 'monthly_plans.students_count',
                 'monthly_plans.generated_items_count',
                 'monthly_plans.skipped_items_count',
@@ -96,6 +102,11 @@ class StudentMonthlyPlanService
                 );
                 $row->setAttribute('generated_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->generated_at));
                 $row->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->created_at));
+                $startDate = $this->monthlyPlanStartDate($row)->toDateString();
+                $endDate = $this->monthlyPlanEndDate($row)->toDateString();
+                $row->setAttribute('start_date', $startDate);
+                $row->setAttribute('end_date', $endDate);
+                $row->setAttribute('period_label', $startDate.' - '.$endDate);
 
                 return $row;
             }),
@@ -222,6 +233,9 @@ class StudentMonthlyPlanService
             ->all();
         $generatedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count);
         $skippedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->skipped_items_count);
+        $periodStart = $this->monthlyPlanStartDate($monthlyPlan);
+        $periodEnd = $this->monthlyPlanEndDate($monthlyPlan);
+        $holidayDates = $this->monthlyPlanHolidayDates($monthlyPlan, $periodStart, $periodEnd);
 
         return [
             'monthly_plan' => [
@@ -232,16 +246,21 @@ class StudentMonthlyPlanService
                 'group_name' => (string) ($monthlyPlan->group?->name ?? ''),
                 'month' => (int) $monthlyPlan->month,
                 'year' => (int) $monthlyPlan->year,
+                'start_date' => $periodStart->toDateString(),
+                'end_date' => $periodEnd->toDateString(),
+                'period_label' => $periodStart->toDateString().' - '.$periodEnd->toDateString(),
+                'holiday_dates' => $holidayDates,
+                'holidays_count' => count($holidayDates),
                 'students_count' => $studentPlanModels->count(),
                 'generated_items_count' => $generatedItemsCount,
                 'skipped_items_count' => $skippedItemsCount,
                 'generated_at' => $this->dateTimeFormatter->formatForAdmin($monthlyPlan->generated_at),
-                'refresh_from_date' => $this->defaultRefreshDate((int) $monthlyPlan->month, (int) $monthlyPlan->year),
-                'refresh_min_date' => CarbonImmutable::create((int) $monthlyPlan->year, (int) $monthlyPlan->month, 1)->toDateString(),
-                'refresh_max_date' => CarbonImmutable::create((int) $monthlyPlan->year, (int) $monthlyPlan->month, 1)->endOfMonth()->toDateString(),
+                'refresh_from_date' => $this->defaultRefreshDate($periodStart, $periodEnd),
+                'refresh_min_date' => $periodStart->toDateString(),
+                'refresh_max_date' => $periodEnd->toDateString(),
             ],
             'dates' => $monthlyPlan->center !== null
-                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year)
+                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
                 : [],
             'plans' => $studentPlans,
         ];
@@ -261,6 +280,9 @@ class StudentMonthlyPlanService
             ->firstOrFail();
 
         $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name']);
+        $periodStart = $this->monthlyPlanStartDate($monthlyPlan);
+        $periodEnd = $this->monthlyPlanEndDate($monthlyPlan);
+        $holidayDates = $this->monthlyPlanHolidayDates($monthlyPlan, $periodStart, $periodEnd);
 
         $studentPlanModels = StudentMonthlyPlan::query()
             ->with([
@@ -283,12 +305,17 @@ class StudentMonthlyPlanService
                 'group_name' => (string) ($monthlyPlan->group?->name ?? ''),
                 'month' => (int) $monthlyPlan->month,
                 'year' => (int) $monthlyPlan->year,
+                'start_date' => $periodStart->toDateString(),
+                'end_date' => $periodEnd->toDateString(),
+                'period_label' => $periodStart->toDateString().' - '.$periodEnd->toDateString(),
+                'holiday_dates' => $holidayDates,
+                'holidays_count' => count($holidayDates),
                 'students_count' => $studentPlanModels->count(),
                 'generated_items_count' => $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count),
                 'generated_at' => $this->dateTimeFormatter->formatForAdmin($monthlyPlan->generated_at),
             ],
             'dates' => $monthlyPlan->center !== null
-                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year)
+                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
                 : [],
             'plans' => $studentPlanModels
                 ->map(fn (StudentMonthlyPlan $plan): array => $this->publicStudentPlanPayload($plan))
@@ -416,10 +443,8 @@ class StudentMonthlyPlanService
         ]);
     }
 
-    private function defaultRefreshDate(int $month, int $year): string
+    private function defaultRefreshDate(CarbonImmutable $start, CarbonImmutable $end): string
     {
-        $start = CarbonImmutable::create($year, $month, 1)->startOfDay();
-        $end = $start->endOfMonth();
         $today = CarbonImmutable::now()->startOfDay();
 
         if ($today->gte($start) && $today->lte($end)) {
@@ -432,20 +457,45 @@ class StudentMonthlyPlanService
     /**
      * @return array<int, array{date: string, day_number: int, day_name: string, day_label: string}>
      */
-    private function workingDatesForMonth(Center $center, int $month, int $year): array
-    {
+    private function workingDatesForMonth(
+        Center $center,
+        int $month,
+        int $year,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+        array $holidayDates = [],
+    ): array {
         $workingDays = is_array($center->working_days) ? $center->working_days : [];
         if ($workingDays === []) {
             $workingDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         }
 
         $workingDayLookup = array_fill_keys(array_map(static fn (string $day): string => strtolower($day), $workingDays), true);
+        $holidayLookup = array_fill_keys(array_values($holidayDates), true);
         $dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        $start = CarbonImmutable::create($year, $month, 1)->startOfDay();
-        $end = $start->endOfMonth();
+        $monthStart = CarbonImmutable::create($year, $month, 1)->startOfDay();
+        $monthEnd = $monthStart->endOfMonth()->startOfDay();
+        $start = ($startDate ?? $monthStart)->startOfDay();
+        $end = ($endDate ?? $monthEnd)->startOfDay();
+
+        if ($start->lt($monthStart)) {
+            $start = $monthStart;
+        }
+
+        if ($end->gt($monthEnd)) {
+            $end = $monthEnd;
+        }
+
         $dates = [];
+        if ($start->gt($end)) {
+            return $dates;
+        }
 
         for ($date = $start; $date->lte($end); $date = $date->addDay()) {
+            if (isset($holidayLookup[$date->toDateString()])) {
+                continue;
+            }
+
             $dayName = $dayNames[$date->dayOfWeek];
             if (! isset($workingDayLookup[$dayName])) {
                 continue;
@@ -460,5 +510,55 @@ class StudentMonthlyPlanService
         }
 
         return $dates;
+    }
+
+    private function monthlyPlanStartDate(MonthlyPlan $monthlyPlan): CarbonImmutable
+    {
+        return $this->carbonDate($monthlyPlan->start_date)
+            ?? CarbonImmutable::create((int) $monthlyPlan->year, (int) $monthlyPlan->month, 1)->startOfDay();
+    }
+
+    private function monthlyPlanEndDate(MonthlyPlan $monthlyPlan): CarbonImmutable
+    {
+        return $this->carbonDate($monthlyPlan->end_date)
+            ?? $this->monthlyPlanStartDate($monthlyPlan)->endOfMonth()->startOfDay();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function monthlyPlanHolidayDates(MonthlyPlan $monthlyPlan, CarbonImmutable $startDate, CarbonImmutable $endDate): array
+    {
+        $dates = [];
+
+        foreach ((array) $monthlyPlan->holiday_dates as $holidayDate) {
+            $date = $this->carbonDate($holidayDate);
+            if ($date === null || $date->lt($startDate) || $date->gt($endDate)) {
+                continue;
+            }
+
+            $dates[$date->toDateString()] = $date->toDateString();
+        }
+
+        ksort($dates);
+
+        return array_values($dates);
+    }
+
+    private function carbonDate(mixed $value): ?CarbonImmutable
+    {
+        if ($value instanceof CarbonImmutable) {
+            return $value->startOfDay();
+        }
+
+        if ($value instanceof DateTimeInterface) {
+            return CarbonImmutable::instance($value)->startOfDay();
+        }
+
+        if (blank($value)) {
+            return null;
+        }
+
+        return CarbonImmutable::parse((string) $value)->startOfDay();
     }
 }

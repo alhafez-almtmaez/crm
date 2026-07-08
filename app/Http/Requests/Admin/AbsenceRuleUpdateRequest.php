@@ -86,6 +86,7 @@ class AbsenceRuleUpdateRequest extends FormRequest
                     }),
             ],
             'action' => ['required', Rule::in([
+                AbsenceRule::ACTION_SEND_MESSAGE,
                 AbsenceRule::ACTION_FREEZE_STUDENT,
                 AbsenceRule::ACTION_DISMISS_STUDENT,
             ])],

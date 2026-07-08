@@ -46,7 +46,11 @@ const attendanceLabel = (type) => {
 };
 
 const actionLabel = (value) => {
-    if (value === 'freeze_student' || value === 'send_message' || value === 'send_message_and_freeze') {
+    if (value === 'send_message') {
+        return t('absenceRules.actionSendMessage');
+    }
+
+    if (value === 'freeze_student' || value === 'send_message_and_freeze') {
         return t('absenceRules.actionFreezeStudent');
     }
 

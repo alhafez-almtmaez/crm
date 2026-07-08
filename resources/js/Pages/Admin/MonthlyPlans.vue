@@ -49,6 +49,7 @@ const columns = computed(() => [
     { field: 'group_name', header: t('monthlyPlans.group'), sortable: true, sortField: 'group_name' },
     { field: 'month_label', header: t('monthlyPlans.month'), sortable: true, sortField: 'month' },
     { field: 'year', header: t('monthlyPlans.year'), sortable: true },
+    { field: 'period_label', header: t('monthlyPlans.period'), sortable: true, sortField: 'start_date' },
     { field: 'students_count', header: t('monthlyPlans.studentsCount'), sortable: true },
     { field: 'generated_items_count', header: t('monthlyPlans.itemsCount'), sortable: true },
     { field: 'generated_at_formatted', header: t('monthlyPlans.generatedAt'), sortable: true, sortField: 'generated_at' },

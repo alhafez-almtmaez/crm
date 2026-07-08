@@ -135,6 +135,63 @@ test('weekday daily limits control monthly plan distribution', function () {
         ->and((float) $days[1]->total_weight)->toBe(2.0);
 });
 
+test('monthly generation respects the selected start and end dates', function () {
+    [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+
+    createPlanPoint($plan, 'تسميع 1', 1, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 2', 2, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 3', 3, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 4', 4, ['weight' => 1]);
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent(
+        student: $student,
+        month: 6,
+        year: 2026,
+        startDate: CarbonImmutable::create(2026, 6, 10),
+        endDate: CarbonImmutable::create(2026, 6, 12),
+    );
+
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+    $days = $studentPlan->days()->orderBy('date')->get();
+
+    expect($monthlyPlan->start_date->toDateString())->toBe('2026-06-10')
+        ->and($monthlyPlan->end_date->toDateString())->toBe('2026-06-12')
+        ->and($days->pluck('date')->map(fn ($date) => $date->format('Y-m-d'))->all())->toBe([
+            '2026-06-10',
+            '2026-06-11',
+            '2026-06-12',
+        ])
+        ->and($studentPlan->items()->count())->toBe(3)
+        ->and(StudentMonthlyPlanItem::query()->where('plan_point_id', $plan->points()->orderByDesc('sort_order')->firstOrFail()->id)->exists())->toBeFalse();
+});
+
+test('monthly generation skips selected holiday dates', function () {
+    [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+
+    createPlanPoint($plan, 'تسميع 1', 1, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 2', 2, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 3', 3, ['weight' => 1]);
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent(
+        student: $student,
+        month: 6,
+        year: 2026,
+        startDate: CarbonImmutable::create(2026, 6, 10),
+        endDate: CarbonImmutable::create(2026, 6, 12),
+        holidayDates: ['2026-06-11'],
+    );
+
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+    $days = $studentPlan->days()->orderBy('date')->get();
+
+    expect($monthlyPlan->holiday_dates)->toBe(['2026-06-11'])
+        ->and($days->pluck('date')->map(fn ($date) => $date->format('Y-m-d'))->all())->toBe([
+            '2026-06-10',
+            '2026-06-12',
+        ])
+        ->and($studentPlan->items()->count())->toBe(2);
+});
+
 test('regenerating a saved monthly plan from a date leaves previous days untouched', function () {
     [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
 

@@ -12,10 +12,12 @@ use App\Models\StudentMonthlyPlanDay;
 use App\Models\StudentMonthlyPlanItem;
 use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class StudentMonthlyPlanGenerator
 {
@@ -24,8 +26,15 @@ class StudentMonthlyPlanGenerator
     /**
      * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
-    public function generateForCenter(Center $center, int $month, int $year, ?int $groupId = null): array
-    {
+    public function generateForCenter(
+        Center $center,
+        int $month,
+        int $year,
+        ?int $groupId = null,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+        array $holidayDates = [],
+    ): array {
         $students = Student::query()
             ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
             ->where('center_id', $center->id)
@@ -36,14 +45,20 @@ class StudentMonthlyPlanGenerator
             ->orderBy('full_name')
             ->get();
 
-        return $this->generateForStudents($students, $month, $year);
+        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates);
     }
 
     /**
      * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
-    public function generateForGroup(Group $group, int $month, int $year): array
-    {
+    public function generateForGroup(
+        Group $group,
+        int $month,
+        int $year,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+        array $holidayDates = [],
+    ): array {
         $students = Student::query()
             ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
             ->where('group_id', $group->id)
@@ -53,21 +68,27 @@ class StudentMonthlyPlanGenerator
             ->orderBy('full_name')
             ->get();
 
-        return $this->generateForStudents($students, $month, $year);
+        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates);
     }
 
     /**
      * @param  EloquentCollection<int, Student>  $students
      * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
      */
-    private function generateForStudents(EloquentCollection $students, int $month, int $year): array
-    {
+    private function generateForStudents(
+        EloquentCollection $students,
+        int $month,
+        int $year,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+        array $holidayDates = [],
+    ): array {
         $planIds = [];
         $monthlyPlanIds = [];
         $skipped = 0;
 
         foreach ($students as $student) {
-            $monthlyPlan = $this->generateForStudent($student, $month, $year);
+            $monthlyPlan = $this->generateForStudent($student, $month, $year, $startDate, $endDate, $holidayDates);
             if ($monthlyPlan === null) {
                 $skipped++;
 
@@ -88,21 +109,29 @@ class StudentMonthlyPlanGenerator
         ];
     }
 
-    public function generateForStudent(Student $student, int $month, int $year): ?StudentMonthlyPlan
-    {
+    public function generateForStudent(
+        Student $student,
+        int $month,
+        int $year,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+        array $holidayDates = [],
+    ): ?StudentMonthlyPlan {
         if ($student->plan_type_id === null) {
             return null;
         }
 
         $this->dataScope->abortUnlessCanAccessStudent($student);
+        [$periodStart, $periodEnd] = $this->periodForMonth($month, $year, $startDate, $endDate);
+        $holidayDates = $this->normalizeHolidayDates($holidayDates, $periodStart, $periodEnd);
 
         $student->loadMissing(['center:id,working_days', 'group:id,center_id']);
-        $dates = $this->workingDatesForMonth($student, $month, $year);
+        $dates = $this->workingDatesForMonth($student, $month, $year, $periodStart, $periodEnd, $holidayDates);
         if ($dates->isEmpty()) {
             return null;
         }
 
-        return DB::transaction(function () use ($student, $month, $year, $dates): ?StudentMonthlyPlan {
+        return DB::transaction(function () use ($student, $month, $year, $periodStart, $periodEnd, $holidayDates, $dates): ?StudentMonthlyPlan {
             $existingPlan = StudentMonthlyPlan::query()
                 ->withCount('items')
                 ->where('student_id', $student->id)
@@ -126,7 +155,7 @@ class StudentMonthlyPlanGenerator
             $lockedStudent->loadMissing('center:id,working_days');
             $startPoint = $this->startPoint($lockedStudent);
 
-            $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year);
+            $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year, $periodStart, $periodEnd, $holidayDates);
             $maxDailyWeight = DailyWeightLimits::normalizeLimit($lockedStudent->max_daily_weight ?? 2);
             $dailyWeightLimits = DailyWeightLimits::normalize(
                 $lockedStudent->daily_weight_limits,
@@ -182,12 +211,21 @@ class StudentMonthlyPlanGenerator
                 ->whereKey($monthlyPlan->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            [$periodStart, $periodEnd] = $this->periodForMonthlyPlan($lockedMonthlyPlan);
+
+            if ($fromDate->lt($periodStart) || $fromDate->gt($periodEnd)) {
+                throw new InvalidArgumentException('Refresh date must be within the monthly plan period.');
+            }
+
+            $holidayDates = $this->normalizeHolidayDates((array) $lockedMonthlyPlan->holiday_dates, $periodStart, $periodEnd);
 
             $dates = $this->workingDatesForPeriod(
                 $lockedMonthlyPlan->center?->working_days,
                 (int) $lockedMonthlyPlan->month,
                 (int) $lockedMonthlyPlan->year,
                 $fromDate,
+                $periodEnd,
+                $holidayDates,
             );
 
             $studentPlanIds = StudentMonthlyPlan::query()
@@ -231,8 +269,14 @@ class StudentMonthlyPlanGenerator
         });
     }
 
-    private function monthlyPlanForStudent(Student $student, int $month, int $year): MonthlyPlan
-    {
+    private function monthlyPlanForStudent(
+        Student $student,
+        int $month,
+        int $year,
+        CarbonImmutable $startDate,
+        CarbonImmutable $endDate,
+        array $holidayDates,
+    ): MonthlyPlan {
         $attributes = [
             'group_id' => $student->group_id,
             'month' => $month,
@@ -243,11 +287,30 @@ class StudentMonthlyPlanGenerator
             $attributes['center_id'] = $student->center_id;
         }
 
-        return MonthlyPlan::query()->firstOrCreate($attributes, [
+        $monthlyPlan = MonthlyPlan::query()->firstOrCreate($attributes, [
+            'start_date' => $startDate->toDateString(),
+            'end_date' => $endDate->toDateString(),
+            'holiday_dates' => $holidayDates,
             'center_id' => $student->center_id,
             'admin_id' => Auth::id(),
             'generated_at' => now(),
         ]);
+
+        $hasStoredItems = ! $monthlyPlan->wasRecentlyCreated
+            && StudentMonthlyPlan::query()
+                ->where('monthly_plan_id', $monthlyPlan->id)
+                ->whereHas('items')
+                ->exists();
+
+        if (! $monthlyPlan->wasRecentlyCreated && ! $hasStoredItems) {
+            $monthlyPlan->forceFill([
+                'start_date' => $startDate->toDateString(),
+                'end_date' => $endDate->toDateString(),
+                'holiday_dates' => $holidayDates,
+            ])->save();
+        }
+
+        return $monthlyPlan;
     }
 
     private function refreshMonthlyPlanTotals(MonthlyPlan $monthlyPlan): void
@@ -617,28 +680,55 @@ class StudentMonthlyPlanGenerator
     /**
      * @return Collection<int, CarbonImmutable>
      */
-    private function workingDatesForMonth(Student $student, int $month, int $year): Collection
-    {
-        return $this->workingDatesForPeriod($student->center?->working_days, $month, $year);
+    private function workingDatesForMonth(
+        Student $student,
+        int $month,
+        int $year,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+        array $holidayDates = [],
+    ): Collection {
+        return $this->workingDatesForPeriod($student->center?->working_days, $month, $year, $startDate, $endDate, $holidayDates);
     }
 
     /**
      * @return Collection<int, CarbonImmutable>
      */
-    private function workingDatesForPeriod(mixed $workingDays, int $month, int $year, ?CarbonImmutable $fromDate = null): Collection
-    {
+    private function workingDatesForPeriod(
+        mixed $workingDays,
+        int $month,
+        int $year,
+        ?CarbonImmutable $fromDate = null,
+        ?CarbonImmutable $toDate = null,
+        array $holidayDates = [],
+    ): Collection {
         if (! is_array($workingDays) || $workingDays === []) {
             $workingDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         }
 
         $workingDayLookup = array_fill_keys(array_map(static fn (string $day): string => strtolower($day), $workingDays), true);
+        $holidayLookup = array_fill_keys(array_values($holidayDates), true);
         $dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        $start = CarbonImmutable::create($year, $month, 1)->startOfDay();
-        $end = $start->endOfMonth();
+        $monthStart = CarbonImmutable::create($year, $month, 1)->startOfDay();
+        $monthEnd = $monthStart->endOfMonth()->startOfDay();
+        $start = ($fromDate ?? $monthStart)->startOfDay();
+        $end = ($toDate ?? $monthEnd)->startOfDay();
+
+        if ($start->lt($monthStart)) {
+            $start = $monthStart;
+        }
+
+        if ($end->gt($monthEnd)) {
+            $end = $monthEnd;
+        }
+
         $dates = collect();
+        if ($start->gt($end)) {
+            return $dates;
+        }
 
         for ($date = $start; $date->lte($end); $date = $date->addDay()) {
-            if ($fromDate !== null && $date->lt($fromDate)) {
+            if (isset($holidayLookup[$date->toDateString()])) {
                 continue;
             }
 
@@ -648,5 +738,83 @@ class StudentMonthlyPlanGenerator
         }
 
         return $dates;
+    }
+
+    /**
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    private function periodForMonth(
+        int $month,
+        int $year,
+        ?CarbonImmutable $startDate = null,
+        ?CarbonImmutable $endDate = null,
+    ): array {
+        $monthStart = CarbonImmutable::create($year, $month, 1)->startOfDay();
+        $monthEnd = $monthStart->endOfMonth()->startOfDay();
+        $startDate = ($startDate ?? $monthStart)->startOfDay();
+        $endDate = ($endDate ?? $monthEnd)->startOfDay();
+
+        foreach ([$startDate, $endDate] as $date) {
+            if ((int) $date->month !== $month || (int) $date->year !== $year) {
+                throw new InvalidArgumentException('Monthly plan period must be within the selected month and year.');
+            }
+        }
+
+        if ($startDate->gt($endDate)) {
+            throw new InvalidArgumentException('Monthly plan start date must be before or equal to the end date.');
+        }
+
+        return [$startDate, $endDate];
+    }
+
+    /**
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    private function periodForMonthlyPlan(MonthlyPlan $monthlyPlan): array
+    {
+        return $this->periodForMonth(
+            (int) $monthlyPlan->month,
+            (int) $monthlyPlan->year,
+            $this->carbonDate($monthlyPlan->start_date),
+            $this->carbonDate($monthlyPlan->end_date),
+        );
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeHolidayDates(array $holidayDates, CarbonImmutable $startDate, CarbonImmutable $endDate): array
+    {
+        $dates = [];
+
+        foreach ($holidayDates as $holidayDate) {
+            $date = $this->carbonDate($holidayDate);
+            if ($date === null || $date->lt($startDate) || $date->gt($endDate)) {
+                continue;
+            }
+
+            $dates[$date->toDateString()] = $date->toDateString();
+        }
+
+        ksort($dates);
+
+        return array_values($dates);
+    }
+
+    private function carbonDate(mixed $value): ?CarbonImmutable
+    {
+        if ($value instanceof CarbonImmutable) {
+            return $value->startOfDay();
+        }
+
+        if ($value instanceof DateTimeInterface) {
+            return CarbonImmutable::instance($value)->startOfDay();
+        }
+
+        if (blank($value)) {
+            return null;
+        }
+
+        return CarbonImmutable::parse((string) $value)->startOfDay();
     }
 }

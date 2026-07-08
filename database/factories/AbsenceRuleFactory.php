@@ -27,6 +27,7 @@ class AbsenceRuleFactory extends Factory
             ]),
             'occurrence_number' => fake()->numberBetween(1, 6),
             'action' => fake()->randomElement([
+                AbsenceRule::ACTION_SEND_MESSAGE,
                 AbsenceRule::ACTION_FREEZE_STUDENT,
                 AbsenceRule::ACTION_DISMISS_STUDENT,
             ]),
@@ -55,9 +56,17 @@ class AbsenceRuleFactory extends Factory
         return $this->state(fn (): array => ['action' => AbsenceRule::ACTION_FREEZE_STUDENT]);
     }
 
+    public function sendMessageAction(): static
+    {
+        return $this->state(fn (): array => [
+            'action' => AbsenceRule::ACTION_SEND_MESSAGE,
+            'freeze_reason' => null,
+            'freeze_working_days_count' => 4,
+        ]);
+    }
+
     public function dismissAction(): static
     {
         return $this->state(fn (): array => ['action' => AbsenceRule::ACTION_DISMISS_STUDENT]);
     }
 }
-

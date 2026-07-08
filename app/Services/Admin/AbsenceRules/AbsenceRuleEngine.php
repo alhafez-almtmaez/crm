@@ -9,6 +9,7 @@ use App\Models\EvaluationStudent;
 use App\Models\Student;
 use App\Services\Admin\AbsenceRules\Actions\DismissStudentAction;
 use App\Services\Admin\AbsenceRules\Actions\FreezeStudentAction;
+use App\Services\Admin\AbsenceRules\Actions\SendMessageAction;
 use App\Services\Admin\AbsenceRules\Contracts\RuleActionHandler;
 use App\Services\Admin\AdminDataScopeService;
 use Carbon\CarbonImmutable;
@@ -37,10 +38,12 @@ class AbsenceRuleEngine
     public function __construct(
         private readonly MessageTemplateRenderer $templateRenderer,
         private readonly AdminDataScopeService $dataScope,
+        SendMessageAction $sendMessageAction,
         FreezeStudentAction $freezeStudentAction,
         DismissStudentAction $dismissStudentAction,
     ) {
         $availableHandlers = [
+            $sendMessageAction,
             $freezeStudentAction,
             $dismissStudentAction,
         ];
@@ -310,7 +313,7 @@ class AbsenceRuleEngine
             return $handler;
         }
 
-        if (in_array($action, [AbsenceRule::ACTION_SEND_MESSAGE, AbsenceRule::ACTION_SEND_MESSAGE_AND_FREEZE], true)) {
+        if ($action === AbsenceRule::ACTION_SEND_MESSAGE_AND_FREEZE) {
             return $this->handlers[AbsenceRule::ACTION_FREEZE_STUDENT];
         }
 

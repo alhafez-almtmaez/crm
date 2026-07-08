@@ -43,6 +43,7 @@ const attendanceTypeOptions = computed(() => [
 ]);
 
 const actionOptions = computed(() => [
+    { value: 'send_message', label: t('absenceRules.actionSendMessage') },
     { value: 'freeze_student', label: t('absenceRules.actionFreezeStudent') },
     { value: 'dismiss_student', label: t('absenceRules.actionDismissStudent') },
 ]);

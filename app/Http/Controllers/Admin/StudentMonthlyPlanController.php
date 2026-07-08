@@ -64,6 +64,8 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
             'groups' => $this->service->groupOptions(),
             'default_month' => now()->month,
             'default_year' => now()->year,
+            'default_start_date' => now()->startOfMonth()->toDateString(),
+            'default_end_date' => now()->endOfMonth()->toDateString(),
         ]);
     }
 
@@ -78,7 +80,7 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
     {
         $report = $this->service->publicReportPayload($publicId);
         $plan = $report['monthly_plan'];
-        $period = ((int) ($plan['month'] ?? 0)).'/'.((int) ($plan['year'] ?? 0));
+        $period = (string) ($plan['period_label'] ?? (((int) ($plan['month'] ?? 0)).'/'.((int) ($plan['year'] ?? 0))));
         $title = "الخطة الشهرية {$period} | مشروع الحافظ المتميز";
         $description = trim(($plan['center_name'] ?? '').' / '.($plan['group_name'] ?? '').' / '.$period);
         $imageUrl = asset('media/logos/logo.png');
@@ -113,6 +115,9 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
 
         $month = (int) $data['month'];
         $year = (int) $data['year'];
+        $startDate = CarbonImmutable::createFromFormat('Y-m-d', (string) $data['start_date'])->startOfDay();
+        $endDate = CarbonImmutable::createFromFormat('Y-m-d', (string) $data['end_date'])->startOfDay();
+        $holidayDates = array_values((array) ($data['holiday_dates'] ?? []));
 
         if ($group !== null) {
             $existingPlan = $this->service->savedPlanForGroup($group, $month, $year);
@@ -124,8 +129,8 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
         }
 
         $result = $group !== null
-            ? $this->generator->generateForGroup($group, $month, $year)
-            : $this->generator->generateForCenter($center, $month, $year);
+            ? $this->generator->generateForGroup($group, $month, $year, $startDate, $endDate, $holidayDates)
+            : $this->generator->generateForCenter($center, $month, $year, startDate: $startDate, endDate: $endDate, holidayDates: $holidayDates);
 
         $firstMonthlyPlanId = $result['monthly_plan_ids'][0] ?? null;
         if ($firstMonthlyPlanId !== null && count($result['monthly_plan_ids']) === 1) {
