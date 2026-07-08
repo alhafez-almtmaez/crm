@@ -19,13 +19,14 @@ class SendMessageAction implements RuleActionHandler
 
     public function execute(RuleExecutionContext $context): RuleExecutionResult
     {
-        $sent = $this->support->sendMessage($context);
+        $dispatch = $this->support->sendMessage($context);
         $deductedPoints = $this->support->deductPoints($context);
 
         return new RuleExecutionResult(
-            wasMessageSent: $sent,
+            wasMessageSent: $dispatch->sent,
             studentWasFrozen: false,
             deductedPointsCount: $deductedPoints,
+            meta: $dispatch->meta,
         );
     }
 }

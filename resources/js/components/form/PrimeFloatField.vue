@@ -40,6 +40,10 @@ defineProps({
         type: String,
         default: '',
     },
+    hint: {
+        type: String,
+        default: '',
+    },
     inputProps: {
         type: Object,
         default: () => ({}),
@@ -69,5 +73,6 @@ defineEmits(['update:modelValue']);
         </FloatLabel>
 
         <small v-if="error" class="text-sm text-red-600">{{ error }}</small>
+        <small v-else-if="hint" class="text-xs text-(--muted-foreground)">{{ hint }}</small>
     </div>
 </template>

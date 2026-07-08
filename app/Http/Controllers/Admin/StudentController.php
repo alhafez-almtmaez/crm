@@ -56,6 +56,9 @@ class StudentController extends Controller implements HasMiddleware
     {
         return Inertia::render('Admin/Students', [
             'centers' => $this->studentService->centerOptions(),
+            'groups' => $this->studentService->groupOptions(),
+            'plans' => $this->studentService->planOptions(),
+            'admins' => $this->studentService->adminOptions(),
         ]);
     }
 

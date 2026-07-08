@@ -163,6 +163,10 @@ const handleSort = (event) => {
             </div>
         </div>
 
+        <div v-if="$slots.filters" class="mb-4 border-t border-(--border) pt-4">
+            <slot name="filters" />
+        </div>
+
         <PrimeDataTable
             :value="rows"
             :loading="loading"

@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Imports\StudentsImport;
 use App\Models\Center;
+use App\Models\Group;
 use App\Models\Plan;
 use App\Models\PlanPoint;
 use App\Models\Student;
@@ -33,6 +34,11 @@ class StudentService
         $perPage = (int) ($filters['per_page'] ?? 10);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $centerId = $this->nullableInt($filters['center_id'] ?? null);
+        $groupId = $this->nullableInt($filters['group_id'] ?? null);
+        $planId = $this->nullableInt($filters['plan_type_id'] ?? null);
+        $adminId = $this->nullableInt($filters['admin_id'] ?? null);
+        $status = $this->nullableInt($filters['is_active'] ?? null);
         $sortMap = [
             'id' => 'students.id',
             'full_name' => 'students.full_name',
@@ -67,6 +73,11 @@ class StudentService
                 'admins.name as admin_name',
             ])
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
+            ->when($centerId !== null, static fn ($query) => $query->where('students.center_id', $centerId))
+            ->when($groupId !== null, static fn ($query) => $query->where('students.group_id', $groupId))
+            ->when($planId !== null, static fn ($query) => $query->where('students.plan_type_id', $planId))
+            ->when($adminId !== null, static fn ($query) => $query->where('students.admin_id', $adminId))
+            ->when($status !== null, static fn ($query) => $query->where('students.is_active', $status))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
@@ -135,6 +146,23 @@ class StudentService
                 'id' => (int) $center->id,
                 'name' => (string) $center->name,
                 'working_days' => is_array($center->working_days) ? $center->working_days : [],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string, center_id: int|null}>
+     */
+    public function groupOptions(): array
+    {
+        return Group::query()
+            ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
+            ->orderBy('name')
+            ->get(['id', 'name', 'center_id'])
+            ->map(static fn (Group $group): array => [
+                'id' => (int) $group->id,
+                'name' => (string) $group->name,
+                'center_id' => $group->center_id !== null ? (int) $group->center_id : null,
             ])
             ->all();
     }
@@ -315,6 +343,15 @@ class StudentService
         }
 
         return $currentUserId;
+    }
+
+    private function nullableInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     /**

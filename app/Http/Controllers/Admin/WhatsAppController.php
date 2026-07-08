@@ -5,16 +5,21 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WhatsappSendRequest;
 use App\Models\Device;
+use App\Services\Admin\WhatsAppPendingMessageService;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response as HttpClientResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class WhatsAppController extends Controller
 {
+    public function __construct(private readonly WhatsAppPendingMessageService $pendingMessages) {}
+
     public function index(): Response
     {
         $device = $this->firstOrCreateDevice();
@@ -114,6 +119,8 @@ class WhatsAppController extends Controller
                 $device->update(['status' => 'CONNECTED']);
             }
 
+            $this->flushPendingMessages();
+
             return null;
         }
 
@@ -205,6 +212,17 @@ class WhatsAppController extends Controller
     private function apiKey(): string
     {
         return (string) config('services.whatsapp_api.key', config('app.key'));
+    }
+
+    private function flushPendingMessages(): void
+    {
+        try {
+            $this->pendingMessages->flushPending((int) config('services.whatsapp_api.pending_flush_limit', 5));
+        } catch (Throwable $exception) {
+            Log::warning('Failed to flush pending WhatsApp messages after reconnect.', [
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function generateSessionId(string $name): string

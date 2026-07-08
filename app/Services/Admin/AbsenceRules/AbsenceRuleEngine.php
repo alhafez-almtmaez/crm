@@ -58,7 +58,9 @@ class AbsenceRuleEngine
      *     processed: int,
      *     skipped: int,
      *     errors: array<int, string>,
-     *     alerts_marked_as_sent: bool
+     *     alerts_marked_as_sent: bool,
+     *     local_preview: bool,
+     *     preview_messages: array<int, array<string, mixed>>
      * }
      */
     public function processEvaluation(int $evaluationId, ?int $executedBy = null): array
@@ -73,6 +75,8 @@ class AbsenceRuleEngine
                 'skipped' => 0,
                 'errors' => ["Evaluation {$evaluationId} not found."],
                 'alerts_marked_as_sent' => false,
+                'local_preview' => false,
+                'preview_messages' => [],
             ];
         }
 
@@ -84,7 +88,9 @@ class AbsenceRuleEngine
      *     processed: int,
      *     skipped: int,
      *     errors: array<int, string>,
-     *     alerts_marked_as_sent: bool
+     *     alerts_marked_as_sent: bool,
+     *     local_preview: bool,
+     *     preview_messages: array<int, array<string, mixed>>
      * }
      */
     public function process(Evaluation $evaluation, ?int $executedBy = null): array
@@ -95,12 +101,16 @@ class AbsenceRuleEngine
                 'skipped' => 0,
                 'errors' => [],
                 'alerts_marked_as_sent' => true,
+                'local_preview' => false,
+                'preview_messages' => [],
             ];
         }
 
         $processed = 0;
         $skipped = 0;
         $errors = [];
+        $localPreviewMessages = [];
+        $isLocalPreviewRun = app()->environment('local');
         $evaluationDateRaw = (string) ($evaluation->date ?? '');
 
         try {
@@ -111,6 +121,8 @@ class AbsenceRuleEngine
                 'skipped' => 0,
                 'errors' => ["Evaluation {$evaluation->id} has invalid date value."],
                 'alerts_marked_as_sent' => false,
+                'local_preview' => false,
+                'preview_messages' => [],
             ];
         }
 
@@ -234,8 +246,9 @@ class AbsenceRuleEngine
 
             try {
                 $result = $this->resolveHandler($rule->action)->execute($context);
+                $isLocalPreview = (bool) ($result->meta['local_preview'] ?? false);
 
-                AbsenceRuleExecutionLog::query()->create([
+                $log = AbsenceRuleExecutionLog::query()->create([
                     'evaluation_id' => $evaluation->id,
                     'evaluation_student_id' => $item->id,
                     'student_id' => $student->id,
@@ -259,6 +272,10 @@ class AbsenceRuleEngine
                     'executed_at' => now(),
                     'meta' => $result->meta,
                 ]);
+
+                if ($isLocalPreview) {
+                    $localPreviewMessages[] = $this->previewMessagePayload($log, $student);
+                }
 
                 $processed++;
             } catch (Throwable $exception) {
@@ -293,7 +310,7 @@ class AbsenceRuleEngine
             }
         }
 
-        $alertsMarkedAsSent = $errors === [] && ! $this->dataScope->shouldScope();
+        $alertsMarkedAsSent = $errors === [] && ! $this->dataScope->shouldScope() && ! $isLocalPreviewRun;
         if ($alertsMarkedAsSent) {
             $evaluation->update(['is_send_absence_alerts' => true]);
         }
@@ -303,6 +320,8 @@ class AbsenceRuleEngine
             'skipped' => $skipped,
             'errors' => $errors,
             'alerts_marked_as_sent' => $alertsMarkedAsSent,
+            'local_preview' => $isLocalPreviewRun,
+            'preview_messages' => $localPreviewMessages,
         ];
     }
 
@@ -434,6 +453,30 @@ class AbsenceRuleEngine
         }
 
         return array_values($unique);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function previewMessagePayload(AbsenceRuleExecutionLog $log, Student $student): array
+    {
+        $meta = $log->meta ?? [];
+
+        return [
+            'id' => (int) $log->id,
+            'student_name' => $student->full_name,
+            'center_name' => $student->center?->name ?? '',
+            'evaluation_id' => (int) $log->evaluation_id,
+            'attendance_type' => $log->attendance_type,
+            'attendance_label' => self::ATTENDANCE_AR_LABELS[$log->attendance_type] ?? $log->attendance_type,
+            'occurrence_number' => $log->occurrence_number,
+            'action' => $log->action,
+            'recipient_phones' => $log->recipient_phones ?? [],
+            'sent_to_group' => (bool) $log->sent_to_group,
+            'group_serialized' => $meta['group_serialized'] ?? null,
+            'message_content' => $log->message_content,
+            'created_at' => $log->created_at?->toIso8601String(),
+        ];
     }
 
     /**

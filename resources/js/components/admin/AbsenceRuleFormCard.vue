@@ -24,6 +24,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    allowAllCenters: {
+        type: Boolean,
+        default: false,
+    },
     submitLabel: {
         type: String,
         default: 'Save',
@@ -36,6 +40,7 @@ const props = defineProps({
 
 const emit = defineEmits(['cancel', 'submit']);
 const { t } = useI18n();
+const ALL_CENTERS_VALUE = '__all_centers__';
 
 const attendanceTypeOptions = computed(() => [
     { value: 'absence', label: t('absenceRules.attendanceAbsence') },
@@ -47,6 +52,26 @@ const actionOptions = computed(() => [
     { value: 'freeze_student', label: t('absenceRules.actionFreezeStudent') },
     { value: 'dismiss_student', label: t('absenceRules.actionDismissStudent') },
 ]);
+
+const centerOptions = computed(() => {
+    const centers = props.centers ?? [];
+
+    if (!props.allowAllCenters) {
+        return centers;
+    }
+
+    return [
+        { id: ALL_CENTERS_VALUE, name: t('absenceRules.allCenters') },
+        ...centers,
+    ];
+});
+
+const centerValue = computed({
+    get: () => (props.allowAllCenters && props.form.center_id === null ? ALL_CENTERS_VALUE : props.form.center_id),
+    set: (value) => {
+        props.form.center_id = value === ALL_CENTERS_VALUE ? null : value;
+    },
+});
 
 const filteredTemplates = computed(() => (
     (props.templates ?? []).map((template) => ({
@@ -69,18 +94,18 @@ const isFreezeAction = computed(() => props.form.action === 'freeze_student');
                     <FloatLabel variant="on">
                         <Select
                             input-id="absence-rule-center"
-                            v-model="props.form.center_id"
-                            :options="props.centers"
+                            v-model="centerValue"
+                            :options="centerOptions"
                             option-label="name"
                             option-value="id"
                             filter
-                            show-clear
+                            :show-clear="false"
                             class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
                         />
                         <label for="absence-rule-center">{{ t('absenceRules.center') }}</label>
                     </FloatLabel>
                     <small v-if="props.form.errors.center_id" class="text-sm text-red-600">{{ props.form.errors.center_id }}</small>
-                    <small v-else class="text-xs text-(--muted-foreground)">{{ t('absenceRules.centerOptionalHint') }}</small>
+                    <small v-else-if="props.allowAllCenters" class="text-xs text-(--muted-foreground)">{{ t('absenceRules.centerOptionalHint') }}</small>
                 </div>
 
                 <PrimeFloatField
@@ -91,6 +116,7 @@ const isFreezeAction = computed(() => props.form.action === 'freeze_student');
                     required
                     :invalid="Boolean(props.form.errors.occurrence_number)"
                     :error="props.form.errors.occurrence_number"
+                    :hint="t('absenceRules.occurrenceMonthlyHint')"
                 />
             </div>
 

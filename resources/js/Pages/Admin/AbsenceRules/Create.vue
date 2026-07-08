@@ -15,6 +15,10 @@ defineProps({
         type: Array,
         default: () => [],
     },
+    can_select_all_centers: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const form = useForm({
@@ -53,6 +57,7 @@ const goBack = () => {
                 :form="form"
                 :centers="centers"
                 :templates="templates"
+                :allow-all-centers="can_select_all_centers"
                 :submit-label="t('absenceRules.createRule')"
                 :title="t('absenceRules.newRule')"
                 :description="t('absenceRules.createDescription')"

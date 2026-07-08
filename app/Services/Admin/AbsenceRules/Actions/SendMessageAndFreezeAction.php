@@ -10,9 +10,7 @@ use App\Services\Admin\AbsenceRules\RuleExecutionSupport;
 
 class SendMessageAndFreezeAction implements RuleActionHandler
 {
-    public function __construct(private readonly RuleExecutionSupport $support)
-    {
-    }
+    public function __construct(private readonly RuleExecutionSupport $support) {}
 
     public function key(): string
     {
@@ -21,13 +19,14 @@ class SendMessageAndFreezeAction implements RuleActionHandler
 
     public function execute(RuleExecutionContext $context): RuleExecutionResult
     {
-        $sent = $this->support->sendMessage($context);
+        $dispatch = $this->support->sendMessage($context);
         $freeze = $this->support->freezeStudent($context);
 
         return new RuleExecutionResult(
-            wasMessageSent: $sent,
+            wasMessageSent: $dispatch->sent,
             studentWasFrozen: $freeze !== null,
             studentFreezeId: $freeze?->id,
+            meta: $dispatch->meta,
         );
     }
 }

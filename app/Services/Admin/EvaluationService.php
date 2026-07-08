@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin;
 
+use App\Models\AbsenceRuleExecutionLog;
 use App\Models\Center;
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
@@ -74,8 +75,15 @@ class EvaluationService
             ->paginate($perPage)
             ->withQueryString();
 
+        $previewCounts = $this->localPreviewCountsForEvaluations(
+            $rows->getCollection()
+                ->pluck('id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all(),
+        );
+
         $rows->setCollection(
-            $rows->getCollection()->map(function ($row) {
+            $rows->getCollection()->map(function ($row) use ($previewCounts) {
                 $row->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->created_at));
                 $row->setAttribute(
                     'date_formatted',
@@ -85,6 +93,7 @@ class EvaluationService
                     'report_url',
                     filled($row->ulid) ? route('evaluations.report', ['publicId' => $row->ulid]) : null,
                 );
+                $row->setAttribute('local_absence_preview_count', $previewCounts[(int) $row->id] ?? 0);
 
                 return $row;
             }),
@@ -249,7 +258,9 @@ class EvaluationService
      *     processed: int,
      *     skipped: int,
      *     errors: array<int, string>,
-     *     alerts_marked_as_sent: bool
+     *     alerts_marked_as_sent: bool,
+     *     local_preview: bool,
+     *     preview_messages: array<int, array<string, mixed>>
      * }
      */
     public function sendAbsenceAlerts(Evaluation $evaluation): array
@@ -260,6 +271,22 @@ class EvaluationService
             evaluationId: $evaluation->id,
             executedBy: Auth::id(),
         );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function absenceAlertPreviews(Evaluation $evaluation): array
+    {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
+        return $this->absencePreviewLogsQuery($evaluation)
+            ->limit(100)
+            ->get()
+            ->filter(fn (AbsenceRuleExecutionLog $log): bool => (bool) (($log->meta ?? [])['local_preview'] ?? false))
+            ->map(fn (AbsenceRuleExecutionLog $log): array => $this->absencePreviewPayload($log))
+            ->values()
+            ->all();
     }
 
     /**
@@ -693,6 +720,72 @@ class EvaluationService
         }
 
         return Carbon::parse($date)->toDateString();
+    }
+
+    /**
+     * @param  array<int, int>  $evaluationIds
+     * @return array<int, int>
+     */
+    private function localPreviewCountsForEvaluations(array $evaluationIds): array
+    {
+        if (! app()->environment('local') || $evaluationIds === []) {
+            return [];
+        }
+
+        return AbsenceRuleExecutionLog::query()
+            ->whereIn('evaluation_id', $evaluationIds)
+            ->where('was_message_sent', false)
+            ->whereNotNull('message_content')
+            ->get(['id', 'evaluation_id', 'meta'])
+            ->filter(fn (AbsenceRuleExecutionLog $log): bool => (bool) (($log->meta ?? [])['local_preview'] ?? false))
+            ->groupBy('evaluation_id')
+            ->map(static fn ($logs): int => $logs->count())
+            ->mapWithKeys(static fn (int $count, $evaluationId): array => [(int) $evaluationId => $count])
+            ->all();
+    }
+
+    private function absencePreviewLogsQuery(Evaluation $evaluation)
+    {
+        return $this->dataScope
+            ->applyAbsenceExecutionLogAccess(AbsenceRuleExecutionLog::query())
+            ->with(['student:id,full_name', 'center:id,name'])
+            ->where('evaluation_id', $evaluation->id)
+            ->where('was_message_sent', false)
+            ->whereNotNull('message_content')
+            ->latest('id');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function absencePreviewPayload(AbsenceRuleExecutionLog $log): array
+    {
+        $meta = $log->meta ?? [];
+
+        return [
+            'id' => (int) $log->id,
+            'student_name' => $log->student?->full_name ?? '-',
+            'center_name' => $log->center?->name ?? '',
+            'evaluation_id' => (int) $log->evaluation_id,
+            'attendance_type' => $log->attendance_type,
+            'attendance_label' => $this->attendanceLabel((string) $log->attendance_type),
+            'occurrence_number' => $log->occurrence_number,
+            'action' => $log->action,
+            'recipient_phones' => $log->recipient_phones ?? [],
+            'sent_to_group' => (bool) $log->sent_to_group,
+            'group_serialized' => $meta['group_serialized'] ?? null,
+            'message_content' => $log->message_content,
+            'created_at_formatted' => $this->dateTimeFormatter->formatForAdmin($log->created_at),
+        ];
+    }
+
+    private function attendanceLabel(string $attendanceType): string
+    {
+        return match ($attendanceType) {
+            'excused_absence' => 'غياب بعذر',
+            'absence' => 'غياب بدون عذر',
+            default => $attendanceType,
+        };
     }
 
     /**

@@ -7,4 +7,5 @@ return [
     'already_exists_for_center_date' => 'An evaluation already exists for this center and date.',
     'absence_alerts_sent_successfully' => 'Absence alerts processed successfully.',
     'absence_alerts_completed_with_errors' => 'Absence alerts processing completed with errors.',
+    'absence_alerts_preview_created' => 'Absence alert messages were created locally without sending them to WhatsApp.',
 ];

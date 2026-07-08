@@ -43,6 +43,7 @@ class AbsenceRuleController extends Controller implements HasMiddleware
         return Inertia::render('Admin/AbsenceRules/Create', [
             'centers' => $this->service->centerOptions(),
             'templates' => $this->service->templateOptions(),
+            'can_select_all_centers' => ! $this->dataScope->shouldScope(),
         ]);
     }
 
@@ -67,6 +68,7 @@ class AbsenceRuleController extends Controller implements HasMiddleware
             ],
             'centers' => $this->service->centerOptions(),
             'templates' => $this->service->templateOptions(),
+            'can_select_all_centers' => ! $this->dataScope->shouldScope(),
         ]);
     }
 

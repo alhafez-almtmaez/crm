@@ -10,7 +10,7 @@ import IntlTelInput from 'intl-tel-input/vueWithUtils';
 import Select from 'primevue/select';
 import Textarea from 'primevue/textarea';
 import { useConfirm } from 'primevue/useconfirm';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
 import AdminLayout from '../../components/admin/AdminLayout.vue';
@@ -28,7 +28,35 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    groups: {
+        type: Array,
+        default: () => [],
+    },
+    plans: {
+        type: Array,
+        default: () => [],
+    },
+    admins: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const defaultFilters = () => ({
+    center_id: null,
+    group_id: null,
+    plan_type_id: null,
+    admin_id: null,
+    is_active: null,
+});
+const filters = ref(defaultFilters());
+const filterParams = () => Object.entries(filters.value).reduce((params, [key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+        params[key] = value;
+    }
+
+    return params;
+}, {});
 const {
     loading,
     rows: students,
@@ -45,6 +73,7 @@ const {
     endpoint: '/admin/students/records',
     defaultSortBy: 'id',
     defaultSortDir: 'desc',
+    extraParams: filterParams,
 });
 const historyVisible = ref(false);
 const historyEndpoint = ref('');
@@ -80,6 +109,20 @@ const congratulatoryForm = ref({
     parent_phone_number: '',
     phone_number: '',
 });
+
+const filteredGroupOptions = computed(() => {
+    if (!filters.value.center_id) {
+        return props.groups;
+    }
+
+    return props.groups.filter((group) => Number(group.center_id) === Number(filters.value.center_id));
+});
+const statusFilterOptions = computed(() => [
+    { label: t('students.statusActive'), value: 1 },
+    { label: t('students.statusFrozen'), value: 2 },
+    { label: t('students.statusInactive'), value: 0 },
+]);
+const activeFilterCount = computed(() => Object.values(filters.value).filter((value) => value !== null && value !== undefined && value !== '').length);
 
 const rows = computed(() => (students.value ?? []).map((student) => ({
     ...student,
@@ -187,6 +230,10 @@ const freezeToDate = computed({
 
 const openCreate = () => {
     router.get('/admin/students/create');
+};
+
+const clearFilters = () => {
+    filters.value = defaultFilters();
 };
 
 const onFreezeParentPhoneChange = (value) => {
@@ -470,6 +517,27 @@ const openHistory = (student) => {
     historyVisible.value = true;
 };
 
+watch(
+    () => filters.value.center_id,
+    (centerId) => {
+        if (!filters.value.group_id) {
+            return;
+        }
+
+        const selectedGroup = props.groups.find((group) => Number(group.id) === Number(filters.value.group_id));
+        if (selectedGroup && (!centerId || Number(selectedGroup.center_id) === Number(centerId))) {
+            return;
+        }
+
+        filters.value.group_id = null;
+    },
+);
+
+watch(filters, () => {
+    currentPage.value = 1;
+    fetchStudents();
+}, { deep: true });
+
 onMounted(() => {
     fetchStudents();
 });
@@ -522,7 +590,94 @@ onMounted(() => {
                 @edit="openEdit"
                 @delete="askDeleteStudent"
                 @row-action="handleRowAction"
-            />
+            >
+                <template #filters>
+                    <div class="flex flex-col gap-3 xl:flex-row xl:items-start">
+                        <div class="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="students-filter-center"
+                                    v-model="filters.center_id"
+                                    :options="props.centers"
+                                    option-label="name"
+                                    option-value="id"
+                                    filter
+                                    show-clear
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="students-filter-center">{{ t('students.filterByCenter') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="students-filter-group"
+                                    v-model="filters.group_id"
+                                    :options="filteredGroupOptions"
+                                    option-label="name"
+                                    option-value="id"
+                                    filter
+                                    show-clear
+                                    :disabled="filteredGroupOptions.length === 0"
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="students-filter-group">{{ t('students.filterByGroup') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="students-filter-plan"
+                                    v-model="filters.plan_type_id"
+                                    :options="props.plans"
+                                    option-label="name"
+                                    option-value="id"
+                                    filter
+                                    show-clear
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="students-filter-plan">{{ t('students.filterByPlan') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="students-filter-admin"
+                                    v-model="filters.admin_id"
+                                    :options="props.admins"
+                                    option-label="name"
+                                    option-value="id"
+                                    filter
+                                    show-clear
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="students-filter-admin">{{ t('students.filterByAdmin') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="students-filter-status"
+                                    v-model="filters.is_active"
+                                    :options="statusFilterOptions"
+                                    option-label="label"
+                                    option-value="value"
+                                    show-clear
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="students-filter-status">{{ t('students.filterByStatus') }}</label>
+                            </FloatLabel>
+                        </div>
+
+                        <Button
+                            type="button"
+                            icon="pi pi-filter-slash"
+                            severity="secondary"
+                            outlined
+                            :label="t('students.clearFilters')"
+                            :disabled="activeFilterCount === 0"
+                            class="h-11 shrink-0"
+                            @click="clearFilters"
+                        />
+                    </div>
+                </template>
+            </DataTable>
             <ConfirmPopup />
             <EntityActivityDrawer
                 v-model="historyVisible"

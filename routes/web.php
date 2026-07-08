@@ -98,6 +98,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::resource('students', StudentController::class)->except(['show']);
 
         Route::get('evaluations/records', [EvaluationController::class, 'records'])->name('evaluations.records');
+        Route::get('evaluations/{evaluation}/absence-alert-previews', [EvaluationController::class, 'absenceAlertPreviews'])->name('evaluations.absence-alert-previews');
         Route::post('evaluations/{evaluation}/absence-alerts', [EvaluationController::class, 'sendAbsenceAlerts'])->name('evaluations.absence-alerts');
         Route::resource('evaluations', EvaluationController::class)->except(['show']);
 

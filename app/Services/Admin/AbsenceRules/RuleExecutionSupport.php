@@ -2,36 +2,42 @@
 
 namespace App\Services\Admin\AbsenceRules;
 
-use App\Models\StudentFreeze;
 use App\Models\Student;
+use App\Models\StudentFreeze;
 use App\Services\Admin\WhatsAppMessagingService;
 
 class RuleExecutionSupport
 {
-    public function __construct(private readonly WhatsAppMessagingService $messagingService)
-    {
-    }
+    public function __construct(private readonly WhatsAppMessagingService $messagingService) {}
 
-    public function sendMessage(RuleExecutionContext $context): bool
+    public function sendMessage(RuleExecutionContext $context): MessageDispatchResult
     {
         $content = trim((string) $context->messageContent);
         $group = $context->shouldSendToGroup() ? $context->groupSerialized : null;
 
         if ($content === '') {
-            return false;
+            return MessageDispatchResult::notSent();
+        }
+
+        if ($this->shouldCreateLocalPreview()) {
+            return MessageDispatchResult::localPreview($context->recipientPhones, $group);
         }
 
         if ($context->recipientPhones === [] && ($group === null || trim($group) === '')) {
-            return false;
+            return MessageDispatchResult::notSent();
         }
 
         $this->messagingService->sendMediaCaption($context->recipientPhones, $content, $group);
 
-        return true;
+        return MessageDispatchResult::sent();
     }
 
     public function freezeStudent(RuleExecutionContext $context): ?StudentFreeze
     {
+        if ($this->shouldCreateLocalPreview()) {
+            return null;
+        }
+
         if ($context->freezeFrom === null || $context->freezeTo === null) {
             return null;
         }
@@ -63,6 +69,10 @@ class RuleExecutionSupport
 
     public function dismissStudent(RuleExecutionContext $context): bool
     {
+        if ($this->shouldCreateLocalPreview()) {
+            return false;
+        }
+
         StudentFreeze::query()
             ->where('student_id', $context->student->id)
             ->where('is_active', true)
@@ -78,6 +88,10 @@ class RuleExecutionSupport
 
     public function deductPoints(RuleExecutionContext $context): int
     {
+        if ($this->shouldCreateLocalPreview()) {
+            return 0;
+        }
+
         $points = max(0, (int) $context->rule->deduction_points_count);
         if ($points === 0) {
             return 0;
@@ -86,5 +100,10 @@ class RuleExecutionSupport
         $context->student->increment('deducted_points_count', $points);
 
         return $points;
+    }
+
+    public function shouldCreateLocalPreview(): bool
+    {
+        return app()->environment('local');
     }
 }

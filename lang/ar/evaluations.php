@@ -7,4 +7,5 @@ return [
     'already_exists_for_center_date' => 'يوجد تقييم مسجل لهذا المركز في نفس التاريخ.',
     'absence_alerts_sent_successfully' => 'تمت معالجة تنبيهات الغياب بنجاح.',
     'absence_alerts_completed_with_errors' => 'تمت معالجة تنبيهات الغياب مع وجود أخطاء.',
+    'absence_alerts_preview_created' => 'تم إنشاء رسائل الغياب محلياً بدون إرسالها إلى واتساب.',
 ];

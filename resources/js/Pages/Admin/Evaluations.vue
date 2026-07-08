@@ -3,9 +3,10 @@ import axios from 'axios';
 import { Head, router } from '@inertiajs/vue3';
 import ConfirmPopup from 'primevue/confirmpopup';
 import { useConfirm } from 'primevue/useconfirm';
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
+import AbsenceAlertPreviewDialog from '../../components/admin/AbsenceAlertPreviewDialog.vue';
 import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
 import AdminLayout from '../../components/admin/AdminLayout.vue';
 import DataTable from '../../components/admin/DataTable.vue';
@@ -15,6 +16,9 @@ import { useServerTable } from '../../composables/useServerTable';
 const confirm = useConfirm();
 const appToast = useAppToast();
 const { t } = useI18n();
+const previewVisible = ref(false);
+const previewLoading = ref(false);
+const previewMessages = ref([]);
 const {
     loading,
     rows: sourceRows,
@@ -33,15 +37,25 @@ const {
     defaultSortDir: 'desc',
 });
 
-const rows = computed(() => (sourceRows.value ?? []).map((row) => ({
-    ...row,
-    center_name: row.center_name ?? t('common.na'),
-    admin_name: row.admin_name ?? t('common.na'),
-    alert_status_label: row.is_send_absence_alerts ? t('evaluations.alertsSent') : t('evaluations.alertsPending'),
-    alert_status_badge_class: row.is_send_absence_alerts
-        ? 'bg-emerald-700 text-white'
-        : 'bg-amber-600 text-white',
-})));
+const rows = computed(() => (sourceRows.value ?? []).map((row) => {
+    const hasLocalPreview = Number(row.local_absence_preview_count ?? 0) > 0;
+
+    return {
+        ...row,
+        center_name: row.center_name ?? t('common.na'),
+        admin_name: row.admin_name ?? t('common.na'),
+        alert_status_label: row.is_send_absence_alerts
+            ? t('evaluations.alertsSent')
+            : hasLocalPreview
+                ? t('evaluations.preview.status')
+                : t('evaluations.alertsPending'),
+        alert_status_badge_class: row.is_send_absence_alerts
+            ? 'bg-emerald-700 text-white'
+            : hasLocalPreview
+                ? 'bg-sky-700 text-white'
+                : 'bg-amber-600 text-white',
+    };
+}));
 
 const columns = computed(() => [
     { field: 'id', header: t('common.id'), sortable: true },
@@ -75,6 +89,14 @@ const rowActions = computed(() => [
         outlined: true,
         titleKey: 'evaluations.sendAlerts',
         show: (row) => !row.is_send_absence_alerts,
+    },
+    {
+        key: 'preview-alerts',
+        icon: 'pi pi-eye',
+        severity: 'info',
+        outlined: true,
+        titleKey: 'evaluations.preview.open',
+        show: (row) => Number(row.local_absence_preview_count ?? 0) > 0,
     },
 ]);
 
@@ -111,12 +133,35 @@ const sendAlerts = async (row) => {
     try {
         const { data } = await axios.post(`/admin/evaluations/${row.id}/absence-alerts`);
         appToast.success(data?.message ?? t('evaluations.sendAlerts'));
+        if (data?.meta?.local_preview) {
+            previewLoading.value = false;
+            previewMessages.value = data.meta.preview_messages ?? [];
+            previewVisible.value = true;
+        }
         await fetchRows();
     } catch (error) {
         appToast.fromAxiosError(error, {
             summary: t('notifications.requestFailedTitle'),
             fallback: t('evaluations.sendAlertsFailed'),
         });
+    }
+};
+
+const fetchAlertPreviews = async (row) => {
+    previewVisible.value = true;
+    previewLoading.value = true;
+    previewMessages.value = [];
+
+    try {
+        const { data } = await axios.get(`/admin/evaluations/${row.id}/absence-alert-previews`);
+        previewMessages.value = data?.data ?? [];
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.loadFailedTitle'),
+            fallback: t('evaluations.preview.loadFailed'),
+        });
+    } finally {
+        previewLoading.value = false;
     }
 };
 
@@ -148,6 +193,11 @@ const askDelete = ({ data: row, event }) => {
 const handleRowAction = ({ action, data: row, event }) => {
     if (action === 'open-report') {
         openReport(row);
+        return;
+    }
+
+    if (action === 'preview-alerts') {
+        fetchAlertPreviews(row);
         return;
     }
 
@@ -208,6 +258,11 @@ onMounted(() => {
                 @edit="openEdit"
                 @delete="askDelete"
                 @row-action="handleRowAction"
+            />
+            <AbsenceAlertPreviewDialog
+                v-model="previewVisible"
+                :messages="previewMessages"
+                :loading="previewLoading"
             />
             <ConfirmPopup />
         </section>

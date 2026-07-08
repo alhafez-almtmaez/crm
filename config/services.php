@@ -38,6 +38,8 @@ return [
     'whatsapp_api' => [
         'url' => env('WHATSAPP_API_URL'),
         'key' => env('WHATSAPP_API_KEY', env('APP_KEY')),
+        'message_delay_seconds' => env('WHATSAPP_MESSAGE_DELAY_SECONDS', 30),
+        'pending_flush_limit' => env('WHATSAPP_PENDING_FLUSH_LIMIT', 5),
     ],
 
 ];
