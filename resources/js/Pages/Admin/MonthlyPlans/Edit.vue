@@ -29,6 +29,7 @@ const props = defineProps({
 const { t } = useI18n();
 const refreshForm = useForm({
     from_date: props.monthly_plan.refresh_from_date ?? '',
+    holiday_dates: props.monthly_plan.holiday_dates ?? [],
 });
 
 const title = computed(() => `${props.monthly_plan.group_name} / ${t(`monthlyPlans.months.${props.monthly_plan.month}`)} ${props.monthly_plan.year}`);
@@ -51,6 +52,9 @@ const formatYmdDate = (value) => {
 
     return `${year}-${month}-${day}`;
 };
+const normalizeYmdDateList = (values) => [...new Set((values ?? [])
+    .filter((value) => value instanceof Date && !Number.isNaN(value.getTime()))
+    .map((value) => formatYmdDate(value)))].sort();
 const refreshDateValue = computed({
     get: () => parseYmdDate(refreshForm.from_date),
     set: (value) => {
@@ -64,9 +68,29 @@ const refreshDateValue = computed({
 });
 const refreshMinDate = computed(() => parseYmdDate(props.monthly_plan.refresh_min_date));
 const refreshMaxDate = computed(() => parseYmdDate(props.monthly_plan.refresh_max_date));
+const holidayDateValues = computed({
+    get: () => (refreshForm.holiday_dates ?? [])
+        .map((date) => parseYmdDate(date))
+        .filter((date) => date !== null),
+    set: (values) => {
+        refreshForm.holiday_dates = normalizeYmdDateList(Array.isArray(values) ? values : []);
+    },
+});
+const selectedHolidayDates = computed(() => [...(refreshForm.holiday_dates ?? [])].sort());
+const holidayDateErrors = computed(() => Object.entries(refreshForm.errors)
+    .filter(([key]) => key === 'holiday_dates' || key.startsWith('holiday_dates.'))
+    .map(([, message]) => message));
 
 const goBack = () => {
     router.get('/admin/monthly-plans');
+};
+
+const removeHolidayDate = (date) => {
+    refreshForm.holiday_dates = (refreshForm.holiday_dates ?? []).filter((holidayDate) => holidayDate !== date);
+};
+
+const clearHolidayDates = () => {
+    refreshForm.holiday_dates = [];
 };
 
 const refreshFuturePlan = () => {
@@ -160,6 +184,52 @@ const refreshFuturePlan = () => {
                                 :loading="refreshForm.processing"
                             />
                         </div>
+                    </div>
+
+                    <div class="mt-4 grid gap-2">
+                        <FloatLabel variant="on">
+                            <DatePicker
+                                input-id="monthly-plan-refresh-holiday-dates"
+                                v-model="holidayDateValues"
+                                selection-mode="multiple"
+                                show-icon
+                                icon-display="input"
+                                date-format="yy-mm-dd"
+                                :min-date="refreshMinDate"
+                                :max-date="refreshMaxDate"
+                                :manual-input="false"
+                                class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            />
+                            <FormFieldLabel for-id="monthly-plan-refresh-holiday-dates" :text="t('monthlyPlans.holidayDates')" />
+                        </FloatLabel>
+
+                        <div v-if="selectedHolidayDates.length" class="flex flex-wrap items-center gap-2">
+                            <span
+                                v-for="date in selectedHolidayDates"
+                                :key="date"
+                                class="inline-flex h-8 items-center gap-2 rounded-md border border-(--border) bg-(--muted) px-2 text-sm text-(--foreground)"
+                            >
+                                <span>{{ date }}</span>
+                                <button
+                                    type="button"
+                                    class="inline-flex size-5 items-center justify-center rounded-sm text-(--muted-foreground) hover:bg-(--background) hover:text-(--foreground)"
+                                    :aria-label="t('monthlyPlans.removeHolidayDate')"
+                                    @click="removeHolidayDate(date)"
+                                >
+                                    <i class="pi pi-times text-xs" aria-hidden="true" />
+                                </button>
+                            </span>
+                            <Button
+                                type="button"
+                                icon="pi pi-trash"
+                                severity="secondary"
+                                text
+                                :aria-label="t('monthlyPlans.clearHolidayDates')"
+                                @click="clearHolidayDates"
+                            />
+                        </div>
+                        <p v-else class="text-sm text-(--muted-foreground)">{{ t('monthlyPlans.noHolidayDates') }}</p>
+                        <small v-for="error in holidayDateErrors" :key="error" class="text-sm text-red-600">{{ error }}</small>
                     </div>
                 </form>
             </article>

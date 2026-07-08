@@ -235,6 +235,38 @@ test('regenerating a saved monthly plan from a date leaves previous days untouch
         ->and($days[3]->items->pluck('plan_point_id')->all())->toBe([$fifth->id]);
 });
 
+test('regenerating a saved monthly plan updates holiday dates before redistribution', function () {
+    [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+
+    $first = createPlanPoint($plan, 'تسميع 1', 1, ['weight' => 1]);
+    $second = createPlanPoint($plan, 'تسميع 2', 2, ['weight' => 1]);
+    $third = createPlanPoint($plan, 'تسميع 3', 3, ['weight' => 1]);
+    $fourth = createPlanPoint($plan, 'تسميع 4', 4, ['weight' => 1]);
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent($student, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+
+    app(StudentMonthlyPlanGenerator::class)->regenerateFutureForMonthlyPlan(
+        monthlyPlan: $monthlyPlan,
+        fromDate: CarbonImmutable::create(2026, 6, 2),
+        holidayDates: ['2026-06-03'],
+    );
+
+    $days = $studentPlan->refresh()->days()->with('items')->orderBy('date')->get();
+
+    expect($monthlyPlan->refresh()->holiday_dates)->toBe(['2026-06-03'])
+        ->and($days->pluck('date')->map(fn ($date) => $date->format('Y-m-d'))->all())->toBe([
+            '2026-06-01',
+            '2026-06-02',
+            '2026-06-04',
+            '2026-06-05',
+        ])
+        ->and($days[0]->items->pluck('plan_point_id')->all())->toBe([$first->id])
+        ->and($days[1]->items->pluck('plan_point_id')->all())->toBe([$second->id])
+        ->and($days[2]->items->pluck('plan_point_id')->all())->toBe([$third->id])
+        ->and($days[3]->items->pluck('plan_point_id')->all())->toBe([$fourth->id]);
+});
+
 test('standalone item is placed by itself', function () {
     [, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 5);
     createPlanPoint($plan, 'تسميع صفحة 1', 1);

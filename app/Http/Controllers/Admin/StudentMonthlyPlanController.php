@@ -155,6 +155,7 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
         $result = $this->generator->regenerateFutureForMonthlyPlan(
             monthlyPlan: $monthlyPlan,
             fromDate: CarbonImmutable::parse((string) $request->validated('from_date')),
+            holidayDates: array_values((array) $request->validated('holiday_dates', [])),
         );
 
         return redirect()

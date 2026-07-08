@@ -186,7 +186,7 @@
     "refreshFuture": "Refresh Distribution",
     "refreshFutureTitle": "Edit plan from a selected date",
     "refreshFromDate": "From Date",
-    "refreshFutureHint": "Previous days stay unchanged, and this date onward is redistributed.",
+    "refreshFutureHint": "Previous days stay unchanged, the selected holiday dates are saved, and this date onward is redistributed.",
     "refreshFutureConfirm": "Refresh the plan from {date} onward?",
     "generatedAt": "Generated At",
     "month": "Month",

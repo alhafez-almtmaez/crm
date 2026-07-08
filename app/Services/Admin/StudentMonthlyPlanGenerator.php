@@ -199,12 +199,12 @@ class StudentMonthlyPlanGenerator
     /**
      * @return array{student_plans: int, generated_items: int}
      */
-    public function regenerateFutureForMonthlyPlan(MonthlyPlan $monthlyPlan, CarbonImmutable $fromDate): array
+    public function regenerateFutureForMonthlyPlan(MonthlyPlan $monthlyPlan, CarbonImmutable $fromDate, ?array $holidayDates = null): array
     {
         $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
         $fromDate = $fromDate->startOfDay();
 
-        return DB::transaction(function () use ($monthlyPlan, $fromDate): array {
+        return DB::transaction(function () use ($monthlyPlan, $fromDate, $holidayDates): array {
             /** @var MonthlyPlan $lockedMonthlyPlan */
             $lockedMonthlyPlan = MonthlyPlan::query()
                 ->with('center:id,working_days')
@@ -217,7 +217,8 @@ class StudentMonthlyPlanGenerator
                 throw new InvalidArgumentException('Refresh date must be within the monthly plan period.');
             }
 
-            $holidayDates = $this->normalizeHolidayDates((array) $lockedMonthlyPlan->holiday_dates, $periodStart, $periodEnd);
+            $holidayDates = $this->normalizeHolidayDates($holidayDates ?? (array) $lockedMonthlyPlan->holiday_dates, $periodStart, $periodEnd);
+            $lockedMonthlyPlan->forceFill(['holiday_dates' => $holidayDates])->save();
 
             $dates = $this->workingDatesForPeriod(
                 $lockedMonthlyPlan->center?->working_days,
