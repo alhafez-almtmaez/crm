@@ -95,7 +95,7 @@ const rowActions = computed(() => [
     },
     {
         key: 'message-logs',
-        icon: 'pi pi-envelope',
+        icon: 'pi pi-whatsapp',
         severity: messageLogSeverity,
         outlined: true,
         titleKey: 'evaluations.messageLog.open',
