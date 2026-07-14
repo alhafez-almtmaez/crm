@@ -410,6 +410,27 @@ var ar_default = {
 			"occurrence": "رقم التكرار",
 			"centerGroup": "مجموعة المركز"
 		},
+		"messageLog": {
+			"title": "سجل رسائل الغياب",
+			"open": "عرض سجل الرسائل",
+			"empty": "لا توجد رسائل غياب مسجلة لهذا التقييم.",
+			"loadFailed": "تعذر تحميل سجل الرسائل.",
+			"executionTime": "وقت التنفيذ",
+			"action": "الإجراء",
+			"noContent": "لم يتم تسجيل نص رسالة.",
+			"statuses": {
+				"sent": "مرسلة",
+				"localPreview": "معاينة محلية",
+				"failed": "فشلت",
+				"notSent": "غير مرسلة"
+			},
+			"actions": {
+				"sendMessage": "إرسال رسالة",
+				"sendMessageAndFreeze": "إرسال رسالة وتجميد",
+				"freezeStudent": "تجميد الطالب",
+				"dismissStudent": "فصل الطالب"
+			}
+		},
 		"deleteConfirm": "حذف تقييم {center} بتاريخ {date}؟",
 		"deleteEvaluation": "حذف التقييم",
 		"deleted": "تم حذف التقييم بنجاح.",
@@ -1193,6 +1214,27 @@ var en_default = {
 			"occurrence": "Occurrence",
 			"centerGroup": "Center group"
 		},
+		"messageLog": {
+			"title": "Absence Message Log",
+			"open": "View message log",
+			"empty": "No absence messages have been recorded for this evaluation.",
+			"loadFailed": "Could not load message log.",
+			"executionTime": "Execution time",
+			"action": "Action",
+			"noContent": "No message content was recorded.",
+			"statuses": {
+				"sent": "Sent",
+				"localPreview": "Local preview",
+				"failed": "Failed",
+				"notSent": "Not sent"
+			},
+			"actions": {
+				"sendMessage": "Send message",
+				"sendMessageAndFreeze": "Send message and freeze",
+				"freezeStudent": "Freeze student",
+				"dismissStudent": "Dismiss student"
+			}
+		},
 		"deleteConfirm": "Delete evaluation for {center} on {date}?",
 		"deleteEvaluation": "Delete Evaluation",
 		"deleted": "Evaluation deleted successfully.",
@@ -1618,7 +1660,7 @@ createServer((page) => createInertiaApp({
 		"./Pages/Admin/Dashboard.vue": () => import("./assets/Dashboard-LeQea_1P.js"),
 		"./Pages/Admin/Evaluations/Create.vue": () => import("./assets/Create-BXp3MK_v.js"),
 		"./Pages/Admin/Evaluations/Edit.vue": () => import("./assets/Edit-C0dFtDx9.js"),
-		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-DGfEPlBf.js"),
+		"./Pages/Admin/Evaluations.vue": () => import("./assets/Evaluations-CkjV0zd8.js"),
 		"./Pages/Admin/Groups/Create.vue": () => import("./assets/Create-WfvsMm-7.js"),
 		"./Pages/Admin/Groups/Edit.vue": () => import("./assets/Edit-CUM6PyBT.js"),
 		"./Pages/Admin/Groups.vue": () => import("./assets/Groups-B21-EJml.js"),

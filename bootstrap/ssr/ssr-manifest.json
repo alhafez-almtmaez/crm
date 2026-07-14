@@ -33,7 +33,7 @@
     "/build/assets/Dashboard-DXxvwJPZ.css"
   ],
   "resources/js/Pages/Admin/Evaluations.vue": [
-    "/build/assets/Evaluations-DGfEPlBf.js"
+    "/build/assets/Evaluations-CkjV0zd8.js"
   ],
   "resources/js/Pages/Admin/Evaluations/Create.vue": [
     "/build/assets/Create-BXp3MK_v.js"
@@ -164,7 +164,10 @@
     "/build/assets/AdminBreadcrumbs-BrxAtoLL.js"
   ],
   "resources/js/components/admin/AbsenceAlertPreviewDialog.vue": [
-    "/build/assets/Evaluations-DGfEPlBf.js"
+    "/build/assets/Evaluations-CkjV0zd8.js"
+  ],
+  "resources/js/components/admin/AbsenceMessageLogDialog.vue": [
+    "/build/assets/Evaluations-CkjV0zd8.js"
   ],
   "resources/js/components/admin/AbsenceRuleFormCard.vue": [
     "/build/assets/AbsenceRuleFormCard-CFhv0p90.js"
