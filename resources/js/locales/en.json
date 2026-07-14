@@ -200,6 +200,9 @@
     "period": "Period",
     "monthlyGridHint": "Student names are on the right, and assignments are distributed across the center working days in the selected period.",
     "student": "Student",
+    "searchStudent": "Search by student name",
+    "searchStudentPlaceholder": "Search by student name...",
+    "noStudentSearchResults": "No students match this name.",
     "studentsCount": "Students",
     "workingDaysCount": "Working Days",
     "date": "Date",
@@ -221,6 +224,7 @@
     "completedOnDate": "Done on {date}",
     "completedBeforeDueDate": "Done early {date}",
     "notCompleted": "Not done",
+    "evaluationAbsence": "Evaluation absence",
     "months": {
       "1": "January",
       "2": "February",

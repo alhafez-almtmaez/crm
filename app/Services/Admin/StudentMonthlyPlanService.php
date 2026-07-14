@@ -3,6 +3,8 @@
 namespace App\Services\Admin;
 
 use App\Models\Center;
+use App\Models\Evaluation;
+use App\Models\EvaluationStudent;
 use App\Models\Group;
 use App\Models\HomeworkStudentPoint;
 use App\Models\MonthlyPlan;
@@ -231,11 +233,13 @@ class StudentMonthlyPlanService
             ->get();
 
         $homeworkCompletionDates = $this->homeworkCompletionDatesByStudent($studentPlanModels);
+        $evaluationAbsences = $this->evaluationAbsencesByStudentDate($studentPlanModels);
 
         $studentPlans = $studentPlanModels
             ->map(fn (StudentMonthlyPlan $plan): array => $this->studentPlanPayload(
                 $plan,
-                $homeworkCompletionDates[(int) $plan->student_id] ?? []
+                $homeworkCompletionDates[(int) $plan->student_id] ?? [],
+                $evaluationAbsences[(int) $plan->student_id] ?? []
             ))
             ->all();
         $generatedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count);
@@ -333,8 +337,11 @@ class StudentMonthlyPlanService
     /**
      * @return array<string, mixed>
      */
-    private function studentPlanPayload(StudentMonthlyPlan $plan, array $completionDatesByPlanPoint = []): array
-    {
+    private function studentPlanPayload(
+        StudentMonthlyPlan $plan,
+        array $completionDatesByPlanPoint = [],
+        array $evaluationAbsencesByDate = []
+    ): array {
         $today = CarbonImmutable::now()->toDateString();
         $planCompletedItemsCount = 0;
         $planEligibleItemsCount = 0;
@@ -472,6 +479,7 @@ class StudentMonthlyPlanService
                     $dayMissedItemsCount,
                     $dayFutureCompletedItemsCount
                 ),
+                'absences' => $date !== null ? ($evaluationAbsencesByDate[$date] ?? []) : [],
                 'items' => $items,
             ];
         })->all();
@@ -595,6 +603,94 @@ class StudentMonthlyPlanService
         }
 
         return $completionDates;
+    }
+
+    /**
+     * @param  Collection<int, StudentMonthlyPlan>  $studentPlans
+     * @return array<int, array<string, array<int, array<string, mixed>>>>
+     */
+    private function evaluationAbsencesByStudentDate(Collection $studentPlans): array
+    {
+        $studentIds = $studentPlans
+            ->pluck('student_id')
+            ->map(static fn ($studentId): int => (int) $studentId)
+            ->unique()
+            ->values()
+            ->all();
+
+        $dates = $studentPlans
+            ->flatMap(static fn (StudentMonthlyPlan $plan) => $plan->days->pluck('date'))
+            ->filter()
+            ->map(static fn ($date): string => CarbonImmutable::parse($date)->toDateString())
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($studentIds === [] || $dates === []) {
+            return [];
+        }
+
+        $rows = EvaluationStudent::query()
+            ->join('evaluations', 'evaluations_users.evaluation_id', '=', 'evaluations.id')
+            ->whereIn('evaluations.date', $dates)
+            ->whereIn('evaluations_users.attendances', [
+                EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
+                EvaluationStudent::ATTENDANCE_ABSENCE,
+            ])
+            ->where(function ($query) use ($studentIds): void {
+                $query
+                    ->whereIn('evaluations_users.student_id', $studentIds)
+                    ->orWhereIn('evaluations_users.user_id', $studentIds);
+            })
+            ->orderBy('evaluations.date')
+            ->orderBy('evaluations_users.id')
+            ->get([
+                'evaluations_users.id as evaluation_student_id',
+                'evaluations_users.student_id',
+                'evaluations_users.user_id',
+                'evaluations_users.attendances',
+                'evaluations_users.note',
+                'evaluations.id as evaluation_id',
+                'evaluations.date as evaluation_date',
+                'evaluations.evaluation_type',
+            ]);
+
+        $absences = [];
+        foreach ($rows as $row) {
+            $studentId = (int) ($row->student_id ?: $row->user_id);
+            $date = CarbonImmutable::parse($row->evaluation_date)->toDateString();
+            $attendance = (int) $row->attendances;
+            $evaluationType = (int) ($row->evaluation_type ?? Evaluation::TYPE_ALHIFZ);
+
+            if ($studentId === 0 || $date === '') {
+                continue;
+            }
+
+            $absences[$studentId][$date][] = [
+                'evaluation_id' => (int) $row->evaluation_id,
+                'evaluation_student_id' => (int) $row->evaluation_student_id,
+                'date' => $date,
+                'attendance' => $attendance,
+                'attendance_key' => $this->absenceAttendanceKey($attendance),
+                'evaluation_type' => $evaluationType,
+                'evaluation_type_key' => $this->evaluationTypeKey($evaluationType),
+                'note' => filled($row->note) ? (string) $row->note : null,
+            ];
+        }
+
+        return $absences;
+    }
+
+    private function absenceAttendanceKey(int $attendance): string
+    {
+        return $attendance === EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE
+            ? 'excusedAbsence'
+            : 'absence';
+    }
+
+    private function evaluationTypeKey(int $evaluationType): string
+    {
+        return $evaluationType === Evaluation::TYPE_TAJWID ? 'tajwid' : 'alhifz';
     }
 
     /**

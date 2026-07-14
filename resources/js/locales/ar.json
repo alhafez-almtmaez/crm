@@ -200,6 +200,9 @@
     "period": "الفترة",
     "monthlyGridHint": "أسماء الطلاب على اليمين، والواجبات موزعة على أيام دوام المركز خلال الفترة المحددة.",
     "student": "الطالب",
+    "searchStudent": "بحث باسم الطالب",
+    "searchStudentPlaceholder": "ابحث باسم الطالب...",
+    "noStudentSearchResults": "لا يوجد طلاب بهذا الاسم.",
     "studentsCount": "عدد الطلاب",
     "workingDaysCount": "أيام الدوام",
     "date": "التاريخ",
@@ -221,6 +224,7 @@
     "completedOnDate": "منجز بتاريخ {date}",
     "completedBeforeDueDate": "منجز مسبقًا {date}",
     "notCompleted": "غير منجز",
+    "evaluationAbsence": "غياب من التقييم",
     "months": {
       "1": "كانون الثاني",
       "2": "شباط",

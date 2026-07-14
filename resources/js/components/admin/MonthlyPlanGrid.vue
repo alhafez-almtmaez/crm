@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps({
@@ -14,6 +14,7 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+const studentSearch = shallowRef('');
 
 const dayOrder = [
     'sunday',
@@ -30,6 +31,18 @@ const planRows = computed(() => props.plans.map((plan) => ({
     dayMap: Object.fromEntries((plan.days ?? []).map((day) => [day.date, day])),
 })));
 
+const normalizedStudentSearch = computed(() => studentSearch.value.trim().toLowerCase());
+
+const filteredPlanRows = computed(() => {
+    if (normalizedStudentSearch.value === '') {
+        return planRows.value;
+    }
+
+    return planRows.value.filter((plan) => String(plan.student_name ?? '')
+        .toLowerCase()
+        .includes(normalizedStudentSearch.value));
+});
+
 const activeDayNames = computed(() => {
     const usedDays = new Set(
         props.dates
@@ -40,13 +53,17 @@ const activeDayNames = computed(() => {
     return dayOrder.filter((day) => usedDays.has(day));
 });
 
-const rowsWithSkippedItems = computed(() => planRows.value.filter((row) => row.skipped_items?.length));
+const rowsWithSkippedItems = computed(() => filteredPlanRows.value.filter((row) => row.skipped_items?.length));
 
+const cellDay = (plan, date) => plan.dayMap?.[date] ?? null;
 const cellItems = (plan, date) => plan.dayMap?.[date]?.items ?? [];
+const cellAbsences = (plan, date) => plan.dayMap?.[date]?.absences ?? [];
 const cellTotalWeight = (plan, date) => plan.dayMap?.[date]?.total_weight ?? 0;
 const cellDailyLimit = (plan, date) => plan.dayMap?.[date]?.daily_weight_limit ?? plan.max_daily_weight ?? 0;
 const dailyLimitForDay = (plan, day) => plan.daily_weight_limits?.[day] ?? plan.max_daily_weight ?? 0;
 const cellCompletion = (plan, date) => plan.dayMap?.[date]?.completion ?? null;
+const hasCellContent = (plan, date) => Boolean(cellDay(plan, date))
+    && (cellItems(plan, date).length > 0 || cellAbsences(plan, date).length > 0);
 const hasEligibleCompletion = (completion) => Number(completion?.eligible_items_count ?? 0) > 0;
 const completionPercentage = (completion) => (
     completion?.percentage === null || completion?.percentage === undefined ? '—' : `${completion.percentage}%`
@@ -64,33 +81,48 @@ const completionBadgeClass = (completion) => ({
 
 const cellToneClass = (plan, date) => {
     const tone = completionTone(cellCompletion(plan, date));
+    const absences = cellAbsences(plan, date);
 
-    return {
+    const completionClass = {
         on_time: 'bg-emerald-50/60',
         different_day: 'bg-orange-50/70',
         missed: 'bg-red-50/60',
         future_completed: 'bg-sky-50/60',
-    }[tone] ?? '';
+    }[tone];
+
+    if (completionClass) {
+        return completionClass;
+    }
+
+    if (absences.some((absence) => absence.attendance_key === 'absence')) {
+        return 'bg-red-50/40';
+    }
+
+    if (absences.length > 0) {
+        return 'bg-amber-50/50';
+    }
+
+    return '';
 };
 
 const itemCompletionClass = (item) => {
     if (item.completion_status === 'on_time') {
-        return 'border-emerald-300 bg-emerald-50 text-emerald-950';
+        return 'border-emerald-300 bg-white text-emerald-950';
     }
 
     if (item.completion_status === 'different_day') {
-        return 'border-orange-300 bg-orange-50 text-orange-950';
+        return 'border-orange-300 bg-white text-orange-950';
     }
 
     if (item.completion_status === 'missed') {
-        return 'border-red-300 bg-red-50 text-red-950';
+        return 'border-red-300 bg-white text-red-950';
     }
 
     if (item.completion_status === 'future_completed') {
-        return 'border-sky-300 bg-sky-50 text-sky-950';
+        return 'border-sky-300 bg-white text-sky-950';
     }
 
-    return 'border-(--border) bg-(--background) text-(--foreground)';
+    return 'border-(--border) bg-white text-(--foreground)';
 };
 
 const itemStatusClass = (item) => ({
@@ -106,6 +138,15 @@ const shouldShowItemStatus = (item) => [
     'missed',
     'future_completed',
 ].includes(item.completion_status);
+
+const absenceClass = (absence) => (
+    absence.attendance_key === 'absence'
+        ? 'border-red-300 bg-red-50 text-red-900'
+        : 'border-amber-300 bg-amber-50 text-amber-900'
+);
+
+const absenceLabel = (absence) => t(`evaluations.${absence.attendance_key}`);
+const absenceEvaluationTypeLabel = (absence) => t(`evaluations.${absence.evaluation_type_key}`);
 
 const shortDate = (date) => {
     const [, month, day] = String(date).split('-').map((segment) => Number(segment));
@@ -140,9 +181,16 @@ const itemStatusLabel = (item) => {
                         {{ t('monthlyPlans.monthlyGridHint') }}
                     </p>
                 </div>
-                <div class="flex flex-wrap gap-2 text-sm">
+                <div class="flex flex-wrap items-center gap-2 text-sm">
+                    <input
+                        v-model="studentSearch"
+                        type="search"
+                        class="h-9 min-w-56 rounded-md border border-(--border) bg-(--background) px-3 text-sm text-(--foreground) outline-none transition focus:border-(--primary) focus:ring-2 focus:ring-(--ring)"
+                        :aria-label="t('monthlyPlans.searchStudent')"
+                        :placeholder="t('monthlyPlans.searchStudentPlaceholder')"
+                    />
                     <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
-                        {{ t('monthlyPlans.studentsCount') }}: {{ plans.length }}
+                        {{ t('monthlyPlans.studentsCount') }}: {{ filteredPlanRows.length }} / {{ plans.length }}
                     </span>
                     <span class="rounded-md border border-(--border) px-3 py-1 font-semibold">
                         {{ t('monthlyPlans.workingDaysCount') }}: {{ dates.length }}
@@ -172,88 +220,106 @@ const itemStatusLabel = (item) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="plan in planRows" :key="plan.id" class="align-top">
-                            <th class="sticky right-0 z-20 min-w-72 border-b border-(--border) bg-(--card) px-3 py-3 text-start shadow-(--shadow-sm)">
-                                <span class="block font-semibold">{{ plan.student_name }}</span>
-                                <span class="mt-1 block text-xs font-medium text-(--muted-foreground)">
-                                    {{ plan.plan_name || t('common.na') }}
-                                </span>
-                                <div v-if="activeDayNames.length" class="mt-1">
-                                    <span class="block text-xs text-(--muted-foreground)">
-                                        {{ t('monthlyPlans.dailyWeightLimits') }}
-                                    </span>
-                                    <div class="mt-1 flex flex-wrap gap-1">
-                                        <span
-                                            v-for="day in activeDayNames"
-                                            :key="`${plan.id}-${day}`"
-                                            class="rounded-sm border border-(--border) bg-(--background) px-1.5 py-0.5 text-[11px] font-semibold text-(--foreground)"
-                                        >
-                                            {{ t(`days.${day}`) }}: {{ dailyLimitForDay(plan, day) }}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                                    <span
-                                        class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold"
-                                        :class="completionBadgeClass(plan.completion)"
-                                    >
-                                        {{ t('monthlyPlans.completionPercentage') }}: {{ completionPercentage(plan.completion) }}
-                                    </span>
-                                    <span class="text-[11px] text-(--muted-foreground)">
-                                        {{ t('monthlyPlans.completedItems') }}: {{ completionProgress(plan.completion) }}
-                                    </span>
-                                </div>
-                            </th>
+                        <tr v-if="filteredPlanRows.length === 0">
                             <td
-                                v-for="date in dates"
-                                :key="`${plan.id}-${date.date}`"
-                                class="min-w-44 border-b border-(--border) px-1.5 py-1.5 align-top"
-                                :class="cellToneClass(plan, date.date)"
+                                :colspan="dates.length + 1"
+                                class="border-b border-(--border) px-4 py-8 text-center text-sm font-medium text-(--muted-foreground)"
                             >
-                                <div v-if="cellItems(plan, date.date).length" class="grid gap-1.5">
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <span
-                                            v-if="hasEligibleCompletion(cellCompletion(plan, date.date))"
-                                            class="rounded-md border px-2 py-1 text-[11px] font-semibold"
-                                            :class="completionBadgeClass(cellCompletion(plan, date.date))"
-                                        >
-                                            {{ t('monthlyPlans.dayCompletion') }}:
-                                            {{ completionPercentage(cellCompletion(plan, date.date)) }}
-                                            ({{ completionProgress(cellCompletion(plan, date.date)) }})
+                                {{ t('monthlyPlans.noStudentSearchResults') }}
+                            </td>
+                        </tr>
+                        <template v-else>
+                            <tr v-for="plan in filteredPlanRows" :key="plan.id" class="align-top">
+                                <th class="sticky right-0 z-20 min-w-72 border-b border-(--border) bg-(--card) px-3 py-3 text-start shadow-(--shadow-sm)">
+                                    <span class="block font-semibold">{{ plan.student_name }}</span>
+                                    <span class="mt-1 block text-xs font-medium text-(--muted-foreground)">
+                                        {{ plan.plan_name || t('common.na') }}
+                                    </span>
+                                    <div v-if="activeDayNames.length" class="mt-1">
+                                        <span class="block text-xs text-(--muted-foreground)">
+                                            {{ t('monthlyPlans.dailyWeightLimits') }}
                                         </span>
-                                        <span class="rounded-md border border-(--border) bg-(--card) px-2 py-1 text-[11px] font-semibold text-(--muted-foreground)">
-                                            {{ t('monthlyPlans.totalWeight') }}: {{ cellTotalWeight(plan, date.date) }}
-                                            / {{ t('monthlyPlans.dailyWeightLimit') }}: {{ cellDailyLimit(plan, date.date) }}
-                                        </span>
-                                    </div>
-                                    <div
-                                        v-for="item in cellItems(plan, date.date)"
-                                        :key="item.id"
-                                        class="rounded-md border px-2 py-1.5"
-                                        :class="itemCompletionClass(item)"
-                                    >
-                                        <div class="flex items-start justify-between gap-2">
-                                            <div class="line-clamp-2 text-xs font-semibold leading-5">{{ item.name }}</div>
-                                            <span class="shrink-0 rounded-sm bg-(--muted) px-1.5 py-0.5 text-[11px] font-semibold">
-                                                {{ item.weight }}
+                                        <div class="mt-1 flex flex-wrap gap-1">
+                                            <span
+                                                v-for="day in activeDayNames"
+                                                :key="`${plan.id}-${day}`"
+                                                class="rounded-sm border border-(--border) bg-(--background) px-1.5 py-0.5 text-[11px] font-semibold text-(--foreground)"
+                                            >
+                                                {{ t(`days.${day}`) }}: {{ dailyLimitForDay(plan, day) }}
                                             </span>
                                         </div>
-                                        <div class="mt-1 flex flex-wrap items-center gap-1">
-                                            <span v-if="item.is_standalone" class="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                                        <span
+                                            class="inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold"
+                                            :class="completionBadgeClass(plan.completion)"
+                                        >
+                                            {{ t('monthlyPlans.completionPercentage') }}: {{ completionPercentage(plan.completion) }}
+                                        </span>
+                                        <span class="text-[11px] text-(--muted-foreground)">
+                                            {{ t('monthlyPlans.completedItems') }}: {{ completionProgress(plan.completion) }}
+                                        </span>
+                                    </div>
+                                </th>
+                                <td
+                                    v-for="date in dates"
+                                    :key="`${plan.id}-${date.date}`"
+                                    class="min-w-44 border-b border-(--border) px-1.5 py-1.5 align-top"
+                                    :class="cellToneClass(plan, date.date)"
+                                >
+                                    <div v-if="hasCellContent(plan, date.date)" class="grid gap-1">
+                                        <div v-if="cellAbsences(plan, date.date).length" class="grid gap-1">
+                                            <div
+                                                v-for="absence in cellAbsences(plan, date.date)"
+                                                :key="absence.evaluation_student_id"
+                                                class="flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] font-semibold leading-4"
+                                                :class="absenceClass(absence)"
+                                            >
+                                                <span class="truncate">{{ t('monthlyPlans.evaluationAbsence') }}: {{ absenceLabel(absence) }}</span>
+                                                <span class="shrink-0 opacity-80">/ {{ absenceEvaluationTypeLabel(absence) }}</span>
+                                                <span v-if="absence.note" class="min-w-0 truncate opacity-80">/ {{ absence.note }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-1">
+                                            <span
+                                                v-if="hasEligibleCompletion(cellCompletion(plan, date.date))"
+                                                class="rounded-sm border px-1.5 py-0.5 text-[11px] font-semibold leading-4"
+                                                :class="completionBadgeClass(cellCompletion(plan, date.date))"
+                                            >
+                                                {{ t('monthlyPlans.dayCompletion') }}:
+                                                {{ completionPercentage(cellCompletion(plan, date.date)) }}
+                                                ({{ completionProgress(cellCompletion(plan, date.date)) }})
+                                            </span>
+                                            <span class="rounded-sm border border-(--border) bg-(--card) px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-(--muted-foreground)">
+                                                {{ t('monthlyPlans.totalWeight') }}: {{ cellTotalWeight(plan, date.date) }}
+                                                / {{ t('monthlyPlans.dailyWeightLimit') }}: {{ cellDailyLimit(plan, date.date) }}
+                                            </span>
+                                        </div>
+                                        <div
+                                            v-for="item in cellItems(plan, date.date)"
+                                            :key="item.id"
+                                            class="flex min-w-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[11px] leading-4"
+                                            :class="itemCompletionClass(item)"
+                                        >
+                                            <span class="min-w-0 flex-1 truncate font-semibold">{{ item.name }}</span>
+                                            <span class="shrink-0 rounded-sm bg-(--muted) px-1 py-0.5 text-[10px] font-semibold leading-3">
+                                                {{ item.weight }}
+                                            </span>
+                                            <span v-if="item.is_standalone" class="shrink-0 rounded-sm bg-amber-100 px-1 py-0.5 text-[10px] font-semibold leading-3 text-amber-900">
                                                 {{ t('monthlyPlans.standalone') }}
                                             </span>
                                             <span
                                                 v-if="shouldShowItemStatus(item)"
-                                                class="rounded-sm px-1.5 py-0.5 text-[11px] font-semibold"
+                                                class="shrink-0 whitespace-nowrap rounded-sm px-1 py-0.5 text-[10px] font-semibold leading-3"
                                                 :class="itemStatusClass(item)"
                                             >
                                                 {{ itemStatusLabel(item) }}
                                             </span>
                                         </div>
                                     </div>
-                                </div>
-                            </td>
-                        </tr>
+                                </td>
+                            </tr>
+                        </template>
                     </tbody>
                 </table>
             </div>
