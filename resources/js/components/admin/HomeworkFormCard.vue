@@ -6,7 +6,7 @@ import DatePicker from 'primevue/datepicker';
 import Dialog from 'primevue/dialog';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAppToast } from '../../composables/useAppToast';
 import FormFieldLabel from '../form/FormFieldLabel.vue';
@@ -45,6 +45,7 @@ const historyVisible = ref(false);
 const historyLoading = ref(false);
 const historyRows = ref([]);
 const historyStudent = ref(null);
+const studentSearch = shallowRef('');
 const dayOptions = [
     { value: 'sunday', dayIndex: 0, labelKey: 'days.sunday' },
     { value: 'monday', dayIndex: 1, labelKey: 'days.monday' },
@@ -167,6 +168,19 @@ const totalDonePoints = computed(() => props.form.items.reduce((total, item) => 
 const totalManualAdjustments = computed(() => props.form.items.reduce((total, item) => (
     total + Number(item.points_adjustment ?? 0)
 ), 0));
+
+const homeworkItemRows = computed(() => props.form.items.map((item, itemIndex) => ({ item, itemIndex })));
+const normalizedStudentSearch = computed(() => studentSearch.value.trim().toLowerCase());
+
+const filteredHomeworkItems = computed(() => {
+    if (normalizedStudentSearch.value === '') {
+        return homeworkItemRows.value;
+    }
+
+    return homeworkItemRows.value.filter(({ item }) => String(item.full_name ?? '')
+        .toLowerCase()
+        .includes(normalizedStudentSearch.value));
+});
 
 const expectedBalanceAfterAdjustment = (item) => (
     Number(item.points_balance ?? 0)
@@ -359,11 +373,23 @@ const pointCardClass = (point) => {
                         <h3 class="text-lg font-semibold">{{ t('homeworks.studentsList') }}</h3>
                         <p class="text-sm text-(--muted-foreground)">{{ t('homeworks.studentsHint') }}</p>
                     </div>
-                    <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
-                        {{ t('homeworks.selectedPointsTotal', { points: totalDonePoints }) }}
-                    </div>
-                    <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
-                        {{ t('homeworks.manualAdjustmentsTotal', { points: totalManualAdjustments }) }}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input
+                            v-model="studentSearch"
+                            type="search"
+                            class="h-10 min-w-56 rounded-md border border-(--border) bg-(--background) px-3 text-sm text-(--foreground) outline-none transition-colors focus:border-(--primary)"
+                            :aria-label="t('homeworks.searchStudent')"
+                            :placeholder="t('homeworks.searchStudentPlaceholder')"
+                        >
+                        <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
+                            {{ t('homeworks.studentsCount') }}: {{ filteredHomeworkItems.length }} / {{ form.items.length }}
+                        </div>
+                        <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
+                            {{ t('homeworks.selectedPointsTotal', { points: totalDonePoints }) }}
+                        </div>
+                        <div class="rounded-md border border-(--border) bg-(--background) px-3 py-2 text-sm font-medium">
+                            {{ t('homeworks.manualAdjustmentsTotal', { points: totalManualAdjustments }) }}
+                        </div>
                     </div>
                 </div>
 
@@ -376,20 +402,24 @@ const pointCardClass = (point) => {
                         {{ form.errors.items }}
                     </div>
 
-                    <div class="divide-y divide-(--border)">
+                    <div v-if="filteredHomeworkItems.length === 0" class="px-4 py-6 text-sm text-(--muted-foreground)">
+                        {{ t('homeworks.noStudentSearchResults') }}
+                    </div>
+
+                    <div v-else class="divide-y divide-(--border)">
                         <section
-                            v-for="(item, itemIndex) in form.items"
+                            v-for="({ item, itemIndex }, displayIndex) in filteredHomeworkItems"
                             :key="item.student_id"
                             class="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(15rem,18rem)_minmax(11rem,13rem)_1fr]"
                         >
                         <div class="min-w-0">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <p class="truncate font-semibold" :class="studentNameToneClass(itemIndex)">{{ item.full_name }}</p>
+                                    <p class="truncate font-semibold" :class="studentNameToneClass(displayIndex)">{{ item.full_name }}</p>
                                     <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-(--muted-foreground)">
                                         <span
                                             class="inline-flex max-w-full items-center rounded-md border px-2 py-0.5 font-medium"
-                                            :class="planToneClass(itemIndex)"
+                                            :class="planToneClass(displayIndex)"
                                         >
                                             {{ item.plan_name || t('common.na') }}
                                         </span>
