@@ -75,15 +75,15 @@ class EvaluationService
             ->paginate($perPage)
             ->withQueryString();
 
-        $previewCounts = $this->localPreviewCountsForEvaluations(
-            $rows->getCollection()
-                ->pluck('id')
-                ->map(static fn ($id): int => (int) $id)
-                ->all(),
-        );
+        $evaluationIds = $rows->getCollection()
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+        $previewCounts = $this->localPreviewCountsForEvaluations($evaluationIds);
+        $messageLogStatuses = $this->messageLogStatusesForEvaluations($evaluationIds);
 
         $rows->setCollection(
-            $rows->getCollection()->map(function ($row) use ($previewCounts) {
+            $rows->getCollection()->map(function ($row) use ($messageLogStatuses, $previewCounts) {
                 $row->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->created_at));
                 $row->setAttribute(
                     'date_formatted',
@@ -94,6 +94,7 @@ class EvaluationService
                     filled($row->ulid) ? route('evaluations.report', ['publicId' => $row->ulid]) : null,
                 );
                 $row->setAttribute('local_absence_preview_count', $previewCounts[(int) $row->id] ?? 0);
+                $row->setAttribute('message_log_status', $messageLogStatuses[(int) $row->id] ?? null);
 
                 return $row;
             }),
@@ -755,6 +756,43 @@ class EvaluationService
             ->groupBy('evaluation_id')
             ->map(static fn ($logs): int => $logs->count())
             ->mapWithKeys(static fn (int $count, $evaluationId): array => [(int) $evaluationId => $count])
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $evaluationIds
+     * @return array<int, string>
+     */
+    private function messageLogStatusesForEvaluations(array $evaluationIds): array
+    {
+        if ($evaluationIds === []) {
+            return [];
+        }
+
+        return $this->dataScope
+            ->applyAbsenceExecutionLogAccess(AbsenceRuleExecutionLog::query())
+            ->whereIn('evaluation_id', $evaluationIds)
+            ->whereNotNull('message_content')
+            ->get(['evaluation_id', 'was_message_sent', 'meta'])
+            ->groupBy('evaluation_id')
+            ->map(function ($logs): ?string {
+                $hasFailure = $logs->contains(function (AbsenceRuleExecutionLog $log): bool {
+                    $error = Arr::get($log->meta ?? [], 'error');
+
+                    return ! $log->was_message_sent && is_string($error) && trim($error) !== '';
+                });
+
+                if ($hasFailure) {
+                    return 'failed';
+                }
+
+                $allSent = $logs->isNotEmpty()
+                    && $logs->every(fn (AbsenceRuleExecutionLog $log): bool => (bool) $log->was_message_sent);
+
+                return $allSent ? 'sent' : null;
+            })
+            ->filter()
+            ->mapWithKeys(static fn (string $status, $evaluationId): array => [(int) $evaluationId => $status])
             ->all();
     }
 

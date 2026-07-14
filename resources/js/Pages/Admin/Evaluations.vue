@@ -23,6 +23,7 @@ const previewMessages = ref([]);
 const messageLogVisible = ref(false);
 const messageLogLoading = ref(false);
 const messageLogs = ref([]);
+const messageLogEvaluation = ref(null);
 const {
     loading,
     rows: sourceRows,
@@ -77,6 +78,11 @@ const columns = computed(() => [
     { field: 'created_at_formatted', header: t('evaluations.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
 
+const messageLogSeverity = (row) => ({
+    failed: 'danger',
+    sent: 'success',
+}[row.message_log_status] ?? 'secondary');
+
 const rowActions = computed(() => [
     {
         key: 'open-report',
@@ -89,7 +95,7 @@ const rowActions = computed(() => [
     {
         key: 'message-logs',
         icon: 'pi pi-envelope',
-        severity: 'secondary',
+        severity: messageLogSeverity,
         outlined: true,
         titleKey: 'evaluations.messageLog.open',
     },
@@ -180,6 +186,7 @@ const fetchMessageLogs = async (row) => {
     messageLogVisible.value = true;
     messageLogLoading.value = true;
     messageLogs.value = [];
+    messageLogEvaluation.value = row;
 
     try {
         const { data } = await axios.get(`/admin/evaluations/${row.id}/message-logs`);
@@ -300,6 +307,7 @@ onMounted(() => {
             />
             <AbsenceMessageLogDialog
                 v-model="messageLogVisible"
+                :evaluation="messageLogEvaluation"
                 :logs="messageLogs"
                 :loading="messageLogLoading"
             />

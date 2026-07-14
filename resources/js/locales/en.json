@@ -399,6 +399,7 @@
       "open": "View message log",
       "empty": "No absence messages have been recorded for this evaluation.",
       "loadFailed": "Could not load message log.",
+      "evaluationDetails": "Evaluation details",
       "executionTime": "Execution time",
       "action": "Action",
       "noContent": "No message content was recorded.",
