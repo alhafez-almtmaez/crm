@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\Center;
 use App\Models\Group;
+use App\Models\HomeworkStudentPoint;
 use App\Models\MonthlyPlan;
 use App\Models\StudentMonthlyPlan;
 use App\Services\System\DateTimeFormatterService;
@@ -11,6 +12,7 @@ use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 class StudentMonthlyPlanService
 {
@@ -228,8 +230,13 @@ class StudentMonthlyPlanService
             ->select('student_monthly_plans.*')
             ->get();
 
+        $homeworkCompletionDates = $this->homeworkCompletionDatesByStudent($studentPlanModels);
+
         $studentPlans = $studentPlanModels
-            ->map(fn (StudentMonthlyPlan $plan): array => $this->studentPlanPayload($plan))
+            ->map(fn (StudentMonthlyPlan $plan): array => $this->studentPlanPayload(
+                $plan,
+                $homeworkCompletionDates[(int) $plan->student_id] ?? []
+            ))
             ->all();
         $generatedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count);
         $skippedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->skipped_items_count);
@@ -326,8 +333,149 @@ class StudentMonthlyPlanService
     /**
      * @return array<string, mixed>
      */
-    private function studentPlanPayload(StudentMonthlyPlan $plan): array
+    private function studentPlanPayload(StudentMonthlyPlan $plan, array $completionDatesByPlanPoint = []): array
     {
+        $today = CarbonImmutable::now()->toDateString();
+        $planCompletedItemsCount = 0;
+        $planEligibleItemsCount = 0;
+        $planCompletedWeight = 0.0;
+        $planEligibleWeight = 0.0;
+        $planSameDayItemsCount = 0;
+        $planDifferentDayItemsCount = 0;
+        $planMissedItemsCount = 0;
+        $planFutureCompletedItemsCount = 0;
+
+        $days = $plan->days->map(function ($day) use (
+            $plan,
+            $completionDatesByPlanPoint,
+            $today,
+            &$planCompletedItemsCount,
+            &$planEligibleItemsCount,
+            &$planCompletedWeight,
+            &$planEligibleWeight,
+            &$planSameDayItemsCount,
+            &$planDifferentDayItemsCount,
+            &$planMissedItemsCount,
+            &$planFutureCompletedItemsCount
+        ): array {
+            $date = $day->date?->format('Y-m-d');
+            $isDueDate = $date !== null && $date <= $today;
+            $dayCompletedItemsCount = 0;
+            $dayEligibleItemsCount = 0;
+            $dayCompletedWeight = 0.0;
+            $dayEligibleWeight = 0.0;
+            $daySameDayItemsCount = 0;
+            $dayDifferentDayItemsCount = 0;
+            $dayMissedItemsCount = 0;
+            $dayFutureCompletedItemsCount = 0;
+
+            $items = $day->items->map(function ($item) use (
+                $completionDatesByPlanPoint,
+                $date,
+                $isDueDate,
+                &$dayCompletedItemsCount,
+                &$dayEligibleItemsCount,
+                &$dayCompletedWeight,
+                &$dayEligibleWeight,
+                &$daySameDayItemsCount,
+                &$dayDifferentDayItemsCount,
+                &$dayMissedItemsCount,
+                &$dayFutureCompletedItemsCount,
+                &$planCompletedItemsCount,
+                &$planEligibleItemsCount,
+                &$planCompletedWeight,
+                &$planEligibleWeight,
+                &$planSameDayItemsCount,
+                &$planDifferentDayItemsCount,
+                &$planMissedItemsCount,
+                &$planFutureCompletedItemsCount
+            ): array {
+                $planPointId = $item->plan_point_id ? (int) $item->plan_point_id : null;
+                $weight = (float) $item->weight;
+                $isTrackable = $planPointId !== null;
+                $isDue = $isDueDate && $isTrackable;
+                $completedOn = $planPointId ? ($completionDatesByPlanPoint[$planPointId] ?? null) : null;
+                $isCompleted = $completedOn !== null;
+                $isCompletedOnPlanDate = $isDue && $isCompleted && $date !== null && $completedOn === $date;
+                $isCompletedOnDifferentDate = $isDue && $isCompleted && ! $isCompletedOnPlanDate;
+                $isFutureCompleted = ! $isDueDate && $isTrackable && $isCompleted;
+
+                if ($isDue) {
+                    $dayEligibleItemsCount++;
+                    $planEligibleItemsCount++;
+                    $dayEligibleWeight += $weight;
+                    $planEligibleWeight += $weight;
+
+                    if ($isCompleted) {
+                        $dayCompletedItemsCount++;
+                        $planCompletedItemsCount++;
+                        $dayCompletedWeight += $weight;
+                        $planCompletedWeight += $weight;
+                    }
+
+                    if ($isCompletedOnPlanDate) {
+                        $daySameDayItemsCount++;
+                        $planSameDayItemsCount++;
+                    } elseif ($isCompletedOnDifferentDate) {
+                        $dayDifferentDayItemsCount++;
+                        $planDifferentDayItemsCount++;
+                    } else {
+                        $dayMissedItemsCount++;
+                        $planMissedItemsCount++;
+                    }
+                } elseif ($isFutureCompleted) {
+                    $dayFutureCompletedItemsCount++;
+                    $planFutureCompletedItemsCount++;
+                }
+
+                $completionStatus = match (true) {
+                    ! $isTrackable => 'not_trackable',
+                    $isFutureCompleted => 'future_completed',
+                    ! $isDueDate => 'future',
+                    $isCompletedOnPlanDate => 'on_time',
+                    $isCompletedOnDifferentDate => 'different_day',
+                    default => 'missed',
+                };
+
+                return [
+                    'id' => (int) $item->id,
+                    'plan_point_id' => $planPointId,
+                    'name' => (string) ($item->planPoint?->name ?? ''),
+                    'weight' => $weight,
+                    'is_standalone' => (bool) $item->is_standalone,
+                    'status' => (string) $item->status,
+                    'is_due' => $isDue,
+                    'completed_on' => $completedOn,
+                    'is_completed' => $isCompleted,
+                    'is_completed_on_time' => $isCompletedOnPlanDate,
+                    'completion_status' => $completionStatus,
+                ];
+            })->all();
+
+            return [
+                'id' => (int) $day->id,
+                'date' => $date,
+                'day_number' => (int) $day->day_number,
+                'total_weight' => (float) $day->total_weight,
+                'daily_weight_limit' => $day->daily_weight_limit !== null
+                    ? (int) $day->daily_weight_limit
+                    : ($day->date !== null
+                        ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
+                        : (int) $plan->max_daily_weight),
+                'completion' => $this->completionPayload(
+                    $dayCompletedItemsCount,
+                    $dayEligibleItemsCount,
+                    $dayCompletedWeight,
+                    $dayEligibleWeight,
+                    $daySameDayItemsCount,
+                    $dayDifferentDayItemsCount,
+                    $dayMissedItemsCount,
+                    $dayFutureCompletedItemsCount
+                ),
+                'items' => $items,
+            ];
+        })->all();
+
         return [
             'id' => (int) $plan->id,
             'student_id' => (int) $plan->student_id,
@@ -344,6 +492,16 @@ class StudentMonthlyPlanService
             'generated_items_count' => (int) $plan->generated_items_count,
             'skipped_items_count' => (int) $plan->skipped_items_count,
             'status' => (string) $plan->status,
+            'completion' => $this->completionPayload(
+                $planCompletedItemsCount,
+                $planEligibleItemsCount,
+                $planCompletedWeight,
+                $planEligibleWeight,
+                $planSameDayItemsCount,
+                $planDifferentDayItemsCount,
+                $planMissedItemsCount,
+                $planFutureCompletedItemsCount
+            ),
             'skipped_items' => $plan->items->map(static fn ($item): array => [
                 'id' => (int) $item->id,
                 'plan_point_id' => (int) $item->plan_point_id,
@@ -352,25 +510,7 @@ class StudentMonthlyPlanService
                 'is_standalone' => (bool) $item->is_standalone,
                 'status' => (string) $item->status,
             ])->all(),
-            'days' => $plan->days->map(fn ($day): array => [
-                'id' => (int) $day->id,
-                'date' => $day->date?->format('Y-m-d'),
-                'day_number' => (int) $day->day_number,
-                'total_weight' => (float) $day->total_weight,
-                'daily_weight_limit' => $day->daily_weight_limit !== null
-                    ? (int) $day->daily_weight_limit
-                    : ($day->date !== null
-                        ? DailyWeightLimits::limitForDate($plan->daily_weight_limits, $day->date, $plan->max_daily_weight)
-                        : (int) $plan->max_daily_weight),
-                'items' => $day->items->map(static fn ($item): array => [
-                    'id' => (int) $item->id,
-                    'plan_point_id' => (int) $item->plan_point_id,
-                    'name' => (string) ($item->planPoint?->name ?? ''),
-                    'weight' => (float) $item->weight,
-                    'is_standalone' => (bool) $item->is_standalone,
-                    'status' => (string) $item->status,
-                ])->all(),
-            ])->all(),
+            'days' => $days,
         ];
     }
 
@@ -400,6 +540,108 @@ class StudentMonthlyPlanService
                     'name' => (string) ($item->planPoint?->name ?? ''),
                 ])->all(),
             ])->all(),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, StudentMonthlyPlan>  $studentPlans
+     * @return array<int, array<int, string>>
+     */
+    private function homeworkCompletionDatesByStudent(Collection $studentPlans): array
+    {
+        $studentIds = $studentPlans
+            ->pluck('student_id')
+            ->map(static fn ($studentId): int => (int) $studentId)
+            ->unique()
+            ->values()
+            ->all();
+
+        $planPointIds = $studentPlans
+            ->flatMap(static fn (StudentMonthlyPlan $plan) => $plan->days
+                ->flatMap(static fn ($day) => $day->items->pluck('plan_point_id')))
+            ->filter()
+            ->map(static fn ($planPointId): int => (int) $planPointId)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($studentIds === [] || $planPointIds === []) {
+            return [];
+        }
+
+        $rows = HomeworkStudentPoint::query()
+            ->join('homeworks', 'homework_student_points.homework_id', '=', 'homeworks.id')
+            ->whereIn('homework_student_points.student_id', $studentIds)
+            ->whereIn('homework_student_points.plan_point_id', $planPointIds)
+            ->where('homework_student_points.is_done', true)
+            ->select([
+                'homework_student_points.student_id',
+                'homework_student_points.plan_point_id',
+            ])
+            ->selectRaw('MIN(homeworks.date) as completed_on')
+            ->groupBy('homework_student_points.student_id', 'homework_student_points.plan_point_id')
+            ->get();
+
+        $completionDates = [];
+        foreach ($rows as $row) {
+            $studentId = (int) $row->student_id;
+            $planPointId = (int) $row->plan_point_id;
+
+            if ($studentId === 0 || $planPointId === 0 || $row->completed_on === null) {
+                continue;
+            }
+
+            $completionDates[$studentId][$planPointId] = CarbonImmutable::parse($row->completed_on)->toDateString();
+        }
+
+        return $completionDates;
+    }
+
+    /**
+     * @return array{
+     *     completed_items_count: int,
+     *     eligible_items_count: int,
+     *     same_day_items_count: int,
+     *     different_day_items_count: int,
+     *     missed_items_count: int,
+     *     future_completed_items_count: int,
+     *     completed_weight: float,
+     *     eligible_weight: float,
+     *     percentage: int|null,
+     *     tone: string
+     * }
+     */
+    private function completionPayload(
+        int $completedItemsCount,
+        int $eligibleItemsCount,
+        float $completedWeight,
+        float $eligibleWeight,
+        int $sameDayItemsCount = 0,
+        int $differentDayItemsCount = 0,
+        int $missedItemsCount = 0,
+        int $futureCompletedItemsCount = 0
+    ): array {
+        $tone = match (true) {
+            $eligibleItemsCount > 0 && $missedItemsCount > 0 => 'missed',
+            $eligibleItemsCount > 0 && $differentDayItemsCount > 0 => 'different_day',
+            $eligibleItemsCount > 0 && $completedItemsCount >= $eligibleItemsCount => 'on_time',
+            $futureCompletedItemsCount > 0 => 'future_completed',
+            default => 'neutral',
+        };
+
+        return [
+            'completed_items_count' => $completedItemsCount,
+            'eligible_items_count' => $eligibleItemsCount,
+            'same_day_items_count' => $sameDayItemsCount,
+            'different_day_items_count' => $differentDayItemsCount,
+            'missed_items_count' => $missedItemsCount,
+            'future_completed_items_count' => $futureCompletedItemsCount,
+            'completed_weight' => round($completedWeight, 2),
+            'eligible_weight' => round($eligibleWeight, 2),
+            'percentage' => $eligibleWeight > 0
+                ? (int) round(($completedWeight / $eligibleWeight) * 100)
+                : null,
+            'tone' => $tone,
         ];
     }
 

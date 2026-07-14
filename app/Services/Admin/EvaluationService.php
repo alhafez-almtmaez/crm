@@ -38,6 +38,10 @@ class EvaluationService
         $perPage = (int) ($filters['per_page'] ?? 10);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $centerId = isset($filters['center_id']) ? (int) $filters['center_id'] : null;
+        $dateFrom = trim((string) ($filters['date_from'] ?? ''));
+        $dateTo = trim((string) ($filters['date_to'] ?? ''));
+        $alertStatus = (string) ($filters['alert_status'] ?? '');
         $sortMap = [
             'id' => 'evaluations.id',
             'date' => 'evaluations.date',
@@ -72,6 +76,21 @@ class EvaluationService
                         ->orWhere('centers.name', 'like', "%{$search}%")
                         ->orWhere('admins.name', 'like', "%{$search}%");
                 });
+            })
+            ->when($centerId !== null && $centerId > 0, function ($query) use ($centerId): void {
+                $query->where('evaluations.center_id', $centerId);
+            })
+            ->when($dateFrom !== '', function ($query) use ($dateFrom): void {
+                $query->whereDate('evaluations.date', '>=', $dateFrom);
+            })
+            ->when($dateTo !== '', function ($query) use ($dateTo): void {
+                $query->whereDate('evaluations.date', '<=', $dateTo);
+            })
+            ->when($alertStatus === 'sent', function ($query): void {
+                $query->where('evaluations.is_send_absence_alerts', true);
+            })
+            ->when($alertStatus === 'pending', function ($query): void {
+                $query->where('evaluations.is_send_absence_alerts', false);
             })
             ->orderBy($sortColumn, $sortDir)
             ->paginate($perPage)

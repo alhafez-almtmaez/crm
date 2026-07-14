@@ -78,6 +78,10 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    showFilters: {
+        type: Boolean,
+        default: true,
+    },
 });
 
 const emit = defineEmits(['create', 'delete', 'edit', 'history', 'rowAction', 'pageChange', 'sortChange', 'update:search']);
@@ -162,6 +166,7 @@ const handleSort = (event) => {
                     />
                     <label for="table-search">{{ resolvedSearchLabel() }}</label>
                 </FloatLabel>
+                <slot name="toolbar-actions" />
                 <Button
                     v-if="showCreate"
                     :label="resolvedCreateLabel()"
@@ -173,7 +178,7 @@ const handleSort = (event) => {
             </div>
         </div>
 
-        <div v-if="$slots.filters" class="mb-4 border-t border-(--border) pt-4">
+        <div v-if="$slots.filters && showFilters" class="mb-4 border-t border-(--border) pt-4">
             <slot name="filters" />
         </div>
 

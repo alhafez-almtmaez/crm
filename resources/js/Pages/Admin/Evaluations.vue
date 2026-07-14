@@ -1,7 +1,11 @@
 <script setup>
 import axios from 'axios';
 import { Head, router } from '@inertiajs/vue3';
+import Button from 'primevue/button';
 import ConfirmPopup from 'primevue/confirmpopup';
+import DatePicker from 'primevue/datepicker';
+import FloatLabel from 'primevue/floatlabel';
+import Select from 'primevue/select';
 import { useConfirm } from 'primevue/useconfirm';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -17,6 +21,12 @@ import { useServerTable } from '../../composables/useServerTable';
 const confirm = useConfirm();
 const appToast = useAppToast();
 const { t } = useI18n();
+const props = defineProps({
+    centers: {
+        type: Array,
+        default: () => [],
+    },
+});
 const previewVisible = ref(false);
 const previewLoading = ref(false);
 const previewMessages = ref([]);
@@ -25,6 +35,22 @@ const messageLogLoading = ref(false);
 const messageLogResendingId = ref(null);
 const messageLogs = ref([]);
 const messageLogEvaluation = ref(null);
+const filtersVisible = ref(false);
+const defaultFilters = () => ({
+    center_id: null,
+    date_from: '',
+    date_to: '',
+    alert_status: null,
+});
+const filters = ref(defaultFilters());
+const appliedFilters = ref(defaultFilters());
+const filterParams = () => Object.entries(appliedFilters.value).reduce((params, [key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+        params[key] = value;
+    }
+
+    return params;
+}, {});
 const {
     loading,
     rows: sourceRows,
@@ -41,7 +67,58 @@ const {
     endpoint: '/admin/evaluations/records',
     defaultSortBy: 'id',
     defaultSortDir: 'desc',
+    extraParams: filterParams,
 });
+
+const parseYmdDate = (value) => {
+    if (!value || typeof value !== 'string') {
+        return null;
+    }
+
+    const parts = value.split('-').map((segment) => Number(segment));
+    if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+        return null;
+    }
+
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+};
+
+const formatYmdDate = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+        return '';
+    }
+
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+
+const filterDateFromValue = computed({
+    get: () => parseYmdDate(filters.value.date_from),
+    set: (value) => {
+        filters.value.date_from = formatYmdDate(value);
+    },
+});
+
+const filterDateToValue = computed({
+    get: () => parseYmdDate(filters.value.date_to),
+    set: (value) => {
+        filters.value.date_to = formatYmdDate(value);
+    },
+});
+
+const alertStatusFilterOptions = computed(() => [
+    { label: t('evaluations.alertsSent'), value: 'sent' },
+    { label: t('evaluations.alertsPending'), value: 'pending' },
+]);
+const draftFilterCount = computed(() => Object.values(filters.value).filter((value) => value !== null && value !== undefined && value !== '').length);
+const activeFilterCount = computed(() => Object.values(appliedFilters.value).filter((value) => value !== null && value !== undefined && value !== '').length);
+const canClearFilters = computed(() => draftFilterCount.value > 0 || activeFilterCount.value > 0);
+const filterButtonLabel = computed(() => (activeFilterCount.value > 0
+    ? t('evaluations.filters.toggleWithCount', { count: activeFilterCount.value })
+    : t('evaluations.filters.toggle')));
 
 const rows = computed(() => (sourceRows.value ?? []).map((row) => {
     const hasLocalPreview = Number(row.local_absence_preview_count ?? 0) > 0;
@@ -237,6 +314,23 @@ const resendMessageLog = async (log) => {
     }
 };
 
+const toggleFilters = () => {
+    filtersVisible.value = !filtersVisible.value;
+};
+
+const applyFilters = async () => {
+    appliedFilters.value = { ...filters.value };
+    currentPage.value = 1;
+    await fetchRows();
+};
+
+const clearFilters = async () => {
+    filters.value = defaultFilters();
+    appliedFilters.value = defaultFilters();
+    currentPage.value = 1;
+    await fetchRows();
+};
+
 const askDelete = ({ data: row, event }) => {
     const target = event?.currentTarget ?? event?.target ?? document.body;
 
@@ -328,6 +422,7 @@ onMounted(() => {
                 :search-label="t('evaluations.searchEvaluations')"
                 :table-title="t('evaluations.tableTitle')"
                 :row-actions="rowActions"
+                :show-filters="filtersVisible"
                 @update:search="search = $event"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
@@ -335,7 +430,98 @@ onMounted(() => {
                 @edit="openEdit"
                 @delete="askDelete"
                 @row-action="handleRowAction"
-            />
+            >
+                <template #toolbar-actions>
+                    <Button
+                        type="button"
+                        icon="pi pi-filter"
+                        severity="secondary"
+                        outlined
+                        :label="filterButtonLabel"
+                        class="h-11 px-4 text-base font-semibold"
+                        :aria-expanded="filtersVisible"
+                        @click="toggleFilters"
+                    />
+                </template>
+
+                <template #filters>
+                    <form class="flex flex-col gap-3 xl:flex-row xl:items-start" @submit.prevent="applyFilters">
+                        <div class="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="evaluations-filter-center"
+                                    v-model="filters.center_id"
+                                    :options="props.centers"
+                                    option-label="name"
+                                    option-value="id"
+                                    filter
+                                    show-clear
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="evaluations-filter-center">{{ t('evaluations.filters.center') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <DatePicker
+                                    input-id="evaluations-filter-date-from"
+                                    v-model="filterDateFromValue"
+                                    show-icon
+                                    icon-display="input"
+                                    date-format="yy-mm-dd"
+                                    :manual-input="false"
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="evaluations-filter-date-from">{{ t('evaluations.filters.dateFrom') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <DatePicker
+                                    input-id="evaluations-filter-date-to"
+                                    v-model="filterDateToValue"
+                                    show-icon
+                                    icon-display="input"
+                                    date-format="yy-mm-dd"
+                                    :manual-input="false"
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="evaluations-filter-date-to">{{ t('evaluations.filters.dateTo') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="evaluations-filter-alert-status"
+                                    v-model="filters.alert_status"
+                                    :options="alertStatusFilterOptions"
+                                    option-label="label"
+                                    option-value="value"
+                                    show-clear
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="evaluations-filter-alert-status">{{ t('evaluations.filters.alertStatus') }}</label>
+                            </FloatLabel>
+                        </div>
+
+                        <div class="flex flex-wrap justify-end gap-2">
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                severity="secondary"
+                                outlined
+                                :label="t('evaluations.filters.clear')"
+                                :disabled="!canClearFilters"
+                                class="h-11 shrink-0"
+                                @click="clearFilters"
+                            />
+                            <Button
+                                type="submit"
+                                icon="pi pi-check"
+                                :label="t('evaluations.filters.apply')"
+                                class="h-11 shrink-0"
+                            />
+                        </div>
+                    </form>
+                </template>
+            </DataTable>
             <AbsenceAlertPreviewDialog
                 v-model="previewVisible"
                 :messages="previewMessages"

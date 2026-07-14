@@ -38,7 +38,9 @@ class EvaluationController extends Controller implements HasMiddleware
 
     public function index(): Response
     {
-        return Inertia::render('Admin/Evaluations');
+        return Inertia::render('Admin/Evaluations', [
+            'centers' => $this->service->centerOptions(),
+        ]);
     }
 
     public function report(string $publicId): Response
