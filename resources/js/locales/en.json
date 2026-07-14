@@ -402,6 +402,9 @@
       "evaluationDetails": "Evaluation details",
       "executionTime": "Execution time",
       "action": "Action",
+      "resend": "Resend",
+      "resendSuccess": "Message resent successfully.",
+      "resendFailed": "Could not resend the message.",
       "noContent": "No message content was recorded.",
       "statuses": {
         "sent": "Sent",

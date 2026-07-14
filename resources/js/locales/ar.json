@@ -402,6 +402,9 @@
       "evaluationDetails": "تفاصيل التقييم",
       "executionTime": "وقت التنفيذ",
       "action": "الإجراء",
+      "resend": "إعادة إرسال",
+      "resendSuccess": "تمت إعادة إرسال الرسالة.",
+      "resendFailed": "تعذرت إعادة إرسال الرسالة.",
       "noContent": "لم يتم تسجيل نص رسالة.",
       "statuses": {
         "sent": "مرسلة",

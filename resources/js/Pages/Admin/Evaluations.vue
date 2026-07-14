@@ -22,6 +22,7 @@ const previewLoading = ref(false);
 const previewMessages = ref([]);
 const messageLogVisible = ref(false);
 const messageLogLoading = ref(false);
+const messageLogResendingId = ref(null);
 const messageLogs = ref([]);
 const messageLogEvaluation = ref(null);
 const {
@@ -201,6 +202,41 @@ const fetchMessageLogs = async (row) => {
     }
 };
 
+const replaceMessageLog = (nextLog) => {
+    const index = messageLogs.value.findIndex((log) => log.id === nextLog.id);
+
+    if (index === -1) {
+        messageLogs.value = [nextLog, ...messageLogs.value];
+        return;
+    }
+
+    messageLogs.value = messageLogs.value.map((log, logIndex) => (logIndex === index ? nextLog : log));
+};
+
+const resendMessageLog = async (log) => {
+    if (!messageLogEvaluation.value?.id || !log?.id) {
+        return;
+    }
+
+    messageLogResendingId.value = log.id;
+
+    try {
+        const { data } = await axios.post(`/admin/evaluations/${messageLogEvaluation.value.id}/message-logs/${log.id}/resend`);
+        if (data?.data) {
+            replaceMessageLog(data.data);
+        }
+        appToast.success(data?.message ?? t('evaluations.messageLog.resendSuccess'));
+        await fetchRows();
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.requestFailedTitle'),
+            fallback: t('evaluations.messageLog.resendFailed'),
+        });
+    } finally {
+        messageLogResendingId.value = null;
+    }
+};
+
 const askDelete = ({ data: row, event }) => {
     const target = event?.currentTarget ?? event?.target ?? document.body;
 
@@ -310,6 +346,8 @@ onMounted(() => {
                 :evaluation="messageLogEvaluation"
                 :logs="messageLogs"
                 :loading="messageLogLoading"
+                :resending-log-id="messageLogResendingId"
+                @resend="resendMessageLog"
             />
             <ConfirmPopup />
         </section>

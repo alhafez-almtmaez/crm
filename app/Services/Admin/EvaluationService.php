@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class EvaluationService
 {
@@ -25,6 +26,7 @@ class EvaluationService
         private readonly DateTimeFormatterService $dateTimeFormatter,
         private readonly AbsenceRuleEngine $absenceRuleEngine,
         private readonly AdminDataScopeService $dataScope,
+        private readonly WhatsAppMessagingService $whatsAppMessagingService,
     ) {}
 
     /**
@@ -302,6 +304,91 @@ class EvaluationService
             ->get()
             ->map(fn (AbsenceRuleExecutionLog $log): array => $this->absenceMessageLogPayload($log))
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function resendAbsenceMessage(Evaluation $evaluation, AbsenceRuleExecutionLog $log): array
+    {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+        abort_unless((int) $log->evaluation_id === (int) $evaluation->id, 404);
+        abort_unless(
+            $this->dataScope
+                ->applyAbsenceExecutionLogAccess(AbsenceRuleExecutionLog::query())
+                ->whereKey($log->id)
+                ->exists(),
+            404,
+        );
+
+        /** @var AbsenceRuleExecutionLog $log */
+        $log = AbsenceRuleExecutionLog::query()
+            ->with(['student.center:id,name,group_serialized', 'center:id,name,group_serialized'])
+            ->findOrFail($log->id);
+
+        if ($log->was_message_sent) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_already_sent'),
+            ]);
+        }
+
+        $error = Arr::get($log->meta ?? [], 'error');
+        if (! is_string($error) || trim($error) === '') {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_not_failed'),
+            ]);
+        }
+
+        $content = trim((string) $log->message_content);
+        if ($content === '') {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_missing_content'),
+            ]);
+        }
+
+        $student = $log->student;
+        if (! $student instanceof Student) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_missing_student'),
+            ]);
+        }
+
+        $student->loadMissing('center:id,name,group_serialized');
+        $recipientPhones = $this->extractUniquePhones($student);
+        $groupSerialized = $log->sent_to_group ? $student->center?->group_serialized : null;
+
+        if ($recipientPhones === [] && ($groupSerialized === null || trim($groupSerialized) === '')) {
+            throw ValidationException::withMessages([
+                'message' => __('students.no_recipients_provided'),
+            ]);
+        }
+
+        try {
+            $this->whatsAppMessagingService->sendMediaCaption($recipientPhones, $content, $groupSerialized);
+        } catch (Throwable $exception) {
+            $this->updateResentMessageLog(
+                log: $log,
+                student: $student,
+                recipientPhones: $recipientPhones,
+                groupSerialized: $groupSerialized,
+                wasMessageSent: false,
+                errorMessage: $exception->getMessage(),
+            );
+
+            throw ValidationException::withMessages([
+                'message' => $exception->getMessage(),
+            ]);
+        }
+
+        $log = $this->updateResentMessageLog(
+            log: $log,
+            student: $student,
+            recipientPhones: $recipientPhones,
+            groupSerialized: $groupSerialized,
+            wasMessageSent: true,
+        );
+
+        return $this->absenceMessageLogPayload($log);
     }
 
     /**
@@ -735,6 +822,67 @@ class EvaluationService
         }
 
         return Carbon::parse($date)->toDateString();
+    }
+
+    /**
+     * @param  array<int, string>  $recipientPhones
+     */
+    private function updateResentMessageLog(
+        AbsenceRuleExecutionLog $log,
+        Student $student,
+        array $recipientPhones,
+        ?string $groupSerialized,
+        bool $wasMessageSent,
+        ?string $errorMessage = null,
+    ): AbsenceRuleExecutionLog {
+        $attemptedAt = now();
+        $meta = $log->meta ?? [];
+        $meta['resend_attempted'] = true;
+        $meta['resend_attempted_at'] = $attemptedAt->toIso8601String();
+        $meta['resend_attempted_by'] = Auth::id();
+        $meta['resend_source'] = 'current_student_record';
+        $meta['group_serialized'] = $groupSerialized;
+        $meta['error'] = $errorMessage;
+
+        if ($wasMessageSent) {
+            $meta['resent'] = true;
+            $meta['resent_at'] = $attemptedAt->toIso8601String();
+            $meta['resent_by'] = Auth::id();
+        }
+
+        $log->update([
+            'center_id' => $student->center_id,
+            'recipient_phones' => $recipientPhones,
+            'was_message_sent' => $wasMessageSent,
+            'executed_by' => Auth::id(),
+            'executed_at' => $attemptedAt,
+            'meta' => $meta,
+        ]);
+
+        return $log->refresh()->load(['student:id,full_name', 'center:id,name,group_serialized']);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function extractUniquePhones(Student $student): array
+    {
+        $unique = [];
+
+        foreach ([$student->parent_phone_number, $student->phone_number] as $phone) {
+            if (! is_string($phone)) {
+                continue;
+            }
+
+            $normalized = preg_replace('/\D+/', '', $phone) ?? '';
+            if ($normalized === '') {
+                continue;
+            }
+
+            $unique[$normalized] = $normalized;
+        }
+
+        return array_values($unique);
     }
 
     /**

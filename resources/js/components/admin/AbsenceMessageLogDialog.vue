@@ -21,9 +21,13 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    resendingLogId: {
+        type: Number,
+        default: null,
+    },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'resend']);
 const { t } = useI18n();
 const expandedLogIds = ref([]);
 
@@ -76,6 +80,8 @@ const statusClass = (log) => ({
     failed: 'bg-red-700 text-white',
     notSent: 'bg-amber-600 text-white',
 }[statusKey(log)]);
+
+const canResend = (log) => statusKey(log) === 'failed';
 
 const isExpanded = (log) => expandedLogIds.value.includes(log.id);
 
@@ -220,6 +226,20 @@ const actionLabel = (log) => {
                         <p v-if="log.error" class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
                             {{ log.error }}
                         </p>
+
+                        <div v-if="canResend(log)" class="mt-4 flex justify-end">
+                            <Button
+                                type="button"
+                                icon="pi pi-send"
+                                :label="t('evaluations.messageLog.resend')"
+                                severity="danger"
+                                size="small"
+                                outlined
+                                :loading="props.resendingLogId === log.id"
+                                :disabled="props.resendingLogId !== null"
+                                @click.stop="emit('resend', log)"
+                            />
+                        </div>
 
                         <pre class="mt-4 overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-(--border) bg-(--background) p-3 text-sm leading-7 text-(--foreground)">{{ log.message_content || t('evaluations.messageLog.noContent') }}</pre>
                     </div>

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\EvaluationIndexRequest;
 use App\Http\Requests\Admin\EvaluationStoreRequest;
 use App\Http\Requests\Admin\EvaluationUpdateRequest;
+use App\Models\AbsenceRuleExecutionLog;
 use App\Models\Evaluation;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\EvaluationService;
@@ -30,7 +31,7 @@ class EvaluationController extends Controller implements HasMiddleware
         return [
             new Middleware('can:evaluations.view', only: ['index', 'records', 'absenceAlertPreviews', 'messageLogs']),
             new Middleware('can:evaluations.create', only: ['create', 'store']),
-            new Middleware('can:evaluations.update', only: ['edit', 'update', 'sendAbsenceAlerts']),
+            new Middleware('can:evaluations.update', only: ['edit', 'update', 'sendAbsenceAlerts', 'resendMessageLog']),
             new Middleware('can:evaluations.delete', only: ['destroy']),
         ];
     }
@@ -185,6 +186,16 @@ class EvaluationController extends Controller implements HasMiddleware
 
         return response()->json([
             'data' => $this->service->absenceMessageLogs($evaluation),
+        ]);
+    }
+
+    public function resendMessageLog(Evaluation $evaluation, AbsenceRuleExecutionLog $log): JsonResponse
+    {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
+        return response()->json([
+            'message' => __('evaluations.absence_message_resent_successfully'),
+            'data' => $this->service->resendAbsenceMessage($evaluation, $log),
         ]);
     }
 }
