@@ -290,6 +290,20 @@ class EvaluationService
     }
 
     /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function absenceMessageLogs(Evaluation $evaluation): array
+    {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
+        return $this->absenceMessageLogsQuery($evaluation)
+            ->limit(100)
+            ->get()
+            ->map(fn (AbsenceRuleExecutionLog $log): array => $this->absenceMessageLogPayload($log))
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function reportPayload(string $publicId): array
@@ -755,6 +769,16 @@ class EvaluationService
             ->latest('id');
     }
 
+    private function absenceMessageLogsQuery(Evaluation $evaluation)
+    {
+        return $this->dataScope
+            ->applyAbsenceExecutionLogAccess(AbsenceRuleExecutionLog::query())
+            ->with(['student:id,full_name', 'center:id,name,group_serialized'])
+            ->where('evaluation_id', $evaluation->id)
+            ->whereNotNull('message_content')
+            ->latest('id');
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -776,6 +800,34 @@ class EvaluationService
             'group_serialized' => $meta['group_serialized'] ?? null,
             'message_content' => $log->message_content,
             'created_at_formatted' => $this->dateTimeFormatter->formatForAdmin($log->created_at),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function absenceMessageLogPayload(AbsenceRuleExecutionLog $log): array
+    {
+        $meta = $log->meta ?? [];
+
+        return [
+            'id' => (int) $log->id,
+            'student_name' => $log->student?->full_name ?? '-',
+            'center_name' => $log->center?->name ?? '',
+            'evaluation_id' => (int) $log->evaluation_id,
+            'attendance_type' => $log->attendance_type,
+            'attendance_label' => $this->attendanceLabel((string) $log->attendance_type),
+            'occurrence_number' => $log->occurrence_number,
+            'action' => $log->action,
+            'recipient_phones' => $log->recipient_phones ?? [],
+            'sent_to_group' => (bool) $log->sent_to_group,
+            'group_serialized' => $meta['group_serialized'] ?? $log->center?->group_serialized,
+            'message_content' => $log->message_content,
+            'was_message_sent' => (bool) $log->was_message_sent,
+            'local_preview' => (bool) ($meta['local_preview'] ?? false),
+            'error' => $meta['error'] ?? null,
+            'created_at_formatted' => $this->dateTimeFormatter->formatForAdmin($log->created_at),
+            'executed_at_formatted' => $this->dateTimeFormatter->formatForAdmin($log->executed_at),
         ];
     }
 

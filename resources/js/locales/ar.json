@@ -394,6 +394,27 @@
       "occurrence": "رقم التكرار",
       "centerGroup": "مجموعة المركز"
     },
+    "messageLog": {
+      "title": "سجل رسائل الغياب",
+      "open": "عرض سجل الرسائل",
+      "empty": "لا توجد رسائل غياب مسجلة لهذا التقييم.",
+      "loadFailed": "تعذر تحميل سجل الرسائل.",
+      "executionTime": "وقت التنفيذ",
+      "action": "الإجراء",
+      "noContent": "لم يتم تسجيل نص رسالة.",
+      "statuses": {
+        "sent": "مرسلة",
+        "localPreview": "معاينة محلية",
+        "failed": "فشلت",
+        "notSent": "غير مرسلة"
+      },
+      "actions": {
+        "sendMessage": "إرسال رسالة",
+        "sendMessageAndFreeze": "إرسال رسالة وتجميد",
+        "freezeStudent": "تجميد الطالب",
+        "dismissStudent": "فصل الطالب"
+      }
+    },
     "deleteConfirm": "حذف تقييم {center} بتاريخ {date}؟",
     "deleteEvaluation": "حذف التقييم",
     "deleted": "تم حذف التقييم بنجاح.",

@@ -394,6 +394,27 @@
       "occurrence": "Occurrence",
       "centerGroup": "Center group"
     },
+    "messageLog": {
+      "title": "Absence Message Log",
+      "open": "View message log",
+      "empty": "No absence messages have been recorded for this evaluation.",
+      "loadFailed": "Could not load message log.",
+      "executionTime": "Execution time",
+      "action": "Action",
+      "noContent": "No message content was recorded.",
+      "statuses": {
+        "sent": "Sent",
+        "localPreview": "Local preview",
+        "failed": "Failed",
+        "notSent": "Not sent"
+      },
+      "actions": {
+        "sendMessage": "Send message",
+        "sendMessageAndFreeze": "Send message and freeze",
+        "freezeStudent": "Freeze student",
+        "dismissStudent": "Dismiss student"
+      }
+    },
     "deleteConfirm": "Delete evaluation for {center} on {date}?",
     "deleteEvaluation": "Delete Evaluation",
     "deleted": "Evaluation deleted successfully.",

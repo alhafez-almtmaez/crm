@@ -6,6 +6,7 @@ import { useConfirm } from 'primevue/useconfirm';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
+import AbsenceMessageLogDialog from '../../components/admin/AbsenceMessageLogDialog.vue';
 import AbsenceAlertPreviewDialog from '../../components/admin/AbsenceAlertPreviewDialog.vue';
 import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
 import AdminLayout from '../../components/admin/AdminLayout.vue';
@@ -19,6 +20,9 @@ const { t } = useI18n();
 const previewVisible = ref(false);
 const previewLoading = ref(false);
 const previewMessages = ref([]);
+const messageLogVisible = ref(false);
+const messageLogLoading = ref(false);
+const messageLogs = ref([]);
 const {
     loading,
     rows: sourceRows,
@@ -81,6 +85,13 @@ const rowActions = computed(() => [
         outlined: true,
         titleKey: 'evaluations.openReport',
         show: (row) => Boolean(row.report_url),
+    },
+    {
+        key: 'message-logs',
+        icon: 'pi pi-envelope',
+        severity: 'secondary',
+        outlined: true,
+        titleKey: 'evaluations.messageLog.open',
     },
     {
         key: 'send-alerts',
@@ -165,6 +176,24 @@ const fetchAlertPreviews = async (row) => {
     }
 };
 
+const fetchMessageLogs = async (row) => {
+    messageLogVisible.value = true;
+    messageLogLoading.value = true;
+    messageLogs.value = [];
+
+    try {
+        const { data } = await axios.get(`/admin/evaluations/${row.id}/message-logs`);
+        messageLogs.value = data?.data ?? [];
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.loadFailedTitle'),
+            fallback: t('evaluations.messageLog.loadFailed'),
+        });
+    } finally {
+        messageLogLoading.value = false;
+    }
+};
+
 const askDelete = ({ data: row, event }) => {
     const target = event?.currentTarget ?? event?.target ?? document.body;
 
@@ -198,6 +227,11 @@ const handleRowAction = ({ action, data: row, event }) => {
 
     if (action === 'preview-alerts') {
         fetchAlertPreviews(row);
+        return;
+    }
+
+    if (action === 'message-logs') {
+        fetchMessageLogs(row);
         return;
     }
 
@@ -263,6 +297,11 @@ onMounted(() => {
                 v-model="previewVisible"
                 :messages="previewMessages"
                 :loading="previewLoading"
+            />
+            <AbsenceMessageLogDialog
+                v-model="messageLogVisible"
+                :logs="messageLogs"
+                :loading="messageLogLoading"
             />
             <ConfirmPopup />
         </section>

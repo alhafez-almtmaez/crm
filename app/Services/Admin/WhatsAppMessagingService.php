@@ -21,7 +21,7 @@ class WhatsAppMessagingService
     {
         $recipients = $this->recipientsFromPhones($phones, $groupSerialized);
 
-        $this->sendMediaCaptionToChatIds($recipients, $content, self::DEFAULT_MEDIA_URL);
+        $this->sendMediaCaptionToChatIds($recipients, $content);
     }
 
     /**
@@ -56,15 +56,11 @@ class WhatsAppMessagingService
             throw new WhatsAppMessageSendException($message, $recipients);
         }
 
-        $mediaUrl ??= self::DEFAULT_MEDIA_URL;
-
         foreach ($recipients as $index => $chatId) {
-            $response = $this->apiRequest()->post("{$baseUrl}/client/sendMessage/{$device->session_id}", [
-                'chatId' => $chatId,
-                'contentType' => 'MessageMediaFromURL',
-                'content' => $mediaUrl,
-                'options' => ['caption' => $content],
-            ]);
+            $response = $this->apiRequest()->post(
+                "{$baseUrl}/client/sendMessage/{$device->session_id}",
+                $this->messagePayload($chatId, $content, $mediaUrl),
+            );
 
             if ($response->failed()) {
                 $message = (string) ($response->json('message') ?? $response->json('error') ?? __('whatsapp.send_failed'));
@@ -88,7 +84,40 @@ class WhatsAppMessagingService
 
     private function normalizePhone(string $phone): string
     {
-        return preg_replace('/\D+/', '', $phone) ?? '';
+        $normalized = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if (str_starts_with($normalized, '00')) {
+            $normalized = substr($normalized, 2);
+        }
+
+        if (str_starts_with($normalized, '0') && strlen($normalized) === 10) {
+            return '962'.substr($normalized, 1);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function messagePayload(string $chatId, string $content, ?string $mediaUrl = null): array
+    {
+        $mediaUrl = is_string($mediaUrl) ? trim($mediaUrl) : '';
+
+        if ($mediaUrl === '') {
+            return [
+                'chatId' => $chatId,
+                'contentType' => 'string',
+                'content' => $content,
+            ];
+        }
+
+        return [
+            'chatId' => $chatId,
+            'contentType' => 'MessageMediaFromURL',
+            'content' => $mediaUrl,
+            'options' => ['caption' => $content],
+        ];
     }
 
     /**

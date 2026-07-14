@@ -62,7 +62,29 @@ test('pending whatsapp messages are sent when a connected device is available', 
 
     Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/main_session'
         && $request['chatId'] === '962790000111@s.whatsapp.net'
-        && $request['options']['caption'] === 'Queued absence alert');
+        && $request['contentType'] === 'string'
+        && $request['content'] === 'Queued absence alert');
+});
+
+test('jordanian local phone numbers are normalized before whatsapp send', function () {
+    config()->set('services.whatsapp_api.url', 'https://wa.test');
+    config()->set('services.whatsapp_api.message_delay_seconds', 0);
+
+    Device::factory()->connected()->create(['session_id' => 'main_session']);
+
+    Http::fake([
+        'https://wa.test/client/sendMessage/main_session' => Http::response(['ok' => true]),
+    ]);
+
+    app(WhatsAppMessagingService::class)->sendMediaCaption(
+        ['079 000 0111'],
+        'Direct phone message',
+    );
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/main_session'
+        && $request['chatId'] === '962790000111@s.whatsapp.net'
+        && $request['contentType'] === 'string'
+        && $request['content'] === 'Direct phone message');
 });
 
 test('failed whatsapp send stores only unsent recipients as pending', function () {

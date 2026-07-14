@@ -28,7 +28,7 @@ class EvaluationController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:evaluations.view', only: ['index', 'records', 'absenceAlertPreviews']),
+            new Middleware('can:evaluations.view', only: ['index', 'records', 'absenceAlertPreviews', 'messageLogs']),
             new Middleware('can:evaluations.create', only: ['create', 'store']),
             new Middleware('can:evaluations.update', only: ['edit', 'update', 'sendAbsenceAlerts']),
             new Middleware('can:evaluations.delete', only: ['destroy']),
@@ -176,6 +176,15 @@ class EvaluationController extends Controller implements HasMiddleware
 
         return response()->json([
             'data' => $this->service->absenceAlertPreviews($evaluation),
+        ]);
+    }
+
+    public function messageLogs(Evaluation $evaluation): JsonResponse
+    {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+
+        return response()->json([
+            'data' => $this->service->absenceMessageLogs($evaluation),
         ]);
     }
 }
