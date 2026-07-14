@@ -96,10 +96,10 @@ const rowActions = computed(() => [
     {
         key: 'send-alerts',
         icon: 'pi pi-bell',
-        severity: 'warning',
-        outlined: true,
+        severity: (row) => row.is_send_absence_alerts ? 'contrast' : 'warning',
+        outlined: (row) => !row.is_send_absence_alerts,
+        disabled: (row) => Boolean(row.is_send_absence_alerts),
         titleKey: 'evaluations.sendAlerts',
-        show: (row) => !row.is_send_absence_alerts,
     },
     {
         key: 'preview-alerts',

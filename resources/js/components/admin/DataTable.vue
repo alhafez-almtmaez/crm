@@ -107,6 +107,16 @@ const shouldShowRowAction = (action, rowData) => {
 
     return action.show(rowData);
 };
+const resolveRowActionValue = (action, rowData, key, fallback = null) => {
+    const value = action?.[key];
+
+    if (typeof value === 'function') {
+        return value(rowData);
+    }
+
+    return value ?? fallback;
+};
+const isRowActionDisabled = (action, rowData) => Boolean(resolveRowActionValue(action, rowData, 'disabled', false));
 const resolveRowActionTitle = (action, rowData) => {
     if (typeof action.title === 'function') {
         return action.title(rowData);
@@ -220,12 +230,13 @@ const handleSort = (event) => {
                             v-show="shouldShowRowAction(action, data)"
                             :key="action.key + '-' + data.id"
                             size="small"
-                            :severity="action.severity ?? 'secondary'"
+                            :severity="resolveRowActionValue(action, data, 'severity', 'secondary')"
                             :icon="action.icon"
-                            :outlined="Boolean(action.outlined)"
+                            :outlined="Boolean(resolveRowActionValue(action, data, 'outlined', false))"
+                            :disabled="isRowActionDisabled(action, data)"
                             :title="resolveRowActionTitle(action, data)"
                             :aria-label="resolveRowActionTitle(action, data)"
-                            @click="emit('rowAction', { action: action.key, data, event: $event })"
+                            @click="!isRowActionDisabled(action, data) && emit('rowAction', { action: action.key, data, event: $event })"
                         />
                         <Button
                             v-if="showHistory"
