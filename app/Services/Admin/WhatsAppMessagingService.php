@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Exceptions\WhatsAppMessageSendException;
 use App\Models\Device;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -13,6 +14,8 @@ use Throwable;
 class WhatsAppMessagingService
 {
     private const DEFAULT_MEDIA_URL = 'https://dash.alhafez-almtmaez.com/media/logos/logo.png';
+
+    public function __construct(private readonly ?WhatsAppSessionService $sessions = null) {}
 
     /**
      * @param  array<int, string>  $phones
@@ -57,10 +60,23 @@ class WhatsAppMessagingService
         }
 
         foreach ($recipients as $index => $chatId) {
+            $sessionId = (string) $device->session_id;
             $response = $this->apiRequest()->post(
-                "{$baseUrl}/client/sendMessage/{$device->session_id}",
+                "{$baseUrl}/client/sendMessage/{$sessionId}",
                 $this->messagePayload($chatId, $content, $mediaUrl),
             );
+
+            if ($response->failed() && $this->isSessionNotFoundResponse($response)) {
+                $replacementDevice = $this->sessionService()->connectedDevice($device);
+
+                if ($replacementDevice && $replacementDevice->session_id !== $sessionId) {
+                    $device = $replacementDevice;
+                    $response = $this->apiRequest()->post(
+                        "{$baseUrl}/client/sendMessage/{$device->session_id}",
+                        $this->messagePayload($chatId, $content, $mediaUrl),
+                    );
+                }
+            }
 
             if ($response->failed()) {
                 $message = (string) ($response->json('message') ?? $response->json('error') ?? __('whatsapp.send_failed'));
@@ -80,6 +96,16 @@ class WhatsAppMessagingService
     {
         return Http::withHeader('x-api-key', (string) config('services.whatsapp_api.key', config('app.key')))
             ->timeout(20);
+    }
+
+    private function isSessionNotFoundResponse(Response $response): bool
+    {
+        return ($response->json('message') ?? $response->json('error')) === 'session_not_found';
+    }
+
+    private function sessionService(): WhatsAppSessionService
+    {
+        return $this->sessions ?? app(WhatsAppSessionService::class);
     }
 
     private function normalizePhone(string $phone): string

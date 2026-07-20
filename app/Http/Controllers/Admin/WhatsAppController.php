@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WhatsappSendRequest;
 use App\Models\Device;
 use App\Services\Admin\WhatsAppPendingMessageService;
+use App\Services\Admin\WhatsAppSessionService;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response as HttpClientResponse;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +19,10 @@ use Throwable;
 
 class WhatsAppController extends Controller
 {
-    public function __construct(private readonly WhatsAppPendingMessageService $pendingMessages) {}
+    public function __construct(
+        private readonly WhatsAppPendingMessageService $pendingMessages,
+        private readonly WhatsAppSessionService $sessions,
+    ) {}
 
     public function index(): Response
     {
@@ -122,6 +126,16 @@ class WhatsAppController extends Controller
             $this->flushPendingMessages();
 
             return null;
+        }
+
+        if ($statusResponse->json('message') === 'session_not_found') {
+            $connectedDevice = $this->sessions->connectedDevice($device);
+
+            if ($connectedDevice?->is($device) && $connectedDevice->status === 'CONNECTED') {
+                $this->flushPendingMessages();
+
+                return null;
+            }
         }
 
         $qr = $this->sessionAdd($device);

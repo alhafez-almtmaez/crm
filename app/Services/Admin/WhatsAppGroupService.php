@@ -2,11 +2,14 @@
 
 namespace App\Services\Admin;
 
-use App\Models\Device;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 class WhatsAppGroupService
 {
+    public function __construct(private readonly WhatsAppSessionService $sessions) {}
+
     /**
      * @return array<int, array{label: string, value: string}>
      */
@@ -17,56 +20,82 @@ class WhatsAppGroupService
             return [];
         }
 
-        $device = Device::query()
-            ->where('status', 'CONNECTED')
-            ->whereNotNull('session_id')
-            ->where('session_id', '!=', '')
-            ->first();
+        $device = $this->sessions->connectedDevice();
 
         if (! $device) {
             return [];
         }
 
-        $response = Http::withHeader('x-api-key', (string) config('services.whatsapp_api.key', config('app.key')))
-            ->timeout(20)
-            ->get("{$baseUrl}/client/getChats/{$device->session_id}");
+        $response = $this->apiRequest()
+            ->get("{$baseUrl}/client/getContacts/{$device->session_id}");
 
-        if ($response->failed()) {
-            return [];
+        $records = $this->responseRecords($response, 'contacts');
+
+        if ($records === null) {
+            $response = $this->apiRequest()
+                ->get("{$baseUrl}/client/getChats/{$device->session_id}");
+
+            $records = $this->responseRecords($response, 'chats');
         }
 
-        $chats = $response->json('chats');
-        if (! is_array($chats)) {
+        if ($records === null) {
             return [];
         }
 
         $options = [];
 
-        foreach ($chats as $chat) {
-            if (! is_array($chat)) {
+        foreach ($records as $record) {
+            if (! is_array($record)) {
                 continue;
             }
 
-            $server = (string) data_get($chat, 'id.server', '');
-            if ($server !== 'g.us') {
+            $value = (string) data_get($record, 'id._serialized', '');
+            $server = (string) data_get($record, 'id.server', '');
+
+            if ($server !== 'g.us' && ! str_ends_with($value, '@g.us')) {
                 continue;
             }
 
-            $value = (string) data_get($chat, 'id._serialized', '');
-            $label = (string) data_get($chat, 'name', '');
+            $label = trim((string) (
+                data_get($record, 'name')
+                ?? data_get($record, 'pushname')
+                ?? data_get($record, 'shortName')
+                ?? ''
+            ));
 
-            if ($value === '' || $label === '') {
+            if ($value === '') {
                 continue;
             }
 
-            $options[] = [
-                'label' => $label,
+            $options[$value] = [
+                'label' => $label !== '' ? $label : $value,
                 'value' => $value,
             ];
         }
 
+        $options = array_values($options);
         usort($options, static fn (array $a, array $b): int => strcmp($a['label'], $b['label']));
 
         return $options;
+    }
+
+    /**
+     * @return array<int, mixed>|null
+     */
+    private function responseRecords(Response $response, string $key): ?array
+    {
+        if ($response->failed() || $response->json('success') !== true) {
+            return null;
+        }
+
+        $records = $response->json($key);
+
+        return is_array($records) ? $records : null;
+    }
+
+    private function apiRequest(): PendingRequest
+    {
+        return Http::withHeader('x-api-key', (string) config('services.whatsapp_api.key', config('app.key')))
+            ->timeout(30);
     }
 }

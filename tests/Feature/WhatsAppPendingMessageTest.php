@@ -16,7 +16,7 @@ test('whatsapp message is stored as pending when no device is connected', functi
         ['+962 79 000 0111'],
         'Absence alert',
         '120363000000000000@g.us',
-    ))->toThrow(\RuntimeException::class);
+    ))->toThrow(RuntimeException::class);
 
     $message = WhatsAppPendingMessage::query()->firstOrFail();
 
@@ -87,6 +87,46 @@ test('jordanian local phone numbers are normalized before whatsapp send', functi
         && $request['content'] === 'Direct phone message');
 });
 
+test('sending retries with the connected api session when the local session is stale', function () {
+    config()->set('services.whatsapp_api.url', 'https://wa.test');
+    config()->set('services.whatsapp_api.message_delay_seconds', 0);
+
+    $device = Device::factory()->connected()->create(['session_id' => 'stale_session']);
+
+    Http::fake([
+        'https://wa.test/client/sendMessage/stale_session' => Http::response([
+            'success' => false,
+            'error' => 'session_not_found',
+        ], 404),
+        'https://wa.test/session/status/stale_session' => Http::response([
+            'success' => false,
+            'state' => null,
+            'message' => 'session_not_found',
+        ]),
+        'https://wa.test/session/getSessions' => Http::response([
+            'success' => true,
+            'result' => ['live_session'],
+        ]),
+        'https://wa.test/session/status/live_session' => Http::response([
+            'success' => true,
+            'state' => 'CONNECTED',
+        ]),
+        'https://wa.test/client/sendMessage/live_session' => Http::response(['success' => true]),
+    ]);
+
+    app(WhatsAppMessagingService::class)->sendMediaCaption(
+        ['079 000 0111'],
+        'Recovered message',
+    );
+
+    expect($device->refresh()->session_id)->toBe('live_session')
+        ->and(WhatsAppPendingMessage::query()->count())->toBe(0);
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/live_session'
+        && $request['chatId'] === '962790000111@s.whatsapp.net'
+        && $request['content'] === 'Recovered message');
+});
+
 test('failed whatsapp send stores only unsent recipients as pending', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
     config()->set('services.whatsapp_api.message_delay_seconds', 0);
@@ -102,7 +142,7 @@ test('failed whatsapp send stores only unsent recipients as pending', function (
     expect(fn () => app(WhatsAppMessagingService::class)->sendMediaCaption(
         ['+962 79 000 0111', '+962 79 000 0222'],
         'Absence alert',
-    ))->toThrow(\RuntimeException::class, 'device disconnected');
+    ))->toThrow(RuntimeException::class, 'device disconnected');
 
     $message = WhatsAppPendingMessage::query()->firstOrFail();
 
