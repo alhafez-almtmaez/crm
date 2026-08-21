@@ -16,6 +16,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class StudentService
@@ -43,7 +44,6 @@ class StudentService
             'id' => 'students.id',
             'full_name' => 'students.full_name',
             'center_name' => 'centers.name',
-            'group_name' => 'groups.name',
             'plan_name' => 'plan_types.name',
             'admin_name' => 'admins.name',
             'parent_phone_number' => 'students.parent_phone_number',
@@ -56,8 +56,8 @@ class StudentService
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
 
         $query = Student::query()
+            ->with(['groups' => static fn ($query) => $query->orderBy('groups.name')])
             ->leftJoin('centers', 'students.center_id', '=', 'centers.id')
-            ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
             ->leftJoin('users as admins', 'students.admin_id', '=', 'admins.id')
             ->select([
@@ -68,13 +68,15 @@ class StudentService
                 'students.is_active',
                 'students.created_at',
                 'centers.name as center_name',
-                'groups.name as group_name',
                 'plan_types.name as plan_name',
                 'admins.name as admin_name',
             ])
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->when($centerId !== null, static fn ($query) => $query->where('students.center_id', $centerId))
-            ->when($groupId !== null, static fn ($query) => $query->where('students.group_id', $groupId))
+            ->when($groupId !== null, static fn ($query) => $query->whereHas(
+                'groups',
+                static fn ($groupQuery) => $groupQuery->where('groups.id', $groupId),
+            ))
             ->when($planId !== null, static fn ($query) => $query->where('students.plan_type_id', $planId))
             ->when($adminId !== null, static fn ($query) => $query->where('students.admin_id', $adminId))
             ->when($status !== null, static fn ($query) => $query->where('students.is_active', $status))
@@ -87,17 +89,33 @@ class StudentService
                         ->orWhere('students.email', 'like', "%{$search}%")
                         ->orWhere('students.id_number', 'like', "%{$search}%")
                         ->orWhere('centers.name', 'like', "%{$search}%")
-                        ->orWhere('groups.name', 'like', "%{$search}%")
+                        ->orWhereHas('groups', static fn ($groupQuery) => $groupQuery->where('groups.name', 'like', "%{$search}%"))
                         ->orWhere('plan_types.name', 'like', "%{$search}%")
                         ->orWhere('admins.name', 'like', "%{$search}%");
                 });
-            })
-            ->orderBy($sortColumn, $sortDir);
+            });
+
+        if ($sortBy === 'group_name') {
+            $query->orderBy(
+                Group::query()
+                    ->select('groups.name')
+                    ->join('group_student', 'groups.id', '=', 'group_student.group_id')
+                    ->whereColumn('group_student.student_id', 'students.id')
+                    ->orderBy('groups.name')
+                    ->limit(1),
+                $sortDir,
+            );
+        } else {
+            $query->orderBy($sortColumn, $sortDir);
+        }
 
         $students = $query->paginate($perPage)->withQueryString();
         $students->setCollection(
             $students->getCollection()->map(function ($student) {
                 $student->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($student->created_at));
+                $student->setAttribute('group_name', $student->groups->pluck('name')->implode(', '));
+                $student->setAttribute('group_ids', $student->groups->pluck('id')->map(static fn ($id): int => (int) $id)->all());
+                $student->unsetRelation('groups');
 
                 return $student;
             }),
@@ -111,7 +129,12 @@ class StudentService
      */
     public function create(array $data): Student
     {
-        return Student::query()->create($this->buildPayload($data));
+        return DB::transaction(function () use ($data): Student {
+            $student = Student::query()->create($this->buildPayload($data));
+            $student->groups()->sync($this->groupIdsFromData($data));
+
+            return $student->refresh()->load('groups:id,name');
+        });
     }
 
     /**
@@ -121,9 +144,12 @@ class StudentService
     {
         $this->dataScope->abortUnlessCanAccessStudent($student);
 
-        $student->update($this->buildPayload($data));
+        return DB::transaction(function () use ($student, $data): Student {
+            $student->update($this->buildPayload($data));
+            $student->groups()->sync($this->groupIdsFromData($data));
 
-        return $student->refresh();
+            return $student->refresh()->load('groups:id,name');
+        });
     }
 
     public function delete(Student $student): void
@@ -228,8 +254,8 @@ class StudentService
     public function exportRows(?int $centerId = null): Collection
     {
         return Student::query()
+            ->with(['groups' => static fn ($query) => $query->orderBy('groups.id')])
             ->leftJoin('centers', 'students.center_id', '=', 'centers.id')
-            ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
             ->leftJoin('plan_points as current_plan_points', 'students.current_plan_point_id', '=', 'current_plan_points.id')
             ->leftJoin('users as admins', 'students.admin_id', '=', 'admins.id')
@@ -250,8 +276,6 @@ class StudentService
                 'students.date_of_birth',
                 'centers.name as center_name',
                 'students.center_id',
-                'groups.name as group_name',
-                'students.group_id',
                 'plan_types.name as plan_name',
                 'students.plan_type_id',
                 'current_plan_points.name as plan_point_name',
@@ -289,6 +313,7 @@ class StudentService
     {
         $maxDailyWeight = isset($data['max_daily_weight']) ? (int) $data['max_daily_weight'] : 2;
         $workingDays = $this->workingDaysForCenter(isset($data['center_id']) ? (int) $data['center_id'] : null);
+        $groupIds = $this->groupIdsFromData($data);
 
         return [
             'first_name' => (string) $data['first_name'],
@@ -302,7 +327,8 @@ class StudentService
             'email' => $data['email'] ?? null,
             'date_of_birth' => $data['date_of_birth'] ?? null,
             'center_id' => isset($data['center_id']) ? (int) $data['center_id'] : null,
-            'group_id' => isset($data['group_id']) ? (int) $data['group_id'] : null,
+            // Kept as the primary/legacy group while group_student is the source for all memberships.
+            'group_id' => $groupIds[0] ?? null,
             'plan_type_id' => isset($data['plan_type_id']) ? (int) $data['plan_type_id'] : null,
             'current_plan_point_id' => isset($data['current_plan_point_id']) ? (int) $data['current_plan_point_id'] : null,
             'max_daily_weight' => $maxDailyWeight,
@@ -311,6 +337,20 @@ class StudentService
             'admin_id' => $this->resolveAdminId($data),
             'is_active' => (int) ($data['is_active'] ?? 1),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, int>
+     */
+    private function groupIdsFromData(array $data): array
+    {
+        $values = $data['group_ids'] ?? (isset($data['group_id']) ? [$data['group_id']] : []);
+        if (! is_array($values)) {
+            $values = preg_split('/[,،]/u', (string) $values) ?: [];
+        }
+
+        return array_values(array_unique(array_map('intval', $values)));
     }
 
     /**

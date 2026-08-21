@@ -4,6 +4,7 @@ import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
 import FloatLabel from 'primevue/floatlabel';
 import IntlTelInput from 'intl-tel-input/vueWithUtils';
+import MultiSelect from 'primevue/multiselect';
 import Select from 'primevue/select';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -233,7 +234,7 @@ watch(
 
         if (!nextCenterId) {
             groupOptions.value = [];
-            props.form.group_id = null;
+            props.form.group_ids = [];
             return;
         }
 
@@ -247,18 +248,15 @@ watch(
             }
 
             groupOptions.value = data?.data ?? [];
-            const hasCurrentGroup = groupOptions.value.some((group) => group.id === props.form.group_id);
-
-            if (!hasCurrentGroup) {
-                props.form.group_id = null;
-            }
+            const availableIds = new Set(groupOptions.value.map((group) => Number(group.id)));
+            props.form.group_ids = (props.form.group_ids ?? []).filter((groupId) => availableIds.has(Number(groupId)));
         } catch {
             if (currentToken !== groupsRequestToken) {
                 return;
             }
 
             groupOptions.value = [];
-            props.form.group_id = null;
+            props.form.group_ids = [];
         } finally {
             if (currentToken === groupsRequestToken) {
                 groupsLoading.value = false;
@@ -422,21 +420,23 @@ watch(
 
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
-                        <Select
-                            input-id="student-group-id"
-                            v-model="form.group_id"
+                        <MultiSelect
+                            input-id="student-group-ids"
+                            v-model="form.group_ids"
                             :options="groupOptions"
                             option-label="name"
                             option-value="id"
                             filter
                             show-clear
+                            display="chip"
                             :loading="groupsLoading"
                             :disabled="!form.center_id"
-                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            class="min-h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
                         />
-                        <FormFieldLabel for-id="student-group-id" :text="t('students.group')" />
+                        <FormFieldLabel for-id="student-group-ids" :text="t('students.groups')" />
                     </FloatLabel>
-                    <small v-if="form.errors.group_id" class="text-sm text-red-600">{{ form.errors.group_id }}</small>
+                    <small v-if="form.errors.group_ids" class="text-sm text-red-600">{{ form.errors.group_ids }}</small>
+                    <small v-else-if="form.errors['group_ids.0']" class="text-sm text-red-600">{{ form.errors['group_ids.0'] }}</small>
                     <small v-else-if="form.center_id && !groupsLoading && groupOptions.length === 0" class="text-xs text-(--muted-foreground)">
                         {{ t('students.noGroupsForCenter') }}
                     </small>

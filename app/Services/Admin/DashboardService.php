@@ -248,7 +248,7 @@ class DashboardService
         $lastSevenStart = $today->subDays(6);
         $lastThirtyStart = $today->subDays(29);
         $studentsWithoutPlan = $this->studentsQuery()->whereNull('plan_type_id')->count();
-        $studentsWithoutGroup = $this->studentsQuery()->whereNull('group_id')->count();
+        $studentsWithoutGroup = $this->studentsQuery()->whereDoesntHave('groups')->count();
         $failedAbsenceMessages = $this->absenceLogsQuery()
             ->where('was_message_sent', false)
             ->where(function ($query) use ($lastThirtyStart, $today): void {

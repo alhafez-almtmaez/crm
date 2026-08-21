@@ -59,10 +59,8 @@ class StudentUpdateRequest extends FormRequest
             'email' => ['nullable', 'string', 'email', 'max:255', Rule::unique('students', 'email')->ignore($student->id)],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
             'center_id' => ['required', $centerRule],
-            'group_id' => [
-                'nullable',
-                $groupRule,
-            ],
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['integer', 'distinct', $groupRule],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
             'current_plan_point_id' => [
                 'nullable',
@@ -89,7 +87,7 @@ class StudentUpdateRequest extends FormRequest
             'phone_number' => PhoneNumberHelper::normalizeForStorage($this->input('phone_number')),
             'email' => $this->emptyToNull($this->input('email')),
             'date_of_birth' => $this->emptyToNull($this->input('date_of_birth')),
-            'group_id' => $this->emptyToNull($this->input('group_id')),
+            'group_ids' => $this->normalizedGroupIds(),
             'current_plan_point_id' => $this->emptyToNull($this->input('current_plan_point_id')),
             'admin_id' => $this->emptyToNull($this->input('admin_id')),
             'max_daily_weight' => $this->input('max_daily_weight', 2),
@@ -125,5 +123,24 @@ class StudentUpdateRequest extends FormRequest
         $trimmed = trim($value);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function normalizedGroupIds(): array
+    {
+        $value = $this->input('group_ids', $this->input('group_id'));
+
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $values = is_array($value) ? $value : preg_split('/[,،]/u', (string) $value);
+
+        return array_values(array_filter(
+            array_map(static fn ($id): mixed => is_string($id) ? trim($id) : $id, $values ?: []),
+            static fn ($id): bool => $id !== null && $id !== '',
+        ));
     }
 }

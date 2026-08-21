@@ -69,8 +69,9 @@ class AdminDataScopeService
         return $query->whereExists(function (QueryBuilder $subQuery) use ($groupTable, $userId): void {
             $subQuery
                 ->selectRaw('1')
-                ->from('students as scope_students')
-                ->whereColumn('scope_students.group_id', "{$groupTable}.id")
+                ->from('group_student as scope_group_student')
+                ->join('students as scope_students', 'scope_group_student.student_id', '=', 'scope_students.id')
+                ->whereColumn('scope_group_student.group_id', "{$groupTable}.id")
                 ->where('scope_students.admin_id', $userId);
         });
     }

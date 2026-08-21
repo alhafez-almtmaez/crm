@@ -102,13 +102,13 @@
     "/build/assets/Settings-Df7j4t8l.js"
   ],
   "resources/js/Pages/Admin/Students.vue": [
-    "/build/assets/Students-CbOxY7cG.js"
+    "/build/assets/Students-BUPy-3ns.js"
   ],
   "resources/js/Pages/Admin/Students/Create.vue": [
-    "/build/assets/Create-CpOlUD5l.js"
+    "/build/assets/Create-BYG8b3xz.js"
   ],
   "resources/js/Pages/Admin/Students/Edit.vue": [
-    "/build/assets/Edit-Cq8w6knm.js"
+    "/build/assets/Edit-Bp4awNtG.js"
   ],
   "resources/js/Pages/Admin/Users.vue": [
     "/build/assets/Users-otMGa75s.js"
@@ -188,7 +188,7 @@
     "/build/assets/CenterFormCard-BlEssh6O.js"
   ],
   "resources/js/components/admin/DailyWeightLimitFields.vue": [
-    "/build/assets/StudentFormCard-BhWsIJXX.js"
+    "/build/assets/StudentFormCard-Bee8ZeMY.js"
   ],
   "resources/js/components/admin/DataTable.vue": [
     "/build/assets/useServerTable-DJxI08DG.js"
@@ -218,7 +218,7 @@
     "/build/assets/RoleFormCard-Vz2B9MYk.js"
   ],
   "resources/js/components/admin/StudentFormCard.vue": [
-    "/build/assets/StudentFormCard-BhWsIJXX.js"
+    "/build/assets/StudentFormCard-Bee8ZeMY.js"
   ],
   "resources/js/components/admin/UserFormCard.vue": [
     "/build/assets/UserFormCard-DpfDi2al.js"

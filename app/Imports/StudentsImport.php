@@ -9,6 +9,7 @@ use App\Support\DailyWeightLimits;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Concerns\OnEachRow;
@@ -72,7 +73,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'email' => $this->nullIfEmpty(Arr::get($rowData, 'email')),
             'date_of_birth' => $this->normalizeDateValue(Arr::get($rowData, 'date_of_birth')),
             'center_id' => $this->intOrNull(Arr::get($rowData, 'center_id')),
-            'group_id' => $this->intOrNull(Arr::get($rowData, 'group_id')),
+            'group_ids' => $this->groupIds(Arr::get($rowData, 'group_ids', Arr::get($rowData, 'group_id'))),
             'plan_type_id' => $this->intOrNull(Arr::get($rowData, 'plan_type_id')),
             'admin_id' => $this->intOrNull(Arr::get($rowData, 'admin_id')),
             'is_active' => $this->intOrNull(Arr::get($rowData, 'is_active')),
@@ -125,7 +126,8 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
                 Rule::exists('centers', 'id')
                     ->where(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers')),
             ],
-            'group_id' => ['nullable', Rule::exists('groups', 'id')
+            'group_ids' => ['nullable', 'array'],
+            'group_ids.*' => ['integer', 'distinct', Rule::exists('groups', 'id')
                 ->where(function ($query) use ($payload): void {
                     $query->where('center_id', (int) ($payload['center_id'] ?? 0));
                     $this->dataScope->applyGroupAccess($query, 'groups');
@@ -165,6 +167,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         $validated = $validator->validated();
+        $groupIds = array_values(array_map('intval', $validated['group_ids'] ?? []));
 
         $payload = [
             'first_name' => (string) $validated['first_name'],
@@ -183,7 +186,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'email' => $validated['email'] ?? null,
             'date_of_birth' => $validated['date_of_birth'] ?? null,
             'center_id' => (int) $validated['center_id'],
-            'group_id' => isset($validated['group_id']) ? (int) $validated['group_id'] : null,
+            'group_id' => $groupIds[0] ?? null,
             'plan_type_id' => (int) $validated['plan_type_id'],
             'admin_id' => $this->resolveAdminId(
                 importedAdminId: $validated['admin_id'] ?? null,
@@ -215,11 +218,15 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             );
         }
 
-        if ($student) {
-            $student->update($payload);
-        } else {
-            Student::query()->create($payload);
-        }
+        DB::transaction(static function () use ($student, $payload, $groupIds): void {
+            if ($student) {
+                $student->update($payload);
+            } else {
+                $student = Student::query()->create($payload);
+            }
+
+            $student->groups()->sync($groupIds);
+        });
 
         $this->updated++;
     }
@@ -317,6 +324,33 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         }
 
         return (int) $trimmed;
+    }
+
+    /**
+     * Parse group IDs from the comma-separated format used by student exports.
+     *
+     * @return array<int, mixed>
+     */
+    private function groupIds(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        $values = is_array($value) ? $value : preg_split('/[,،]/u', (string) $value);
+
+        return array_values(array_unique(array_filter(
+            array_map(static function ($id): mixed {
+                if (! is_string($id)) {
+                    return $id;
+                }
+
+                $id = trim($id);
+
+                return ctype_digit($id) ? (int) $id : $id;
+            }, $values ?: []),
+            static fn ($id): bool => $id !== null && $id !== '',
+        ), SORT_REGULAR));
     }
 
     /**

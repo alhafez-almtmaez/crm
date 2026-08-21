@@ -6,7 +6,9 @@ use App\Support\PhoneNumberHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -64,6 +66,11 @@ class Student extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(Group::class);
+    }
+
+    public function groups(): BelongsToMany
+    {
+        return $this->belongsToMany(Group::class)->withTimestamps();
     }
 
     public function plan(): BelongsTo
@@ -160,5 +167,17 @@ class Student extends Model
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(static function (Student $student): void {
+            if ($student->group_id === null || ! Schema::hasTable('group_student')) {
+                return;
+            }
+
+            // Keep records created through the legacy group_id field available to the new relation.
+            $student->groups()->syncWithoutDetaching([(int) $student->group_id]);
+        });
     }
 }

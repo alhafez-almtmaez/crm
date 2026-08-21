@@ -76,6 +76,7 @@ class StudentController extends Controller implements HasMiddleware
     public function edit(Student $student): Response
     {
         $this->dataScope->abortUnlessCanAccessStudent($student);
+        $student->loadMissing('groups:id');
 
         return Inertia::render('Admin/Students/Edit', [
             'student' => [
@@ -90,7 +91,7 @@ class StudentController extends Controller implements HasMiddleware
                 'email' => $student->email,
                 'date_of_birth' => $student->date_of_birth?->format('Y-m-d'),
                 'center_id' => $student->center_id,
-                'group_id' => $student->group_id,
+                'group_ids' => $student->groups->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all(),
                 'plan_type_id' => $student->plan_type_id,
                 'current_plan_point_id' => $student->current_plan_point_id,
                 'max_daily_weight' => $student->max_daily_weight,

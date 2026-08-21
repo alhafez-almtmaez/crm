@@ -141,7 +141,7 @@ const columns = computed(() => [
     { field: 'full_name', header: t('students.studentName'), sortable: true, sortField: 'full_name' },
     { field: 'plan_name', header: t('students.plan'), sortable: true, sortField: 'plan_name' },
     { field: 'center_name', header: t('groups.center'), sortable: true, sortField: 'center_name' },
-    { field: 'group_name', header: t('students.group'), sortable: true, sortField: 'group_name' },
+    { field: 'group_name', header: t('students.groups'), sortable: true, sortField: 'group_name' },
     { field: 'admin_name', header: t('students.admin'), sortable: true, sortField: 'admin_name' },
     { field: 'parent_phone_number', header: t('students.parentPhone'), sortable: true, sortField: 'parent_phone_number', ltr: true },
     { field: 'phone_number', header: t('students.phone'), sortable: true, sortField: 'phone_number', ltr: true },

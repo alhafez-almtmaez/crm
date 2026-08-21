@@ -684,8 +684,8 @@ class EvaluationService
         $frozenLookup = array_fill_keys($this->frozenStudentIdsForDate($centerId, $date), true);
 
         $baseStudents = Student::query()
+            ->with(['groups' => static fn ($query) => $query->orderBy('groups.name')])
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
-            ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
             ->where('students.center_id', $centerId)
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('students.is_active', Student::STATUS_ACTIVE)
@@ -695,7 +695,6 @@ class EvaluationService
                 'students.id',
                 'students.full_name',
                 'plan_types.name as plan_name',
-                'groups.name as group_name',
             ])
             ->get();
 
@@ -712,7 +711,7 @@ class EvaluationService
                 studentId: $studentId,
                 fullName: (string) $student->full_name,
                 planName: $student->plan_name !== null ? (string) $student->plan_name : null,
-                groupName: $student->group_name !== null ? (string) $student->group_name : null,
+                groupName: $student->groups->pluck('name')->implode(', ') ?: null,
                 item: $existingItemsByStudent->get($studentId),
             );
             $included[$studentId] = true;
@@ -725,15 +724,14 @@ class EvaluationService
             }
 
             $student = Student::query()
+                ->with(['groups' => static fn ($query) => $query->orderBy('groups.name')])
                 ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
-                ->leftJoin('groups', 'students.group_id', '=', 'groups.id')
                 ->where('students.id', $studentId)
                 ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
                 ->select([
                     'students.id',
                     'students.full_name',
                     'plan_types.name as plan_name',
-                    'groups.name as group_name',
                 ])
                 ->first();
 
@@ -746,7 +744,7 @@ class EvaluationService
                 studentId: $studentId,
                 fullName: (string) ($student->full_name ?? ''),
                 planName: $student?->plan_name !== null ? (string) $student->plan_name : null,
-                groupName: $student?->group_name !== null ? (string) $student->group_name : null,
+                groupName: $student->groups->pluck('name')->implode(', ') ?: null,
                 item: $item,
             );
         }

@@ -110,7 +110,7 @@ class GroupService
 
         $rows = Student::query()
             ->with(['plan:id,name'])
-            ->where('group_id', $group->id)
+            ->whereHas('groups', static fn ($query) => $query->where('groups.id', $group->id))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'plan_type_id', 'current_plan_point_id', 'points_balance'])
@@ -141,7 +141,7 @@ class GroupService
 
         $students = Student::query()
             ->with(['plan:id,name'])
-            ->where('group_id', $group->id)
+            ->whereHas('groups', static fn ($query) => $query->where('groups.id', $group->id))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->orderByDesc('points_balance')
             ->orderBy('full_name')

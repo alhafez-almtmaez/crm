@@ -168,7 +168,7 @@ class HomeworkService
     {
         $homework->load([
             'students.student.center',
-            'students.student.group',
+            'students.student.groups',
             'students.student.plan',
             'students.plan',
             'students.currentPlanPoint',
@@ -456,7 +456,7 @@ class HomeworkService
     private function studentRowsForCreate(int $centerId, string $date): array
     {
         $students = Student::query()
-            ->with(['plan:id,name', 'group:id,name'])
+            ->with(['plan:id,name', 'groups:id,name'])
             ->where('center_id', $centerId)
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
@@ -465,7 +465,6 @@ class HomeworkService
             ->get([
                 'id',
                 'full_name',
-                'group_id',
                 'plan_type_id',
                 'current_plan_point_id',
                 'points_balance',
@@ -496,7 +495,7 @@ class HomeworkService
             'full_name' => (string) $student->full_name,
             'plan_id' => $planId,
             'plan_name' => $student->plan?->name,
-            'group_name' => $student->group?->name,
+            'group_name' => $student->groups->pluck('name')->implode(', '),
             'points_balance' => (int) $student->points_balance,
             'points_adjustment' => 0,
             'points_adjustment_original' => 0,
@@ -519,7 +518,7 @@ class HomeworkService
             'full_name' => (string) ($student?->full_name ?? ''),
             'plan_id' => $row->plan_id !== null ? (int) $row->plan_id : null,
             'plan_name' => $row->plan?->name ?? $student?->plan?->name,
-            'group_name' => $student?->group?->name,
+            'group_name' => $student?->groups->pluck('name')->implode(', '),
             'is_active' => (int) ($student?->is_active ?? Student::STATUS_INACTIVE),
             'points_balance' => (int) ($student?->points_balance ?? $row->points_balance_after),
             'points_balance_before' => (int) $row->points_balance_before,

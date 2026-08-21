@@ -36,16 +36,19 @@ class StudentMonthlyPlanGenerator
         array $holidayDates = [],
     ): array {
         $students = Student::query()
-            ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
+            ->with(['center:id,working_days', 'groups:id,center_id', 'plan:id,name'])
             ->where('center_id', $center->id)
-            ->when($groupId !== null, fn ($query) => $query->where('group_id', $groupId))
+            ->when($groupId !== null, fn ($query) => $query->whereHas(
+                'groups',
+                static fn ($groupQuery) => $groupQuery->where('groups.id', $groupId),
+            ))
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->whereNotNull('plan_type_id')
             ->orderBy('full_name')
             ->get();
 
-        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates);
+        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates, $groupId);
     }
 
     /**
@@ -60,15 +63,15 @@ class StudentMonthlyPlanGenerator
         array $holidayDates = [],
     ): array {
         $students = Student::query()
-            ->with(['center:id,working_days', 'group:id,center_id', 'plan:id,name'])
-            ->where('group_id', $group->id)
+            ->with(['center:id,working_days', 'groups:id,center_id', 'plan:id,name'])
+            ->whereHas('groups', static fn ($query) => $query->where('groups.id', $group->id))
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->whereNotNull('plan_type_id')
             ->orderBy('full_name')
             ->get();
 
-        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates);
+        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates, (int) $group->id);
     }
 
     /**
@@ -82,13 +85,14 @@ class StudentMonthlyPlanGenerator
         ?CarbonImmutable $startDate = null,
         ?CarbonImmutable $endDate = null,
         array $holidayDates = [],
+        ?int $groupId = null,
     ): array {
         $planIds = [];
         $monthlyPlanIds = [];
         $skipped = 0;
 
         foreach ($students as $student) {
-            $monthlyPlan = $this->generateForStudent($student, $month, $year, $startDate, $endDate, $holidayDates);
+            $monthlyPlan = $this->generateForStudent($student, $month, $year, $startDate, $endDate, $holidayDates, $groupId);
             if ($monthlyPlan === null) {
                 $skipped++;
 
@@ -116,6 +120,7 @@ class StudentMonthlyPlanGenerator
         ?CarbonImmutable $startDate = null,
         ?CarbonImmutable $endDate = null,
         array $holidayDates = [],
+        ?int $groupId = null,
     ): ?StudentMonthlyPlan {
         if ($student->plan_type_id === null) {
             return null;
@@ -125,13 +130,14 @@ class StudentMonthlyPlanGenerator
         [$periodStart, $periodEnd] = $this->periodForMonth($month, $year, $startDate, $endDate);
         $holidayDates = $this->normalizeHolidayDates($holidayDates, $periodStart, $periodEnd);
 
-        $student->loadMissing(['center:id,working_days', 'group:id,center_id']);
+        $student->loadMissing(['center:id,working_days', 'groups:id,center_id']);
+        $resolvedGroupId = $this->resolvedGroupId($student, $groupId);
         $dates = $this->workingDatesForMonth($student, $month, $year, $periodStart, $periodEnd, $holidayDates);
         if ($dates->isEmpty()) {
             return null;
         }
 
-        return DB::transaction(function () use ($student, $month, $year, $periodStart, $periodEnd, $holidayDates, $dates): ?StudentMonthlyPlan {
+        return DB::transaction(function () use ($student, $month, $year, $periodStart, $periodEnd, $holidayDates, $dates, $resolvedGroupId): ?StudentMonthlyPlan {
             $existingPlan = StudentMonthlyPlan::query()
                 ->withCount('items')
                 ->where('student_id', $student->id)
@@ -155,7 +161,7 @@ class StudentMonthlyPlanGenerator
             $lockedStudent->loadMissing('center:id,working_days');
             $startPoint = $this->startPoint($lockedStudent);
 
-            $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year, $periodStart, $periodEnd, $holidayDates);
+            $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year, $periodStart, $periodEnd, $holidayDates, $resolvedGroupId);
             $maxDailyWeight = DailyWeightLimits::normalizeLimit($lockedStudent->max_daily_weight ?? 2);
             $dailyWeightLimits = DailyWeightLimits::normalize(
                 $lockedStudent->daily_weight_limits,
@@ -167,7 +173,7 @@ class StudentMonthlyPlanGenerator
                 'monthly_plan_id' => $monthlyPlan->id,
                 'student_id' => $lockedStudent->id,
                 'center_id' => $lockedStudent->center_id,
-                'group_id' => $lockedStudent->group_id,
+                'group_id' => $resolvedGroupId,
                 'plan_id' => $lockedStudent->plan_type_id,
                 'month' => $month,
                 'year' => $year,
@@ -277,14 +283,15 @@ class StudentMonthlyPlanGenerator
         CarbonImmutable $startDate,
         CarbonImmutable $endDate,
         array $holidayDates,
+        ?int $groupId,
     ): MonthlyPlan {
         $attributes = [
-            'group_id' => $student->group_id,
+            'group_id' => $groupId,
             'month' => $month,
             'year' => $year,
         ];
 
-        if ($student->group_id === null) {
+        if ($groupId === null) {
             $attributes['center_id'] = $student->center_id;
         }
 
@@ -312,6 +319,21 @@ class StudentMonthlyPlanGenerator
         }
 
         return $monthlyPlan;
+    }
+
+    private function resolvedGroupId(Student $student, ?int $requestedGroupId): ?int
+    {
+        if ($requestedGroupId !== null) {
+            return $requestedGroupId;
+        }
+
+        if ($student->group_id !== null && $student->groups->contains('id', (int) $student->group_id)) {
+            return (int) $student->group_id;
+        }
+
+        $groupId = $student->groups->pluck('id')->sort()->first();
+
+        return $groupId !== null ? (int) $groupId : null;
     }
 
     private function refreshMonthlyPlanTotals(MonthlyPlan $monthlyPlan): void

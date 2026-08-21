@@ -48,7 +48,7 @@ const form = useForm({
     email: props.student.email ?? '',
     date_of_birth: props.student.date_of_birth ?? '',
     center_id: props.student.center_id ?? null,
-    group_id: props.student.group_id ?? null,
+    group_ids: props.student.group_ids ?? [],
     plan_type_id: props.student.plan_type_id ?? null,
     current_plan_point_id: props.student.current_plan_point_id ?? null,
     max_daily_weight: Number(props.student.max_daily_weight ?? 2),

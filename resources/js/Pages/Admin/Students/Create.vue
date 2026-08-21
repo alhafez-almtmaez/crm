@@ -40,7 +40,7 @@ const form = useForm({
     email: '',
     date_of_birth: '',
     center_id: null,
-    group_id: null,
+    group_ids: [],
     plan_type_id: null,
     current_plan_point_id: null,
     max_daily_weight: 2,
