@@ -9,7 +9,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('message_templates')) {
+        if (! Schema::hasTable('message_templates')) {
+            return;
+        }
+
+        // Fresh SQLite databases already use the final schema defined by the create migration.
+        if (DB::getDriverName() === 'sqlite') {
             return;
         }
 
@@ -29,11 +34,11 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (!Schema::hasTable('message_templates')) {
+        if (! Schema::hasTable('message_templates')) {
             return;
         }
 
-        if (!Schema::hasColumn('message_templates', 'center_id')) {
+        if (! Schema::hasColumn('message_templates', 'center_id')) {
             Schema::table('message_templates', function (Blueprint $table): void {
                 $table->foreignId('center_id')->nullable()->after('id')->constrained('centers')->nullOnDelete();
             });
@@ -58,7 +63,7 @@ return new class extends Migration
                 ->where('indexname', 'message_templates_key_unique')
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 DB::statement('CREATE UNIQUE INDEX message_templates_key_unique ON message_templates ("key")');
             }
 
@@ -72,7 +77,7 @@ return new class extends Migration
                 ->where('index_name', 'message_templates_key_unique')
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 DB::statement('ALTER TABLE message_templates ADD UNIQUE message_templates_key_unique (`key`)');
             }
 

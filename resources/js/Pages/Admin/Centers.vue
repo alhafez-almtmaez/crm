@@ -37,9 +37,22 @@ const historyVisible = ref(false);
 const historyEndpoint = ref('');
 const historyEntityName = ref('');
 
+const rows = computed(() => (centers.value ?? []).map((center) => {
+    const isFemale = center.student_gender === 'female';
+
+    return {
+        ...center,
+        student_gender_label: isFemale ? t('centers.femaleStudents') : t('centers.maleStudents'),
+        student_gender_badge_class: isFemale
+            ? 'bg-pink-700 text-white min-w-20 justify-center whitespace-nowrap'
+            : 'bg-sky-700 text-white min-w-20 justify-center whitespace-nowrap',
+    };
+}));
+
 const columns = computed(() => [
     { field: 'id', header: t('common.id'), sortable: true },
     { field: 'name', header: t('centers.centerName'), sortable: true },
+    { field: 'student_gender_label', header: t('centers.studentType'), sortable: true, sortField: 'student_gender', badge: true, badgeClassField: 'student_gender_badge_class' },
     { field: 'phone', header: t('centers.phone'), sortable: true, ltr: true },
     { field: 'working_days_display', header: t('centers.workingDays') },
     { field: 'created_at_formatted', header: t('centers.createdAt'), sortable: true, sortField: 'created_at' },
@@ -108,7 +121,7 @@ onMounted(() => {
 
             <DataTable
                 :columns="columns"
-                :rows="centers"
+                :rows="rows"
                 :loading="loading"
                 :total-records="totalRecords"
                 :current-page="currentPage"

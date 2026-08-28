@@ -1,0 +1,518 @@
+@font-face {
+    font-family: "Certificate Amiri";
+    src: url("../fonts/certificate/Amiri-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Amiri";
+    src: url("../fonts/certificate/Amiri-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Naskh";
+    src: url("../fonts/certificate/NotoNaskhArabic-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Naskh";
+    src: url("../fonts/certificate/NotoNaskhArabic-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Kufi";
+    src: url("../fonts/certificate/NotoKufiArabic-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Kufi";
+    src: url("../fonts/certificate/NotoKufiArabic-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Sans Arabic";
+    src: url("../fonts/certificate/NotoSansArabic-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Sans Arabic";
+    src: url("../fonts/certificate/NotoSansArabic-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Nastaliq";
+    src: url("../fonts/certificate/NotoNastaliqUrdu-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+}
+
+@font-face {
+    font-family: "Certificate Nastaliq";
+    src: url("../fonts/certificate/NotoNastaliqUrdu-Bold.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+}
+
+:root {
+    color-scheme: light;
+    --certificate-heading-color: #e8a84e;
+    --certificate-student-name-color: #006f89;
+    --certificate-content-color: #111;
+    --certificate-accent-color: #006f89;
+    --certificate-body-font: "Certificate Naskh", "Noto Naskh Arabic", "Amiri", serif;
+    --certificate-display-font: "Certificate Amiri", "Amiri", serif;
+    --certificate-paper: #fff;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
+    margin: 0;
+}
+
+body {
+    background: #edf1f3;
+    color: var(--certificate-content-color);
+    font-family: var(--certificate-body-font);
+    font-synthesis: none;
+}
+
+.certificate-page {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    padding: 24px;
+}
+
+.certificate-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: min(1209px, 100%);
+    margin: 0 auto 14px;
+    direction: rtl;
+}
+
+.certificate-toolbar button,
+.certificate-toolbar__link {
+    appearance: none;
+    border: 0;
+    border-radius: 10px;
+    background: var(--certificate-accent-color);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    font: 700 16px/1.2 system-ui, sans-serif;
+    justify-content: center;
+    padding: 11px 18px;
+    text-decoration: none;
+}
+
+.certificate-toolbar__link--secondary {
+    background: #42545b;
+}
+
+.certificate {
+    container-type: inline-size;
+    position: relative;
+    width: min(1209px, 100%);
+    aspect-ratio: 297 / 210;
+    overflow: hidden;
+    background: var(--certificate-paper);
+    box-shadow: 0 16px 45px rgb(16 52 62 / 16%);
+    color: var(--certificate-content-color);
+    direction: rtl;
+    font-family: var(--certificate-body-font);
+    font-synthesis: none;
+    isolation: isolate;
+}
+
+.certificate__frame {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+    user-select: none;
+}
+
+.certificate__logo {
+    position: absolute;
+    z-index: 2;
+    object-fit: contain;
+}
+
+.certificate__logo--left {
+    top: 9.9%;
+    left: 8.9%;
+    width: 8%;
+    height: 12.7%;
+}
+
+.certificate__logo--right {
+    top: 11.5%;
+    right: 8.9%;
+    width: 8.6%;
+    height: 18.8%;
+}
+
+.certificate__logo--project-solo {
+    top: 11.5%;
+    right: auto;
+    left: 8.9%;
+    width: 8.6%;
+    height: 18.8%;
+}
+
+.certificate__title,
+.certificate__quote,
+.certificate__intro,
+.certificate__student,
+.certificate__achievement,
+.certificate__closing,
+.certificate__signing,
+.certificate__dates {
+    position: absolute;
+    z-index: 2;
+    margin: 0;
+}
+
+.certificate__intro,
+.certificate__achievement,
+.certificate__closing,
+.certificate__signing,
+.certificate__dates {
+    color: var(--certificate-content-color);
+}
+
+.certificate__title {
+    top: 16.91%;
+    left: 26.22%;
+    width: 47.2%;
+    color: var(--certificate-heading-color);
+    font-family: var(--certificate-display-font);
+    font-size: 4.51cqw;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.certificate__quote {
+    top: 31%;
+    left: 10%;
+    display: flex;
+    width: 80%;
+    align-items: center;
+    justify-content: center;
+    color: var(--certificate-accent-color);
+    font-family: var(--certificate-display-font);
+    font-size: 2cqw;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.certificate__quote > span:not(.certificate__quote-ornament) {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.certificate__quote > span:first-child {
+    text-align: left;
+}
+
+.certificate__quote > span:last-child {
+    text-align: right;
+}
+
+.certificate__quote-ornament {
+    flex: 0 0 auto;
+    margin-inline: 1.1cqw;
+    font-size: 1.55cqw;
+    opacity: 0.82;
+}
+
+.certificate__intro {
+    top: 40.25%;
+    left: 5.84%;
+    width: 87.97%;
+    font-size: 2.15cqw;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: center;
+    text-wrap: balance;
+}
+
+.certificate__intro strong {
+    font-weight: 400;
+}
+
+.certificate__student {
+    top: 47.85%;
+    left: 22.84%;
+    width: 53.64%;
+    color: var(--certificate-student-name-color);
+    font-family: var(--certificate-display-font);
+    font-size: 3.65cqw;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.certificate__student strong,
+.certificate__achievement strong {
+    font-weight: 700;
+}
+
+.certificate__student--long {
+    font-size: 3.15cqw;
+}
+
+.certificate__student--very-long {
+    font-size: 2.65cqw;
+}
+
+.certificate__student--extra-long {
+    left: 12.28%;
+    width: 75.09%;
+    font-size: 2.1cqw;
+}
+
+.ornament {
+    color: var(--certificate-content-color);
+}
+
+.certificate__student .ornament {
+    color: inherit;
+}
+
+.certificate__achievement {
+    top: 56.74%;
+    left: 12.28%;
+    width: 75.09%;
+    font-size: 2.76cqw;
+    line-height: 1.4;
+    text-align: center;
+    text-wrap: balance;
+}
+
+.certificate__achievement strong {
+    color: var(--certificate-accent-color);
+}
+
+.certificate__achievement--long {
+    left: 9.06%;
+    width: 81.53%;
+    font-size: 2.45cqw;
+}
+
+.certificate__achievement--very-long {
+    left: 6.91%;
+    width: 85.82%;
+    font-size: 2.14cqw;
+}
+
+.certificate__closing {
+    top: 64.34%;
+    left: 10.13%;
+    width: 79.38%;
+    font-size: 2.39cqw;
+    line-height: 1.35;
+    text-align: center;
+    text-wrap: balance;
+}
+
+.certificate__signing {
+    top: 72.04%;
+    height: 19.83%;
+    text-align: center;
+}
+
+.certificate__signing h2,
+.certificate__dates h2 {
+    margin: 0;
+    font-size: 2.31cqw;
+    font-weight: 400;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.certificate__signing h2 {
+    transform: translateY(.4cqw);
+}
+
+.certificate__signing--center {
+    left: 8.12%;
+    width: 28.43%;
+}
+
+.certificate__signing--project {
+    left: 41.78%;
+    width: 19.63%;
+}
+
+.certificate__signing--project-solo {
+    left: 8.12%;
+    width: 28.43%;
+}
+
+.signing__stamp,
+.signing__signature {
+    position: absolute;
+    object-fit: contain;
+}
+
+.certificate__signing--center .signing__stamp {
+    top: 18%;
+    left: 1.8%;
+    width: 52.3%;
+    height: 67.3%;
+}
+
+.certificate__signing--center .signing__signature {
+    top: 23.8%;
+    right: 5.3%;
+    width: 56%;
+    height: 65.4%;
+}
+
+.certificate__signing--project .signing__stamp {
+    top: 20.6%;
+    left: 12.2%;
+    width: 45.2%;
+    height: 65.5%;
+}
+
+.certificate__signing--project .signing__signature {
+    top: 29.4%;
+    right: 19.7%;
+    width: 31.9%;
+    height: 52.2%;
+}
+
+.certificate__dates {
+    top: 71.95%;
+    right: 11.02%;
+    width: 21.46%;
+    text-align: center;
+}
+
+.certificate__dates p {
+    width: 82%;
+    margin: .55cqw auto 0;
+    font-size: 1.67cqw;
+    line-height: 1.35;
+    text-align: start;
+    white-space: nowrap;
+}
+
+.certificate__dates h2 + p {
+    margin-top: 1.31cqw;
+}
+
+@media (max-width: 760px) {
+    .certificate-page {
+        align-content: start;
+        padding: 10px;
+    }
+
+    .certificate-toolbar {
+        margin-bottom: 8px;
+    }
+}
+
+body.certificate-preview-body {
+    width: 100vw;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    background: #fff;
+}
+
+.certificate-page--preview {
+    display: grid;
+    width: 100vw;
+    height: 100vh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #fff;
+    place-items: center;
+}
+
+.certificate-page--preview .certificate {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 297 / 210;
+    box-shadow: none;
+}
+
+@page {
+    size: A4 landscape;
+    margin: 0;
+}
+
+@media print {
+    html,
+    body {
+        width: 297mm;
+        height: 210mm;
+        overflow: hidden;
+        background: #fff;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .certificate-page {
+        display: grid;
+        width: 297mm;
+        height: 210mm;
+        min-height: 0;
+        padding: 0;
+        place-items: center;
+    }
+
+    .certificate-toolbar {
+        display: none;
+    }
+
+    .certificate {
+        width: 297mm;
+        height: 210mm;
+        box-shadow: none;
+    }
+
+}

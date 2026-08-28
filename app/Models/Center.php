@@ -13,15 +13,23 @@ class Center extends Model
     use HasFactory;
     use LogsActivity;
 
+    public const STUDENT_GENDER_MALE = 'male';
+
+    public const STUDENT_GENDER_FEMALE = 'female';
+
     protected $fillable = [
         'name',
+        'certificate_name',
+        'student_gender',
         'phone',
         'group_serialized',
         'working_days',
+        'show_center_manager_signature',
     ];
 
     protected $casts = [
         'working_days' => 'array',
+        'show_center_manager_signature' => 'bool',
     ];
 
     public function groups(): HasMany
@@ -53,7 +61,15 @@ class Center extends Model
     {
         return LogOptions::defaults()
             ->useLogName('centers')
-            ->logOnly(['name', 'phone', 'group_serialized', 'working_days'])
+            ->logOnly([
+                'name',
+                'certificate_name',
+                'student_gender',
+                'phone',
+                'group_serialized',
+                'working_days',
+                'show_center_manager_signature',
+            ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

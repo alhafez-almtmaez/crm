@@ -15,6 +15,8 @@ return [
     'permissions' => [
         'dashboard.view',
         'activity_logs.view',
+        'certificate_designs.view',
+        'certificate_designs.update',
         'whatsapp.view',
     ],
 

@@ -1,0 +1,875 @@
+<script setup>
+import axios from 'axios';
+import { Head, useForm } from '@inertiajs/vue3';
+import Button from 'primevue/button';
+import ColorPicker from 'primevue/colorpicker';
+import InputText from 'primevue/inputtext';
+import Select from 'primevue/select';
+import SelectButton from 'primevue/selectbutton';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { adminNavItems } from '../../admin/navItems';
+import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
+import AdminLayout from '../../components/admin/AdminLayout.vue';
+import { useAppToast } from '../../composables/useAppToast';
+
+const GENDER_VALUES = ['male', 'female'];
+const ACHIEVEMENT_TYPE_VALUES = ['surah', 'part', 'three_parts'];
+const COLOR_FIELDS = [
+    { key: 'heading_color', labelKey: 'certificateDesign.colors.heading' },
+    { key: 'student_name_color', labelKey: 'certificateDesign.colors.studentName' },
+    { key: 'content_color', labelKey: 'certificateDesign.colors.content' },
+    { key: 'accent_color', labelKey: 'certificateDesign.colors.accent' },
+];
+const props = defineProps({
+    designs: {
+        type: Object,
+        default: () => ({}),
+    },
+    catalog: {
+        type: Object,
+        default: () => ({}),
+    },
+    previewAchievements: {
+        type: Object,
+        default: () => ({}),
+    },
+    previewCenters: {
+        type: Object,
+        default: () => ({}),
+    },
+    canUpdate: {
+        type: Boolean,
+        default: false,
+    },
+});
+
+const { t, te } = useI18n();
+const appToast = useAppToast();
+
+const deepClone = (value) => JSON.parse(JSON.stringify(value ?? {}));
+const normalizeHex = (value) => {
+    const candidate = String(value ?? '').trim();
+    const cleaned = candidate.replace(/^#/, '');
+
+    return /^[0-9a-fA-F]{6}$/.test(cleaned) ? `#${cleaned.toUpperCase()}` : null;
+};
+const localizedCatalogLabel = (namespace, option) => {
+    const key = `certificateDesign.${namespace}.${option.value}`;
+
+    return te(key) ? t(key) : (option.label || option.value);
+};
+
+const rawThemes = computed(() => props.catalog?.themes ?? []);
+const rawFonts = computed(() => props.catalog?.fonts ?? []);
+const themes = computed(() => rawThemes.value.map((theme) => ({
+    ...theme,
+    label: localizedCatalogLabel('themes', theme),
+})));
+const fonts = computed(() => rawFonts.value.map((font) => ({
+    ...font,
+    label: localizedCatalogLabel('fonts', font),
+})));
+const genders = computed(() => {
+    const options = props.catalog?.genders?.length
+        ? props.catalog.genders
+        : GENDER_VALUES.map((value) => ({ value, label: value }));
+
+    return options.map((option) => ({
+        ...option,
+        label: localizedCatalogLabel('genders', option),
+    }));
+});
+const achievementTypes = computed(() => {
+    const options = props.catalog?.achievementTypes?.length
+        ? props.catalog.achievementTypes
+        : ACHIEVEMENT_TYPE_VALUES.map((value) => ({ value, label: value }));
+
+    return options.map((option) => ({
+        ...option,
+        label: localizedCatalogLabel('types', option),
+    }));
+});
+
+const findTheme = (value) => rawThemes.value.find((theme) => theme.value === value) ?? rawThemes.value[0] ?? {};
+const findFont = (value) => rawFonts.value.find((font) => font.value === value) ?? rawFonts.value[0] ?? {};
+const normalizeDesign = (design = {}) => {
+    const theme = findTheme(design.theme ?? design.theme_key);
+    const font = findFont(design.font ?? design.font_family ?? design.font_key);
+
+    return {
+        theme: design.theme ?? design.theme_key ?? theme.value ?? '',
+        font: design.font ?? design.font_family ?? design.font_key ?? font.value ?? '',
+        heading_color: normalizeHex(design.heading_color) ?? normalizeHex(theme.heading_color) ?? '#A8781D',
+        student_name_color: normalizeHex(design.student_name_color) ?? normalizeHex(theme.student_name_color) ?? '#173F6B',
+        content_color: normalizeHex(design.content_color) ?? normalizeHex(theme.content_color) ?? '#27364A',
+        accent_color: normalizeHex(design.accent_color) ?? normalizeHex(theme.accent_color) ?? '#2B5F91',
+    };
+};
+const normalizeDesignMatrix = (source = {}) => Object.fromEntries(
+    GENDER_VALUES.map((gender) => [
+        gender,
+        Object.fromEntries(ACHIEVEMENT_TYPE_VALUES.map((type) => [
+            type,
+            normalizeDesign(source?.[gender]?.[type]),
+        ])),
+    ]),
+);
+
+const normalizedDesigns = normalizeDesignMatrix(props.designs);
+const initialAchievementType = ACHIEVEMENT_TYPE_VALUES.find(
+    (type) => Array.isArray(props.previewAchievements?.[type])
+        && props.previewAchievements[type].length > 0,
+) ?? ACHIEVEMENT_TYPE_VALUES[0];
+const initialGender = GENDER_VALUES.find(
+    (gender) => Array.isArray(props.previewCenters?.[gender])
+        && props.previewCenters[gender].length > 0,
+) ?? GENDER_VALUES[0];
+const form = useForm({
+    designs: deepClone(normalizedDesigns),
+});
+const savedDesigns = ref(deepClone(normalizedDesigns));
+const selectedGender = ref(initialGender);
+const selectedAchievementType = ref(initialAchievementType);
+const previewFrame = ref(null);
+const downloadingPreviewPdf = ref(false);
+const selectedPreviewPointIds = ref(Object.fromEntries(
+    ACHIEVEMENT_TYPE_VALUES.map((type) => [type, null]),
+));
+const selectedPreviewCenterIds = ref(Object.fromEntries(
+    GENDER_VALUES.map((gender) => [gender, null]),
+));
+const warmedFrames = new Map();
+
+const previewCentersByGender = computed(() => Object.fromEntries(
+    GENDER_VALUES.map((gender) => {
+        const options = Array.isArray(props.previewCenters?.[gender])
+            ? props.previewCenters[gender]
+            : [];
+
+        return [gender, options
+            .map((option) => ({
+                id: Number(option?.id),
+                name: String(option?.name ?? '').trim(),
+                center_name: String(option?.center_name ?? '').trim(),
+                student_gender: String(option?.student_gender ?? ''),
+                show_center_manager_signature: option?.show_center_manager_signature === true,
+            }))
+            .filter((option) => Number.isInteger(option.id)
+                && option.id > 0
+                && option.student_gender === gender
+                && option.center_name !== '')];
+    }),
+));
+const previewAchievementsByType = computed(() => Object.fromEntries(
+    ACHIEVEMENT_TYPE_VALUES.map((type) => {
+        const options = Array.isArray(props.previewAchievements?.[type])
+            ? props.previewAchievements[type]
+            : [];
+
+        return [type, options
+            .map((option) => ({
+                id: Number(option?.id),
+                achievement_type: String(option?.achievement_type ?? ''),
+                achievement_name: String(option?.achievement_name ?? '').trim(),
+                plan_name: String(option?.plan_name ?? '').trim(),
+                plan_point_name: String(option?.plan_point_name ?? '').trim(),
+            }))
+            .filter((option) => Number.isInteger(option.id)
+                && option.id > 0
+                && option.achievement_type === type
+                && option.achievement_name !== '')];
+    }),
+));
+const currentPreviewCenterOptions = computed(
+    () => previewCentersByGender.value[selectedGender.value] ?? [],
+);
+const selectedPreviewCenterId = computed({
+    get: () => selectedPreviewCenterIds.value[selectedGender.value] ?? null,
+    set: (value) => {
+        selectedPreviewCenterIds.value[selectedGender.value] = value === null
+            ? null
+            : Number(value);
+    },
+});
+const currentPreviewCenter = computed(() => currentPreviewCenterOptions.value.find(
+    (option) => option.id === selectedPreviewCenterId.value,
+) ?? null);
+const currentPreviewAchievementOptions = computed(
+    () => previewAchievementsByType.value[selectedAchievementType.value] ?? [],
+);
+const selectedPreviewPointId = computed({
+    get: () => selectedPreviewPointIds.value[selectedAchievementType.value] ?? null,
+    set: (value) => {
+        selectedPreviewPointIds.value[selectedAchievementType.value] = value === null
+            ? null
+            : Number(value);
+    },
+});
+const currentPreviewAchievement = computed(() => currentPreviewAchievementOptions.value.find(
+    (option) => option.id === selectedPreviewPointId.value,
+) ?? null);
+const currentDesign = computed(() => form.designs[selectedGender.value][selectedAchievementType.value]);
+const selectedTheme = computed(() => themes.value.find((theme) => theme.value === currentDesign.value.theme) ?? themes.value[0] ?? {});
+const selectedFont = computed(() => fonts.value.find((font) => font.value === currentDesign.value.font) ?? fonts.value[0] ?? {});
+const selectedGenderLabel = computed(() => genders.value.find((option) => option.value === selectedGender.value)?.label ?? '');
+const selectedTypeLabel = computed(() => achievementTypes.value.find((option) => option.value === selectedAchievementType.value)?.label ?? '');
+
+watch(previewCentersByGender, (optionsByGender) => {
+    GENDER_VALUES.forEach((gender) => {
+        const options = optionsByGender[gender] ?? [];
+        const selectedId = selectedPreviewCenterIds.value[gender];
+
+        if (!options.some((option) => option.id === selectedId)) {
+            selectedPreviewCenterIds.value[gender] = options[0]?.id ?? null;
+        }
+    });
+}, { immediate: true });
+
+watch(previewAchievementsByType, (optionsByType) => {
+    ACHIEVEMENT_TYPE_VALUES.forEach((type) => {
+        const options = optionsByType[type] ?? [];
+        const selectedId = selectedPreviewPointIds.value[type];
+
+        if (!options.some((option) => option.id === selectedId)) {
+            selectedPreviewPointIds.value[type] = options[0]?.id ?? null;
+        }
+    });
+}, { immediate: true });
+
+const resolvedColor = (field) => normalizeHex(currentDesign.value[field])
+    ?? normalizeHex(selectedTheme.value[field])
+    ?? '#222222';
+const pickerValue = (field) => resolvedColor(field).replace(/^#/, '');
+const hasInvalidColor = (design, field) => normalizeHex(design?.[field]) === null;
+const cellHasInvalidColors = (gender, type) => COLOR_FIELDS.some(
+    (field) => hasInvalidColor(form.designs[gender][type], field.key),
+);
+const hasInvalidColors = computed(() => GENDER_VALUES.some(
+    (gender) => ACHIEVEMENT_TYPE_VALUES.some((type) => cellHasInvalidColors(gender, type)),
+));
+const currentDesignHasInvalidColors = computed(() => cellHasInvalidColors(
+    selectedGender.value,
+    selectedAchievementType.value,
+));
+
+const selectContext = (gender, type) => {
+    selectedGender.value = gender;
+    selectedAchievementType.value = type;
+};
+const previewAchievementContext = (option) => [option?.plan_name, option?.plan_point_name]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(' · ');
+const previewCenterContext = (option) => option?.name !== option?.center_name
+    ? option?.name
+    : '';
+const selectTheme = (theme) => {
+    if (!props.canUpdate) return;
+
+    currentDesign.value.theme = theme.value;
+    COLOR_FIELDS.forEach(({ key }) => {
+        currentDesign.value[key] = normalizeHex(theme[key]) ?? currentDesign.value[key];
+    });
+};
+const updateFont = (value) => {
+    currentDesign.value.font = value;
+};
+const updateColor = (field, value) => {
+    const candidate = String(value ?? '');
+    currentDesign.value[field] = candidate.startsWith('#') ? candidate : `#${candidate}`;
+};
+const normalizeColorField = (field) => {
+    const normalized = normalizeHex(currentDesign.value[field]);
+    if (normalized) currentDesign.value[field] = normalized;
+};
+const restoreThemeColors = () => {
+    COLOR_FIELDS.forEach(({ key }) => {
+        currentDesign.value[key] = normalizeHex(selectedTheme.value[key]) ?? currentDesign.value[key];
+    });
+};
+const isCellDirty = (gender, type) => JSON.stringify(form.designs[gender][type])
+    !== JSON.stringify(savedDesigns.value[gender][type]);
+const cellTheme = (gender, type) => themes.value.find((theme) => theme.value === form.designs[gender][type].theme) ?? themes.value[0] ?? {};
+const fieldError = (field) => form.errors[`designs.${selectedGender.value}.${selectedAchievementType.value}.${field}`] ?? '';
+
+const previewDesignPayload = computed(() => ({
+    theme: currentDesign.value.theme,
+    font: currentDesign.value.font,
+    heading_color: resolvedColor('heading_color'),
+    student_name_color: resolvedColor('student_name_color'),
+    content_color: resolvedColor('content_color'),
+    accent_color: resolvedColor('accent_color'),
+}));
+const previewMessage = computed(() => ({
+    type: 'certificate-design-preview:update',
+    ...previewDesignPayload.value,
+    center_id: currentPreviewCenter.value?.id ?? null,
+    achievement_type: selectedAchievementType.value,
+    plan_point_id: currentPreviewAchievement.value?.id ?? null,
+}));
+
+const sendPreviewUpdate = () => {
+    if (typeof window === 'undefined' || !previewFrame.value?.contentWindow) return;
+
+    previewFrame.value.contentWindow.postMessage(previewMessage.value, window.location.origin);
+};
+const handlePreviewMessage = (event) => {
+    if (typeof window === 'undefined'
+        || event.origin !== window.location.origin
+        || event.source !== previewFrame.value?.contentWindow
+        || event.data?.type !== 'certificate-design-preview:ready') {
+        return;
+    }
+
+    sendPreviewUpdate();
+};
+const prewarmFrame = (url) => {
+    const source = String(url ?? '').trim();
+    if (source === '' || warmedFrames.has(source) || typeof window === 'undefined') return;
+
+    const image = new window.Image();
+    image.decoding = 'async';
+    image.addEventListener('error', () => warmedFrames.delete(source), { once: true });
+    image.src = source;
+    warmedFrames.set(source, image);
+};
+
+watch(previewMessage, sendPreviewUpdate, { deep: true, flush: 'post' });
+watch(
+    () => selectedTheme.value.frame_url,
+    (url) => prewarmFrame(url),
+    { immediate: true },
+);
+
+onMounted(() => window.addEventListener('message', handlePreviewMessage));
+onBeforeUnmount(() => window.removeEventListener('message', handlePreviewMessage));
+
+const downloadPreviewPdf = async () => {
+    if (downloadingPreviewPdf.value
+        || currentDesignHasInvalidColors.value
+        || currentPreviewCenter.value === null
+        || currentPreviewAchievement.value === null) {
+        return;
+    }
+
+    downloadingPreviewPdf.value = true;
+
+    try {
+        const response = await axios.post('/admin/certificate-designs/preview/pdf', {
+            center_id: currentPreviewCenter.value.id,
+            plan_point_id: currentPreviewAchievement.value.id,
+            design: previewDesignPayload.value,
+        }, {
+            responseType: 'blob',
+        });
+        const blob = response.data instanceof Blob
+            ? response.data
+            : new Blob([response.data], { type: 'application/pdf' });
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = objectUrl;
+        link.download = `certificate-preview-center-${currentPreviewCenter.value.id}-${selectedAchievementType.value}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+        if (error?.response?.data instanceof Blob) {
+            try {
+                const parsed = JSON.parse(await error.response.data.text());
+                if (parsed && typeof parsed === 'object') error.response.data = parsed;
+            } catch {
+                // Keep the original Axios error when the response is not JSON.
+            }
+        }
+
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.requestFailedTitle'),
+            fallback: t('certificateDesign.previewPdfFailed'),
+        });
+    } finally {
+        downloadingPreviewPdf.value = false;
+    }
+};
+
+const submit = () => {
+    if (!props.canUpdate || hasInvalidColors.value) return;
+
+    form.put('/admin/certificate-designs', {
+        preserveScroll: true,
+        onSuccess: () => {
+            savedDesigns.value = deepClone(form.designs);
+            form.defaults({ designs: deepClone(form.designs) });
+        },
+    });
+};
+</script>
+
+<template>
+    <Head :title="t('certificateDesign.title')">
+        <link rel="stylesheet" href="/css/certificate-font-previews.css" />
+    </Head>
+
+    <AdminLayout :nav-items="adminNavItems" :page-title="t('certificateDesign.title')">
+        <form class="space-y-6" @submit.prevent="submit">
+            <AdminBreadcrumbs />
+
+            <header class="flex flex-col gap-5 rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm) sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div class="flex items-start gap-4">
+                    <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_oklab,var(--accent)_14%,transparent)] text-[var(--accent)]">
+                        <i class="pi pi-palette text-xl"></i>
+                    </span>
+                    <div>
+                        <h1 class="text-2xl font-semibold sm:text-3xl">{{ t('certificateDesign.title') }}</h1>
+                        <p class="mt-2 max-w-3xl text-sm leading-6 text-(--muted-foreground) sm:text-base">
+                            {{ t('certificateDesign.description') }}
+                        </p>
+                    </div>
+                </div>
+
+                <Button
+                    type="submit"
+                    icon="pi pi-save"
+                    :label="form.recentlySuccessful ? t('certificateDesign.saved') : t('certificateDesign.save')"
+                    :loading="form.processing"
+                    :disabled="!canUpdate || hasInvalidColors || form.processing"
+                    class="h-11 shrink-0 px-5"
+                />
+            </header>
+
+            <div
+                v-if="!canUpdate"
+                class="flex items-start gap-3 rounded-(--radius-base) border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100"
+            >
+                <i class="pi pi-lock mt-0.5"></i>
+                <p>{{ t('certificateDesign.readOnly') }}</p>
+            </div>
+
+            <div
+                v-if="form.hasErrors"
+                class="flex items-start gap-3 rounded-(--radius-base) border border-red-300/60 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800/60 dark:bg-red-950/35 dark:text-red-200"
+            >
+                <i class="pi pi-exclamation-circle mt-0.5"></i>
+                <p>{{ t('certificateDesign.validationError') }}</p>
+            </div>
+
+            <div class="grid items-start gap-6 xl:grid-cols-[minmax(24rem,0.88fr)_minmax(36rem,1.35fr)]">
+                <section class="space-y-5">
+                    <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
+                        <div>
+                            <h2 class="text-xl font-semibold">{{ t('certificateDesign.contextTitle') }}</h2>
+                            <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificateDesign.contextHint') }}</p>
+                        </div>
+
+                        <div class="mt-5 grid gap-5">
+                            <div>
+                                <p id="certificate-design-gender-label" class="mb-2 text-sm font-medium">{{ t('certificateDesign.studentGender') }}</p>
+                                <SelectButton
+                                    v-model="selectedGender"
+                                    :options="genders"
+                                    option-label="label"
+                                    option-value="value"
+                                    :allow-empty="false"
+                                    aria-labelledby="certificate-design-gender-label"
+                                    fluid
+                                />
+                            </div>
+
+                            <div>
+                                <label for="certificate-preview-center" class="mb-2 block text-sm font-medium">
+                                    {{ t('certificateDesign.previewCenter') }}
+                                </label>
+                                <p class="mb-2 text-xs leading-5 text-(--muted-foreground)">
+                                    {{ t('certificateDesign.previewCenterHint') }}
+                                </p>
+
+                                <Select
+                                    v-if="currentPreviewCenterOptions.length"
+                                    input-id="certificate-preview-center"
+                                    v-model="selectedPreviewCenterId"
+                                    :options="currentPreviewCenterOptions"
+                                    option-label="center_name"
+                                    option-value="id"
+                                    :filter-fields="['center_name', 'name']"
+                                    :filter-placeholder="t('certificateDesign.searchPreviewCenter')"
+                                    :empty-filter-message="t('certificateDesign.noMatchingPreviewCenter')"
+                                    filter
+                                    fluid
+                                >
+                                    <template #value>
+                                        <div v-if="currentPreviewCenter" class="flex min-w-0 items-center justify-between gap-3 text-start">
+                                            <span class="min-w-0">
+                                                <span class="block truncate font-semibold">{{ currentPreviewCenter.center_name }}</span>
+                                                <span v-if="previewCenterContext(currentPreviewCenter)" class="mt-0.5 block truncate text-xs text-(--muted-foreground)">
+                                                    {{ previewCenterContext(currentPreviewCenter) }}
+                                                </span>
+                                            </span>
+                                            <span
+                                                class="shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+                                                :class="currentPreviewCenter.show_center_manager_signature
+                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
+                                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                                            >
+                                                {{ t(currentPreviewCenter.show_center_manager_signature
+                                                    ? 'certificateDesign.centerIdentityVisible'
+                                                    : 'certificateDesign.centerIdentityHidden') }}
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template #option="{ option }">
+                                        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 py-0.5 text-start">
+                                            <span class="min-w-0">
+                                                <span class="block truncate font-semibold">{{ option.center_name }}</span>
+                                                <span v-if="previewCenterContext(option)" class="mt-0.5 block truncate text-xs text-(--muted-foreground)">
+                                                    {{ previewCenterContext(option) }}
+                                                </span>
+                                            </span>
+                                            <span
+                                                class="shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+                                                :class="option.show_center_manager_signature
+                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
+                                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                                            >
+                                                {{ t(option.show_center_manager_signature
+                                                    ? 'certificateDesign.centerIdentityVisible'
+                                                    : 'certificateDesign.centerIdentityHidden') }}
+                                            </span>
+                                        </div>
+                                    </template>
+                                </Select>
+
+                                <div
+                                    v-else
+                                    class="flex items-start gap-3 rounded-lg border border-dashed border-(--border) bg-(--background) p-3 text-sm text-(--muted-foreground)"
+                                >
+                                    <i class="pi pi-building mt-0.5 shrink-0"></i>
+                                    <p>{{ t('certificateDesign.noPreviewCenters') }}</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <p id="certificate-design-type-label" class="mb-2 text-sm font-medium">{{ t('certificateDesign.certificateType') }}</p>
+                                <SelectButton
+                                    v-model="selectedAchievementType"
+                                    :options="achievementTypes"
+                                    option-label="label"
+                                    option-value="value"
+                                    :allow-empty="false"
+                                    aria-labelledby="certificate-design-type-label"
+                                    fluid
+                                />
+                            </div>
+
+                            <div>
+                                <label for="certificate-preview-achievement" class="mb-2 block text-sm font-medium">
+                                    {{ t('certificateDesign.previewAchievement') }}
+                                </label>
+                                <p class="mb-2 text-xs leading-5 text-(--muted-foreground)">
+                                    {{ t('certificateDesign.previewAchievementHint') }}
+                                </p>
+
+                                <Select
+                                    v-if="currentPreviewAchievementOptions.length"
+                                    input-id="certificate-preview-achievement"
+                                    v-model="selectedPreviewPointId"
+                                    :options="currentPreviewAchievementOptions"
+                                    option-label="achievement_name"
+                                    option-value="id"
+                                    :filter-fields="['achievement_name', 'plan_name', 'plan_point_name']"
+                                    :filter-placeholder="t('certificateDesign.searchPreviewAchievement')"
+                                    :empty-filter-message="t('certificateDesign.noMatchingPreviewAchievement')"
+                                    filter
+                                    fluid
+                                >
+                                    <template #value>
+                                        <div v-if="currentPreviewAchievement" class="min-w-0 text-start">
+                                            <span class="block truncate font-semibold">{{ currentPreviewAchievement.achievement_name }}</span>
+                                            <span class="mt-0.5 block truncate text-xs text-(--muted-foreground)">
+                                                {{ previewAchievementContext(currentPreviewAchievement) }}
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template #option="{ option }">
+                                        <div class="min-w-0 py-0.5 text-start">
+                                            <span class="block truncate font-semibold">{{ option.achievement_name }}</span>
+                                            <span class="mt-0.5 block truncate text-xs text-(--muted-foreground)">
+                                                {{ previewAchievementContext(option) }}
+                                            </span>
+                                        </div>
+                                    </template>
+                                </Select>
+
+                                <div
+                                    v-else
+                                    class="flex items-start gap-3 rounded-lg border border-dashed border-(--border) bg-(--background) p-3 text-sm text-(--muted-foreground)"
+                                >
+                                    <i class="pi pi-info-circle mt-0.5 shrink-0"></i>
+                                    <p>{{ t('certificateDesign.noPreviewAchievements') }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-xl font-semibold">{{ t('certificateDesign.matrixTitle') }}</h2>
+                                <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificateDesign.matrixHint') }}</p>
+                            </div>
+                            <span class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
+                                {{ t('certificateDesign.configurationsCount', { count: 6 }) }}
+                            </span>
+                        </div>
+
+                        <div class="mt-4 space-y-3">
+                            <section v-for="gender in genders" :key="`matrix-${gender.value}`">
+                                <p class="mb-2 text-xs font-semibold text-(--muted-foreground)">{{ gender.label }}</p>
+                                <div class="grid gap-2 sm:grid-cols-3">
+                                    <button
+                                        v-for="type in achievementTypes"
+                                        :key="`${gender.value}-${type.value}`"
+                                        type="button"
+                                        class="group relative flex min-w-0 items-center gap-2 rounded-lg border p-2.5 text-start transition"
+                                        :class="[
+                                            selectedGender === gender.value && selectedAchievementType === type.value
+                                                ? 'border-[var(--accent)] bg-[color-mix(in_oklab,var(--accent)_9%,transparent)] shadow-sm'
+                                                : 'border-(--border) bg-(--background) hover:border-[color-mix(in_oklab,var(--accent)_45%,var(--border))]',
+                                            cellHasInvalidColors(gender.value, type.value) ? '!border-red-500 ring-1 ring-red-500/25' : '',
+                                        ]"
+                                        :aria-pressed="selectedGender === gender.value && selectedAchievementType === type.value"
+                                        @click="selectContext(gender.value, type.value)"
+                                    >
+                                        <span
+                                            class="h-8 w-8 shrink-0 rounded-lg border border-black/10 shadow-inner"
+                                            :style="{ backgroundColor: normalizeHex(form.designs[gender.value][type.value].accent_color) ?? '#9ca3af' }"
+                                        ></span>
+                                        <span class="min-w-0 flex-1">
+                                            <span class="block truncate text-xs font-semibold">{{ type.label }}</span>
+                                            <span class="mt-0.5 block truncate text-[0.7rem] text-(--muted-foreground)">
+                                                {{ cellTheme(gender.value, type.value).label || cellTheme(gender.value, type.value).value }}
+                                            </span>
+                                        </span>
+                                        <i
+                                            v-if="cellHasInvalidColors(gender.value, type.value)"
+                                            class="pi pi-exclamation-circle text-sm text-red-500"
+                                            :title="t('certificateDesign.invalidColor')"
+                                        ></i>
+                                        <i
+                                            v-else-if="isCellDirty(gender.value, type.value)"
+                                            class="pi pi-circle-fill text-[0.45rem] text-amber-500"
+                                            :title="t('certificateDesign.unsaved')"
+                                        ></i>
+                                    </button>
+                                </div>
+                            </section>
+                        </div>
+                    </article>
+
+                    <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h2 class="text-xl font-semibold">{{ t('certificateDesign.themeTitle') }}</h2>
+                                <p class="mt-1 text-sm text-(--muted-foreground)">
+                                    {{ t('certificateDesign.editingContext', { gender: selectedGenderLabel, type: selectedTypeLabel }) }}
+                                </p>
+                            </div>
+                            <span class="rounded-full border border-(--border) bg-(--background) px-3 py-1 text-xs font-medium">
+                                {{ themes.length }} {{ t('certificateDesign.themeCountLabel') }}
+                            </span>
+                        </div>
+
+                        <div class="mt-4 max-h-[34rem] overflow-y-auto pe-1">
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <button
+                                    v-for="theme in themes"
+                                    :key="theme.value"
+                                    type="button"
+                                    class="overflow-hidden rounded-xl border bg-(--background) text-start transition"
+                                    :class="currentDesign.theme === theme.value
+                                        ? 'border-[var(--accent)] ring-2 ring-[color-mix(in_oklab,var(--accent)_24%,transparent)]'
+                                        : 'border-(--border) hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--accent)_45%,var(--border))] hover:shadow-sm'"
+                                    :disabled="!canUpdate"
+                                    :aria-pressed="currentDesign.theme === theme.value"
+                                    @pointerenter="prewarmFrame(theme.frame_url)"
+                                    @focus="prewarmFrame(theme.frame_url)"
+                                    @click="selectTheme(theme)"
+                                >
+                                    <span class="relative block aspect-[297/210] overflow-hidden bg-white">
+                                        <img
+                                            v-if="theme.frame_url"
+                                            :src="theme.frame_url"
+                                            alt=""
+                                            class="absolute inset-0 h-full w-full object-fill"
+                                            loading="lazy"
+                                        />
+                                        <span class="absolute inset-x-[18%] top-[35%] h-1 rounded-full" :style="{ backgroundColor: theme.heading_color }"></span>
+                                        <span class="absolute inset-x-[27%] top-[49%] h-1.5 rounded-full" :style="{ backgroundColor: theme.student_name_color }"></span>
+                                    </span>
+                                    <span class="flex items-center justify-between gap-3 border-t border-(--border) p-3">
+                                        <span class="min-w-0 truncate text-sm font-semibold">{{ theme.label }}</span>
+                                        <span class="flex shrink-0 -space-x-1 rtl:space-x-reverse">
+                                            <span
+                                                v-for="colorKey in COLOR_FIELDS.map((field) => field.key)"
+                                                :key="colorKey"
+                                                class="h-4 w-4 rounded-full border-2 border-(--background)"
+                                                :style="{ backgroundColor: theme[colorKey] }"
+                                            ></span>
+                                        </span>
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+
+                    <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
+                        <h2 class="text-xl font-semibold">{{ t('certificateDesign.typographyAndColors') }}</h2>
+                        <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificateDesign.typographyAndColorsHint') }}</p>
+
+                        <div class="mt-5">
+                            <label for="certificate-font" class="mb-2 block text-sm font-medium">{{ t('certificateDesign.font') }}</label>
+                            <Select
+                                input-id="certificate-font"
+                                :model-value="currentDesign.font"
+                                :options="fonts"
+                                option-label="label"
+                                option-value="value"
+                                fluid
+                                :disabled="!canUpdate"
+                                @update:model-value="updateFont"
+                            >
+                                <template #option="{ option }">
+                                    <div class="flex w-full items-center justify-between gap-4">
+                                        <span>{{ option.label }}</span>
+                                        <span class="flex shrink-0 items-baseline gap-3 text-(--muted-foreground)" dir="rtl">
+                                            <span class="text-xs" :style="{ fontFamily: option.body_family }">نَصُّ الشَّهَادَةِ</span>
+                                            <span class="text-lg" :style="{ fontFamily: option.display_family }">اسْمُ الطَّالِبِ</span>
+                                        </span>
+                                    </div>
+                                </template>
+                            </Select>
+                        </div>
+
+                        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                            <div v-for="field in COLOR_FIELDS" :key="field.key">
+                                <label :for="`certificate-${field.key}`" class="mb-2 block text-sm font-medium">{{ t(field.labelKey) }}</label>
+                                <div
+                                    class="flex items-center gap-2 rounded-lg border bg-(--background) p-2 transition focus-within:ring-2"
+                                    :class="hasInvalidColor(currentDesign, field.key) || fieldError(field.key)
+                                        ? 'border-red-500 focus-within:ring-red-500/20'
+                                        : 'border-(--border) focus-within:border-[var(--accent)] focus-within:ring-[color-mix(in_oklab,var(--accent)_18%,transparent)]'"
+                                >
+                                    <label :for="`certificate-${field.key}-picker`" class="sr-only">
+                                        {{ t(field.labelKey) }}
+                                    </label>
+                                    <ColorPicker
+                                        :input-id="`certificate-${field.key}-picker`"
+                                        :model-value="pickerValue(field.key)"
+                                        format="hex"
+                                        :disabled="!canUpdate"
+                                        @update:model-value="updateColor(field.key, $event)"
+                                    />
+                                    <InputText
+                                        :id="`certificate-${field.key}`"
+                                        :model-value="currentDesign[field.key]"
+                                        dir="ltr"
+                                        maxlength="7"
+                                        class="h-9 min-w-0 flex-1 border-0 bg-transparent font-mono uppercase shadow-none"
+                                        :disabled="!canUpdate"
+                                        @update:model-value="updateColor(field.key, $event)"
+                                        @blur="normalizeColorField(field.key)"
+                                    />
+                                </div>
+                                <small v-if="fieldError(field.key)" class="mt-1 block text-xs text-red-600 dark:text-red-400">{{ fieldError(field.key) }}</small>
+                                <small v-else-if="hasInvalidColor(currentDesign, field.key)" class="mt-1 block text-xs text-red-600 dark:text-red-400">
+                                    {{ t('certificateDesign.invalidColor') }}
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="mt-5 flex justify-end">
+                            <Button
+                                type="button"
+                                icon="pi pi-refresh"
+                                :label="t('certificateDesign.restoreThemeColors')"
+                                severity="secondary"
+                                outlined
+                                size="small"
+                                :disabled="!canUpdate"
+                                @click="restoreThemeColors"
+                            />
+                        </div>
+                    </article>
+                </section>
+
+                <aside class="xl:sticky xl:top-6">
+                    <article class="overflow-hidden rounded-(--radius-base) border border-(--border) bg-(--card) text-(--card-foreground) shadow-(--shadow-sm)">
+                        <header class="flex flex-wrap items-center justify-between gap-3 border-b border-(--border) p-4 sm:p-5">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="relative flex h-2.5 w-2.5">
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50"></span>
+                                        <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                                    </span>
+                                    <h2 class="text-lg font-semibold">{{ t('certificateDesign.livePreview') }}</h2>
+                                </div>
+                                <p class="mt-1 text-xs text-(--muted-foreground)">{{ t('certificateDesign.previewHint') }}</p>
+                            </div>
+                            <div class="flex flex-wrap items-center justify-end gap-2 text-xs font-medium">
+                                <span class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-[var(--accent)]">{{ selectedGenderLabel }}</span>
+                                <span v-if="currentPreviewCenter" class="max-w-48 truncate rounded-full border border-(--border) bg-(--background) px-2.5 py-1" :title="currentPreviewCenter.center_name">
+                                    {{ currentPreviewCenter.center_name }}
+                                </span>
+                                <span class="rounded-full border border-(--border) bg-(--background) px-2.5 py-1">{{ selectedTypeLabel }}</span>
+                                <Button
+                                    type="button"
+                                    icon="pi pi-download"
+                                    :label="t('certificateDesign.downloadPreviewPdf')"
+                                    severity="secondary"
+                                    outlined
+                                    size="small"
+                                    :loading="downloadingPreviewPdf"
+                                    :disabled="currentDesignHasInvalidColors || !currentPreviewCenter || !currentPreviewAchievement || downloadingPreviewPdf"
+                                    @click="downloadPreviewPdf"
+                                />
+                            </div>
+                        </header>
+
+                        <div class="bg-[linear-gradient(135deg,color-mix(in_oklab,var(--border)_65%,transparent)_25%,transparent_25%,transparent_75%,color-mix(in_oklab,var(--border)_65%,transparent)_75%)] bg-size-[20px_20px] p-3 sm:p-6">
+                            <iframe
+                                ref="previewFrame"
+                                src="/admin/certificate-designs/preview"
+                                :title="t('certificateDesign.livePreview')"
+                                class="mx-auto block aspect-[297/210] w-full overflow-hidden border-0 bg-white shadow-[0_22px_60px_rgb(15_23_42/20%)]"
+                                loading="eager"
+                                referrerpolicy="same-origin"
+                                sandbox="allow-scripts allow-same-origin"
+                                @load="sendPreviewUpdate"
+                            ></iframe>
+                        </div>
+
+                        <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-(--border) p-4 text-xs text-(--muted-foreground)">
+                            <span>{{ selectedTheme.label || t('certificateDesign.noTheme') }} · {{ selectedFont.label || t('certificateDesign.noFont') }}</span>
+                            <span>{{ t('certificateDesign.a4Landscape') }}</span>
+                        </footer>
+                    </article>
+
+                    <div class="mt-4 flex flex-col gap-3 rounded-(--radius-base) border border-(--border) bg-(--card) p-4 shadow-(--shadow-sm) sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-sm text-(--muted-foreground)">
+                            {{ form.isDirty ? t('certificateDesign.unsavedChanges') : t('certificateDesign.allSaved') }}
+                        </p>
+                        <Button
+                            type="submit"
+                            icon="pi pi-save"
+                            :label="t('certificateDesign.save')"
+                            :loading="form.processing"
+                            :disabled="!canUpdate || hasInvalidColors || form.processing"
+                            class="h-10 shrink-0"
+                        />
+                    </div>
+                </aside>
+            </div>
+        </form>
+    </AdminLayout>
+</template>

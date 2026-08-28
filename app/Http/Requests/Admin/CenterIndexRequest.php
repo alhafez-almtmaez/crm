@@ -21,7 +21,7 @@ class CenterIndexRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:120'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
-            'sort_by' => ['nullable', Rule::in(['id', 'name', 'phone', 'created_at'])],
+            'sort_by' => ['nullable', Rule::in(['id', 'name', 'student_gender', 'phone', 'created_at'])],
             'sort_dir' => ['nullable', Rule::in(['asc', 'desc'])],
         ];
     }

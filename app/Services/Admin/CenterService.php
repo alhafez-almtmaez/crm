@@ -22,18 +22,29 @@ class CenterService
         $perPage = (int) ($filters['per_page'] ?? 10);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
-        $allowedSorts = ['id', 'name', 'phone', 'created_at'];
+        $allowedSorts = ['id', 'name', 'student_gender', 'phone', 'created_at'];
 
         $sortBy = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'id';
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
 
         $query = Center::query()
-            ->select(['id', 'name', 'phone', 'group_serialized', 'working_days', 'created_at'])
+            ->select([
+                'id',
+                'name',
+                'certificate_name',
+                'student_gender',
+                'phone',
+                'group_serialized',
+                'working_days',
+                'show_center_manager_signature',
+                'created_at',
+            ])
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
                     $builder
                         ->where('name', 'like', "%{$search}%")
+                        ->orWhere('student_gender', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%")
                         ->orWhere('group_serialized', 'like', "%{$search}%");
                 });
@@ -62,9 +73,12 @@ class CenterService
     {
         return Center::query()->create([
             'name' => $data['name'],
+            'certificate_name' => $data['certificate_name'] ?? null,
+            'student_gender' => $data['student_gender'],
             'phone' => $data['phone'],
             'group_serialized' => $data['group_serialized'] ?? null,
             'working_days' => $data['working_days'],
+            'show_center_manager_signature' => (bool) ($data['show_center_manager_signature'] ?? true),
         ]);
     }
 
@@ -75,9 +89,12 @@ class CenterService
     {
         $center->update([
             'name' => $data['name'],
+            'certificate_name' => $data['certificate_name'] ?? null,
+            'student_gender' => $data['student_gender'],
             'phone' => $data['phone'],
             'group_serialized' => $data['group_serialized'] ?? null,
             'working_days' => $data['working_days'],
+            'show_center_manager_signature' => (bool) ($data['show_center_manager_signature'] ?? true),
         ]);
 
         return $center->refresh();

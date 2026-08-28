@@ -56,7 +56,15 @@ class CenterController extends Controller implements HasMiddleware
 
         return Inertia::render('Admin/Centers/Edit', [
             'center' => [
-                ...$center->only(['id', 'name', 'phone', 'group_serialized']),
+                ...$center->only([
+                    'id',
+                    'name',
+                    'certificate_name',
+                    'student_gender',
+                    'phone',
+                    'group_serialized',
+                    'show_center_manager_signature',
+                ]),
                 'working_days' => is_array($center->working_days) ? $center->working_days : [],
             ],
             'whatsappGroups' => $this->whatsAppGroupService->options(),

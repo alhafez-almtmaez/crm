@@ -24,6 +24,8 @@ const labelKeyBySegment = {
     centers: 'breadcrumbs.centers',
     groups: 'breadcrumbs.groups',
     students: 'breadcrumbs.students',
+    certificates: 'breadcrumbs.certificates',
+    'certificate-designs': 'breadcrumbs.certificateDesign',
     evaluations: 'breadcrumbs.evaluations',
     homeworks: 'breadcrumbs.homeworks',
     'absence-rules': 'breadcrumbs.absenceRules',

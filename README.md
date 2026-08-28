@@ -47,6 +47,10 @@ Permissions seeded by default:
 
 `admin` role is seeded and synced with all permissions above.
 
+After adding or changing entries in `config/permissions.php`, run
+`php artisan permissions:sync` during deployment so the database permissions
+and role assignments match the configured source of truth.
+
 ## Project Structure (important parts)
 
 - Backend

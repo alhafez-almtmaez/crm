@@ -1,0 +1,39 @@
+@font-face {
+    font-family: "Certificate Amiri";
+    src: url("../fonts/certificate/Amiri-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Certificate Naskh";
+    src: url("../fonts/certificate/NotoNaskhArabic-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Certificate Kufi";
+    src: url("../fonts/certificate/NotoKufiArabic-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Certificate Sans Arabic";
+    src: url("../fonts/certificate/NotoSansArabic-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Certificate Nastaliq";
+    src: url("../fonts/certificate/NotoNastaliqUrdu-Regular.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}

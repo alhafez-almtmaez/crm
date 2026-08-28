@@ -15,6 +15,9 @@ defineProps({
 
 const form = useForm({
     name: '',
+    student_gender: 'male',
+    certificate_name: '',
+    show_center_manager_signature: true,
     phone: '',
     group_serialized: '',
     working_days: [],

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AbsenceRuleController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\CenterController;
+use App\Http\Controllers\Admin\CertificateDesignController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EvaluationController;
 use App\Http\Controllers\Admin\GroupController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\Admin\HomeworkController;
 use App\Http\Controllers\Admin\MessageTemplateController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\StudentCertificateController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\StudentMonthlyPlanController;
 use App\Http\Controllers\Admin\SystemSettingsController;
@@ -95,6 +97,11 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::post('students/{student}/freeze', [StudentController::class, 'freeze'])->name('students.freeze');
         Route::post('students/{student}/unfreeze', [StudentController::class, 'unfreeze'])->name('students.unfreeze');
         Route::post('students/{student}/congratulatory', [StudentController::class, 'congratulatory'])->name('students.congratulatory');
+        Route::get('students/{student}/certificates', [StudentCertificateController::class, 'index'])->name('students.certificates.index');
+        Route::post('students/{student}/certificates', [StudentCertificateController::class, 'store'])->name('students.certificates.store');
+        Route::put('students/{student}/certificates/{certificate}/design', [StudentCertificateController::class, 'redesign'])->name('students.certificates.redesign');
+        Route::get('students/{student}/certificates/{certificate}', [StudentCertificateController::class, 'show'])->name('students.certificates.show');
+        Route::get('students/{student}/certificates/{certificate}/pdf', [StudentCertificateController::class, 'pdf'])->name('students.certificates.pdf');
         Route::resource('students', StudentController::class)->except(['show']);
 
         Route::get('evaluations/records', [EvaluationController::class, 'records'])->name('evaluations.records');
@@ -117,6 +124,15 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
 
         Route::get('activity-logs/records', [ActivityLogController::class, 'records'])->name('activity-logs.records');
         Route::resource('activity-logs', ActivityLogController::class)->only(['index']);
+
+        Route::get('certificate-designs/preview', [CertificateDesignController::class, 'preview'])
+            ->name('certificate-designs.preview');
+        Route::post('certificate-designs/preview/pdf', [CertificateDesignController::class, 'previewPdf'])
+            ->name('certificate-designs.preview.pdf');
+        Route::get('certificate-designs', [CertificateDesignController::class, 'index'])
+            ->name('certificate-designs.index');
+        Route::put('certificate-designs', [CertificateDesignController::class, 'update'])
+            ->name('certificate-designs.update');
 
         Route::get('settings', fn () => Inertia::render('Admin/Settings'))->name('settings');
         Route::put('settings/system', [SystemSettingsController::class, 'update'])->name('settings.update');

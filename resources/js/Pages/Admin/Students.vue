@@ -150,6 +150,13 @@ const columns = computed(() => [
 
 const rowActions = computed(() => [
     {
+        key: 'certificates',
+        icon: 'pi pi-id-card',
+        severity: 'secondary',
+        outlined: true,
+        title: t('certificates.manageStudentCertificates'),
+    },
+    {
         key: 'freeze',
         icon: 'pi pi-lock',
         severity: 'warn',
@@ -493,6 +500,11 @@ const askUnfreezeStudent = ({ data: student, event }) => {
 
 const handleRowAction = (payload) => {
     if (!payload?.action) {
+        return;
+    }
+
+    if (payload.action === 'certificates') {
+        router.get(`/admin/students/${payload.data.id}/certificates`);
         return;
     }
 

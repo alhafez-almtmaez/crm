@@ -109,6 +109,12 @@ export const adminNavItems = [
         roles: ['admin'],
     },
     {
+        labelKey: 'nav.certificateDesign',
+        href: '/admin/certificate-designs',
+        icon: 'pi pi-palette',
+        permissions: ['certificate_designs.view'],
+    },
+    {
         labelKey: 'nav.settings',
         href: '/admin/settings',
         icon: 'pi pi-cog',

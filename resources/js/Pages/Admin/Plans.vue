@@ -1,6 +1,6 @@
 <script setup>
 import axios from 'axios';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import Button from 'primevue/button';
 import ConfirmPopup from 'primevue/confirmpopup';
 import Dialog from 'primevue/dialog';
@@ -18,6 +18,7 @@ import { useServerTable } from '../../composables/useServerTable';
 const confirm = useConfirm();
 const appToast = useAppToast();
 const { t } = useI18n();
+const page = usePage();
 const {
     loading,
     rows: plans,
@@ -43,6 +44,12 @@ const selectedPlan = ref(null);
 const pointsImportFile = ref(null);
 const pointsImportErrors = ref({});
 const actionLoading = ref(false);
+const canViewCertificateDesigns = computed(() => {
+    const roles = page.props.auth?.user?.roles ?? [];
+    const permissions = page.props.auth?.user?.permissions ?? [];
+
+    return roles.includes('admin') || permissions.includes('certificate_designs.view');
+});
 
 const columns = computed(() => [
     { field: 'id', header: t('common.id'), sortable: true },
@@ -62,6 +69,10 @@ const rowActions = computed(() => [
 
 const openCreate = () => {
     router.get('/admin/plans/create');
+};
+
+const openCertificateDesigns = () => {
+    router.get('/admin/certificate-designs');
 };
 
 const openEdit = (plan) => {
@@ -209,7 +220,19 @@ onMounted(() => {
                 @edit="openEdit"
                 @delete="askDeletePlan"
                 @row-action="handleRowAction"
-            />
+            >
+                <template v-if="canViewCertificateDesigns" #toolbar-actions>
+                    <Button
+                        type="button"
+                        icon="pi pi-palette"
+                        :label="t('certificateDesign.open')"
+                        severity="secondary"
+                        outlined
+                        class="h-11"
+                        @click="openCertificateDesigns"
+                    />
+                </template>
+            </DataTable>
             <ConfirmPopup />
             <EntityActivityDrawer
                 v-model="historyVisible"

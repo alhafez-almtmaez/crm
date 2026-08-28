@@ -23,12 +23,17 @@ class CenterFactory extends Factory
 
         return [
             'name' => fake()->unique()->bothify('Center-##??'),
+            'certificate_name' => null,
+            'student_gender' => fake()->randomElement([
+                Center::STUDENT_GENDER_MALE,
+                Center::STUDENT_GENDER_FEMALE,
+            ]),
             'phone' => '9627'.fake()->unique()->numerify('#######'),
             'group_serialized' => fake()->boolean(70)
                 ? '1203630'.fake()->numerify('########').'@g.us'
                 : null,
             'working_days' => $workingDays,
+            'show_center_manager_signature' => true,
         ];
     }
 }
-

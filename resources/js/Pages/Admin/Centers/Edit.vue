@@ -19,6 +19,9 @@ const props = defineProps({
 
 const form = useForm({
     name: props.center.name,
+    student_gender: props.center.student_gender ?? 'male',
+    certificate_name: props.center.certificate_name ?? '',
+    show_center_manager_signature: Boolean(props.center.show_center_manager_signature ?? true),
     phone: props.center.phone,
     group_serialized: props.center.group_serialized ?? '',
     working_days: props.center.working_days ?? [],

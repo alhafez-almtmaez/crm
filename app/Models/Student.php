@@ -128,6 +128,11 @@ class Student extends Model
         return $this->hasMany(StudentMonthlyPlan::class);
     }
 
+    public function certificates(): HasMany
+    {
+        return $this->hasMany(Certificate::class);
+    }
+
     public function setParentPhoneNumberAttribute(mixed $value): void
     {
         $this->attributes['parent_phone_number'] = PhoneNumberHelper::normalizeForStorage($value);
