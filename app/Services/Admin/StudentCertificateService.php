@@ -297,7 +297,6 @@ class StudentCertificateService
             $certificate->wording_snapshot,
             (string) $certificate->achievement_type,
             [
-                'project_name' => (string) $certificate->project_name,
                 'closing_text' => (string) $certificate->closing_text,
             ],
             (string) $design['student_gender'],

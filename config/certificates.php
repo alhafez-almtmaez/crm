@@ -283,16 +283,18 @@ return [
     ],
     'wording' => [
         'male' => [
-            'project_name' => 'الحَافِظِ المُتَمَيِّزِ',
-            'intro_before_project' => 'تَتَقَدَّمُ إِدَارَةُ مَشْرُوعِ',
+            // Kept as an empty compatibility key for wording snapshots issued
+            // before the center name became the complete certificate identity.
+            'project_name' => '',
+            'intro_before_project' => 'تَتَقَدَّمُ إِدَارَةُ',
             'intro_after_center' => 'بِالتَّهْنِئَةِ الحَارَّةِ لِطَالِبِ العِلْمِ المُتَمَيِّزِ:',
             'achievement_intro' => 'وَذَلِكَ لِإِنْجَازِهِ',
             'achievement_suffix' => 'بِإِتْقَانٍ عَالٍ بِفَضْلِ اللهِ تَعَالَى',
             'closing_text' => 'نَسْأَلُ اللهَ لَهُ التَّوْفِيقَ وَالثَّبَاتَ، وَأَنْ يَمُنَّ عَلَيْهِ بِإِتْمَامِ حِفْظِ كِتَابِهِ الكَرِيمِ وَالعَمَلِ بِهِ.',
         ],
         'female' => [
-            'project_name' => 'الحَافِظِ المُتَمَيِّزِ',
-            'intro_before_project' => 'تَتَقَدَّمُ إِدَارَةُ مَشْرُوعِ',
+            'project_name' => '',
+            'intro_before_project' => 'تَتَقَدَّمُ إِدَارَةُ',
             'intro_after_center' => 'بِالتَّهْنِئَةِ الحَارَّةِ لِطَالِبَةِ العِلْمِ المُتَمَيِّزَةِ:',
             'achievement_intro' => 'وَذَلِكَ لِإِنْجَازِهَا',
             'achievement_suffix' => 'بِإِتْقَانٍ عَالٍ بِفَضْلِ اللهِ تَعَالَى',
@@ -302,8 +304,8 @@ return [
     'title' => 'شَهادَةُ تَمَيُّزٍ وَتَقْدِيرٍ',
     'quote_first' => 'لَوْلَا المَشَقَّةُ سَادَ النَّاسُ كُلُّهُمُ',
     'quote_second' => 'الجُودُ يُفْقِرُ وَالإِقْدَامُ قَتَّالُ',
-    'project_name' => 'الحَافِظِ المُتَمَيِّزِ',
-    'intro_before_project' => 'تَتَقَدَّمُ إِدَارَةُ مَشْرُوعِ',
+    'project_name' => '',
+    'intro_before_project' => 'تَتَقَدَّمُ إِدَارَةُ',
     'intro_after_center' => 'بِالتَّهْنِئَةِ الحَارَّةِ لِطَالِبِ العِلْمِ المُتَمَيِّزِ:',
     'achievement_intro' => 'وَذَلِكَ لِإِنْجَازِهِ',
     'achievement_labels' => [

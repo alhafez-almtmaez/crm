@@ -157,7 +157,8 @@ class CertificateDesignController extends Controller implements HasMiddleware
         bool $pdf = false,
         bool $previewMode = false,
     ): array {
-        $showCenterIdentity = (bool) ($center['show_center_manager_signature'] ?? true);
+        $showCenterIdentity = $center !== null
+            && (bool) ($center['show_center_manager_signature'] ?? false);
         $renderAssets = $this->certificateRenderer->renderAssetPayload(
             $design,
             $pdf,
@@ -218,7 +219,7 @@ class CertificateDesignController extends Controller implements HasMiddleware
             'quote_first' => (string) config('certificates.quote_first'),
             'quote_second' => (string) config('certificates.quote_second'),
             'project_name' => (string) $wording['project_name'],
-            'center_name' => (string) ($center['center_name'] ?? __('certificates.default_center_name')),
+            'center_name' => (string) ($center['center_name'] ?? '—'),
             'show_center_manager_signature' => $showCenterIdentity,
             'student_name' => $studentNames[$gender] ?? $studentNames[Center::STUDENT_GENDER_MALE],
             'achievement_intro' => (string) $wording['achievement_intro'],

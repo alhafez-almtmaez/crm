@@ -101,12 +101,7 @@
             @endif
 
             @if ($certificate['images']['right_logo'] !== '')
-                <img @class([
-                         'certificate__logo',
-                         'certificate__logo--right',
-                         'certificate__logo--project-solo' => ! $showCenterIdentity,
-                     ])
-                     data-certificate-preview-project-logo
+                <img class="certificate__logo certificate__logo--right"
                      src="{{ $certificate['images']['right_logo'] }}"
                      alt="{{ $certificate['labels']['right_logo'] }}">
             @endif
@@ -121,8 +116,7 @@
 
             <p class="certificate__intro">
                 <span data-certificate-preview-intro-before-project>{{ $certificate['intro_before_project'] }}</span>
-                <strong data-certificate-preview-project-name>{{ $certificate['project_name'] }}</strong>
-                - <strong data-certificate-preview-center-name>{{ $certificate['center_name'] }}</strong> -
+                <strong data-certificate-preview-center-name>{{ $certificate['center_name'] }}</strong>
                 <span data-certificate-preview-intro-after-center>{{ $certificate['intro_after_center'] }}</span>
             </p>
 
@@ -206,13 +200,11 @@
                 const frame = document.querySelector('[data-certificate-preview-frame]');
                 const centerName = document.querySelector('[data-certificate-preview-center-name]');
                 const centerIdentityElements = document.querySelectorAll('[data-certificate-preview-center-identity]');
-                const projectLogo = document.querySelector('[data-certificate-preview-project-logo]');
                 const projectSigning = document.querySelector('[data-certificate-preview-project-signing]');
                 const student = document.querySelector('[data-certificate-preview-student]');
                 const achievementLabel = document.querySelector('[data-certificate-preview-achievement-label]');
                 const achievementName = document.querySelector('[data-certificate-preview-achievement-name]');
                 const wordingElements = {
-                    project_name: document.querySelector('[data-certificate-preview-project-name]'),
                     intro_before_project: document.querySelector('[data-certificate-preview-intro-before-project]'),
                     intro_after_center: document.querySelector('[data-certificate-preview-intro-after-center]'),
                     achievement_intro: document.querySelector('[data-certificate-preview-achievement-intro]'),
@@ -284,28 +276,30 @@
                         }
                     });
 
-                    if (center) {
-                        if (centerName
-                            && typeof center.center_name === 'string'
-                            && center.center_name.trim() !== '') {
-                            centerName.textContent = center.center_name;
-                        }
-
-                        if (typeof center.show_center_manager_signature === 'boolean') {
-                            const showCenterIdentity = center.show_center_manager_signature;
-
-                            certificateElement?.classList.toggle('certificate--project-only', !showCenterIdentity);
-                            projectLogo?.classList.toggle('certificate__logo--project-solo', !showCenterIdentity);
-                            projectSigning?.classList.toggle('certificate__signing--project-solo', !showCenterIdentity);
-                            centerIdentityElements.forEach((element) => {
-                                element.hidden = !showCenterIdentity;
-                            });
-                        }
-                    }
-
+                    const requestedGender = ['male', 'female'].includes(data.gender)
+                        ? data.gender
+                        : '';
                     const gender = center && ['male', 'female'].includes(center.student_gender)
                         ? center.student_gender
-                        : '';
+                        : requestedGender;
+                    const hasCenter = center !== null;
+                    const showCenterIdentity = hasCenter
+                        && center.show_center_manager_signature === true;
+
+                    if (centerName) {
+                        centerName.textContent = hasCenter
+                            && typeof center.center_name === 'string'
+                            && center.center_name.trim() !== ''
+                                ? center.center_name
+                                : '—';
+                    }
+
+                    certificateElement?.classList.toggle('certificate--project-only', !showCenterIdentity);
+                    projectSigning?.classList.toggle('certificate__signing--project-solo', !showCenterIdentity);
+                    centerIdentityElements.forEach((element) => {
+                        element.hidden = !showCenterIdentity;
+                    });
+
                     const achievementType = typeof data.achievement_type === 'string'
                         ? data.achievement_type
                         : '';

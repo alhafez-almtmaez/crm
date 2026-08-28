@@ -7,7 +7,13 @@ use App\Models\Certificate;
 
 class CertificateWordingService
 {
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
+
+    /**
+     * Schema v2 removed the fixed project name from the introduction. The
+     * certificate's snapshotted center name is now its complete identity.
+     */
+    private const CENTER_IDENTITY_SCHEMA_VERSION = 2;
 
     /** @var list<string> */
     private const GENDERS = [
@@ -51,12 +57,9 @@ class CertificateWordingService
             'schema_version' => self::SCHEMA_VERSION,
             'student_gender' => $gender,
             'achievement_type' => $achievementType,
-            'project_name' => $this->configuredText(
-                $selected,
-                $male,
-                'project_name',
-                (string) config('certificates.project_name', ''),
-            ),
+            // Retain the key so old renderers and persisted columns remain
+            // compatible, but the center name is now the sole identity shown.
+            'project_name' => '',
             'intro_before_project' => $this->configuredText(
                 $selected,
                 $male,
@@ -111,13 +114,6 @@ class CertificateWordingService
                 : $fallbackGender;
         if ($snapshotGender === Center::STUDENT_GENDER_FEMALE) {
             $legacy = $this->resolve($snapshotGender, $achievementType);
-
-            // The old project name was already snapshotted in its own column.
-            // Its old closing text was masculine, so it must not override the
-            // inferred feminine wording.
-            if (is_string($legacyOverrides['project_name'] ?? null)) {
-                $legacy['project_name'] = $legacyOverrides['project_name'];
-            }
         } else {
             $legacy = $this->legacySnapshot($achievementType, $legacyOverrides);
         }
@@ -126,10 +122,12 @@ class CertificateWordingService
             return $legacy;
         }
 
-        $normalized = $legacy;
-        $normalized['schema_version'] = is_numeric($snapshot['schema_version'] ?? null)
+        $snapshotVersion = is_numeric($snapshot['schema_version'] ?? null)
             ? max(1, (int) $snapshot['schema_version'])
-            : self::SCHEMA_VERSION;
+            : 1;
+
+        $normalized = $legacy;
+        $normalized['schema_version'] = $snapshotVersion;
 
         $normalized['student_gender'] = $snapshotGender;
 
@@ -140,6 +138,22 @@ class CertificateWordingService
             if (is_string($value) && mb_strlen($value) <= 5000) {
                 $normalized[$key] = $value;
             }
+        }
+
+        $hasLegacyIdentity = $snapshotVersion < self::CENTER_IDENTITY_SCHEMA_VERSION
+            || (is_string($snapshot['project_name'] ?? null) && $snapshot['project_name'] !== '')
+            || ($snapshot['intro_before_project'] ?? null) === 'تَتَقَدَّمُ إِدَارَةُ مَشْرُوعِ';
+
+        // Normalize only snapshots carrying the old identity contract. A valid
+        // v2+ snapshot remains historically stable if wording config changes.
+        if ($hasLegacyIdentity) {
+            $current = $this->resolve($snapshotGender, $achievementType);
+            $normalized['intro_before_project'] = $current['intro_before_project'];
+            $normalized['project_name'] = '';
+        }
+
+        if ($snapshotVersion < self::CENTER_IDENTITY_SCHEMA_VERSION) {
+            $normalized['schema_version'] = self::SCHEMA_VERSION;
         }
 
         return $normalized;
@@ -154,6 +168,10 @@ class CertificateWordingService
         $legacy = $this->resolve(Center::STUDENT_GENDER_MALE, $achievementType);
 
         foreach (self::TEXT_KEYS as $key) {
+            if ($key === 'project_name') {
+                continue;
+            }
+
             if (is_string($overrides[$key] ?? null)) {
                 $legacy[$key] = $overrides[$key];
             }

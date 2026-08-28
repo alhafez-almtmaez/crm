@@ -33,10 +33,10 @@ function certificateDesignSettingsUser(array $permissions): User
 /**
  * @return array<string, mixed>
  */
-function certificateDesignPdfPreviewPayload(int $planPointId = 1): array
+function certificateDesignPdfPreviewPayload(int $planPointId, int $centerId): array
 {
     return [
-        'gender' => Center::STUDENT_GENDER_FEMALE,
+        'center_id' => $centerId,
         'plan_point_id' => $planPointId,
         'design' => [
             'theme' => 'purple',
@@ -47,6 +47,17 @@ function certificateDesignPdfPreviewPayload(int $planPointId = 1): array
             'accent_color' => '#456789',
         ],
     ];
+}
+
+function certificateDesignPreviewCenter(array $attributes = []): Center
+{
+    return Center::factory()->create([
+        'name' => 'مركز المعاينة',
+        'certificate_name' => 'الاسم الرسمي للشهادة',
+        'student_gender' => Center::STUDENT_GENDER_FEMALE,
+        'show_center_manager_signature' => false,
+        ...$attributes,
+    ]);
 }
 
 function certificateDesignPreviewPoint(array $attributes = []): PlanPoint
@@ -93,7 +104,39 @@ test('certificate design page exposes the complete defaults and catalog', functi
             ->where('catalog.achievementTypes.1.value', Certificate::ACHIEVEMENT_PART)
             ->where('catalog.achievementTypes.2.value', Certificate::ACHIEVEMENT_THREE_PARTS)
             ->has('catalog.themes', 20)
-            ->has('catalog.fonts', 12));
+            ->has('catalog.fonts', 12)
+            ->has('previewCenters.male', 0)
+            ->has('previewCenters.female', 0));
+});
+
+test('certificate design page groups real centers and resolves their certificate names', function () {
+    $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $maleCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز الذكور',
+        'certificate_name' => '   ',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+        'show_center_manager_signature' => true,
+    ]);
+    $femaleCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز الإناث',
+        'certificate_name' => '  الاسم المعتمد للشهادة  ',
+    ]);
+
+    $this->actingAs($user, 'web')
+        ->get(route('admin.certificate-designs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('previewCenters.male', 1)
+            ->where('previewCenters.male.0.id', $maleCenter->id)
+            ->where('previewCenters.male.0.name', 'مركز الذكور')
+            ->where('previewCenters.male.0.center_name', 'مركز الذكور')
+            ->where('previewCenters.male.0.student_gender', Center::STUDENT_GENDER_MALE)
+            ->where('previewCenters.male.0.show_center_manager_signature', true)
+            ->has('previewCenters.female', 1)
+            ->where('previewCenters.female.0.id', $femaleCenter->id)
+            ->where('previewCenters.female.0.center_name', 'الاسم المعتمد للشهادة')
+            ->where('previewCenters.female.0.student_gender', Center::STUDENT_GENDER_FEMALE)
+            ->where('previewCenters.female.0.show_center_manager_signature', false));
 });
 
 test('every certificate theme has a readable frame asset', function () {
@@ -204,6 +247,12 @@ test('certificate design page groups real certificate plan points by resolved ac
 
 test('certificate design preview uses the real certificate and its actual assets', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $center = certificateDesignPreviewCenter([
+        'name' => 'مركز الذكور للمعاينة',
+        'certificate_name' => 'المركز الرسمي للذكور',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+        'show_center_manager_signature' => true,
+    ]);
     $point = certificateDesignPreviewPoint();
 
     $response = $this->actingAs($user, 'web')
@@ -217,16 +266,22 @@ test('certificate design preview uses the real certificate and its actual assets
         ->assertSee('center-signature.png', false)
         ->assertSee('project-stamp.png', false)
         ->assertSee('project-signature.png', false)
-        ->assertDontSee('certificate--project-only', false)
-        ->assertDontSee('certificate__logo--project-solo', false)
-        ->assertDontSee('certificate__signing--project-solo', false)
-        ->assertViewHas('certificate', function (array $certificate) use ($point): bool {
+        ->assertSee('المركز الرسمي للذكور')
+        ->assertViewHas('certificate', function (array $certificate) use ($center, $point): bool {
             $wording = $certificate['preview_samples']['wording'] ?? [];
 
             return ($certificate['show_center_manager_signature'] ?? false) === true
+                && ($certificate['center_name'] ?? null) === 'المركز الرسمي للذكور'
                 && ($certificate['achievement_name'] ?? null) === 'السابع'
+                && ($certificate['design']['student_gender'] ?? null) === Center::STUDENT_GENDER_MALE
                 && ($certificate['design']['achievement_type'] ?? null) === Certificate::ACHIEVEMENT_PART
                 && ($certificate['preview_catalog']['achievements'][(string) $point->id]['achievement_name'] ?? null) === 'السابع'
+                && ($certificate['preview_catalog']['centers'][(string) $center->id]['student_gender'] ?? null)
+                    === Center::STUDENT_GENDER_MALE
+                && ($certificate['preview_catalog']['centers'][(string) $center->id]['center_name'] ?? null)
+                    === 'المركز الرسمي للذكور'
+                && ($certificate['preview_catalog']['centers'][(string) $center->id]['show_center_manager_signature'] ?? false)
+                    === true
                 && ($wording[Center::STUDENT_GENDER_MALE]['achievement_intro'] ?? null)
                     === config('certificates.wording.male.achievement_intro')
                 && ($wording[Center::STUDENT_GENDER_FEMALE]['achievement_intro'] ?? null)
@@ -235,11 +290,57 @@ test('certificate design preview uses the real certificate and its actual assets
                     === config('certificates.wording.female.closing_text');
         });
 
+    expect(preg_match(
+        '/<p class="certificate__intro">(.*?)<\/p>/su',
+        $response->getContent(),
+        $introMatches,
+    ))->toBe(1);
+
+    $introText = preg_replace(
+        '/\s+/u',
+        ' ',
+        trim(html_entity_decode(strip_tags($introMatches[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+    );
+
+    expect($introText)->toBe(implode(' ', [
+        trim((string) config('certificates.wording.male.intro_before_project')),
+        'المركز الرسمي للذكور',
+        trim((string) config('certificates.wording.male.intro_after_center')),
+    ]));
+    expect($response->getContent())->not->toContain('data-certificate-preview-project-name');
+
     $unauthorized = User::factory()->create();
 
     $this->actingAs($unauthorized, 'web')
         ->get(route('admin.certificate-designs.preview'))
         ->assertForbidden();
+});
+
+test('certificate design web preview starts from a real hidden female center but keeps switchable assets', function () {
+    $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $center = certificateDesignPreviewCenter([
+        'certificate_name' => 'مركز الإناث المعتمد',
+    ]);
+    certificateDesignPreviewPoint();
+
+    $this->actingAs($user, 'web')
+        ->get(route('admin.certificate-designs.preview'))
+        ->assertOk()
+        ->assertSee('class="certificate__logo certificate__logo--right"', false)
+        ->assertDontSee('certificate__logo--project-solo', false)
+        ->assertViewHas('certificate', function (array $certificate) use ($center): bool {
+            $images = $certificate['images'] ?? [];
+
+            return ($certificate['center_name'] ?? null) === 'مركز الإناث المعتمد'
+                && ($certificate['show_center_manager_signature'] ?? true) === false
+                && ($certificate['design']['student_gender'] ?? null) === Center::STUDENT_GENDER_FEMALE
+                && ($certificate['center_manager_title'] ?? '') !== ''
+                && str_contains((string) ($images['left_logo'] ?? ''), 'left-logo.png')
+                && str_contains((string) ($images['center_stamp'] ?? ''), 'center-stamp.png')
+                && str_contains((string) ($images['center_signature'] ?? ''), 'center-signature.png')
+                && ($certificate['preview_catalog']['centers'][(string) $center->id]['show_center_manager_signature'] ?? true)
+                    === false;
+        });
 });
 
 test('certificate design preview shows an explicit empty state when plans have no certificate achievements', function () {
@@ -249,7 +350,10 @@ test('certificate design preview shows an explicit empty state when plans have n
         ->get(route('admin.certificate-designs.preview'))
         ->assertOk()
         ->assertViewHas('certificate', fn (array $certificate): bool => ($certificate['achievement_name'] ?? null) === '—'
+            && ($certificate['center_name'] ?? null) === '—'
+            && ($certificate['show_center_manager_signature'] ?? true) === false
             && ($certificate['preview_catalog']['achievements'] ?? null) === []
+            && ($certificate['preview_catalog']['centers'] ?? null) === []
         )
         ->assertDontSee('الجزء الأول')
         ->assertDontSee('الأجزاء الثلاثة الأولى');
@@ -257,13 +361,23 @@ test('certificate design preview shows an explicit empty state when plans have n
 
 test('a read only design user can download a real pdf preview of unsaved nested design values', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    certificateDesignPreviewCenter([
+        'name' => 'أول مركز في القائمة لا يجب تطبيقه',
+        'certificate_name' => 'هوية مركز غير مختار',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+        'show_center_manager_signature' => true,
+    ]);
+    $center = certificateDesignPreviewCenter([
+        'name' => 'مركز الإناث المختار',
+        'certificate_name' => 'مركز الإناث في ملف PDF',
+    ]);
     $point = certificateDesignPreviewPoint();
     Pdf::fake();
 
     $this->actingAs($user, 'web')
         ->postJson(
             route('admin.certificate-designs.preview.pdf'),
-            certificateDesignPdfPreviewPayload($point->id),
+            certificateDesignPdfPreviewPayload($point->id, $center->id),
         )
         ->assertOk();
 
@@ -279,7 +393,11 @@ test('a read only design user can download a real pdf preview of unsaved nested 
             && $pdf->downloadName === 'certificate-design-preview.pdf'
             && ($certificate['pdf_mode'] ?? false) === true
             && ($certificate['design_preview_mode'] ?? true) === false
-            && ($certificate['show_center_manager_signature'] ?? false) === true
+            && ($certificate['show_center_manager_signature'] ?? true) === false
+            && ($certificate['center_name'] ?? null) === 'مركز الإناث في ملف PDF'
+            && ($certificate['intro_before_project'] ?? null) === config('certificates.wording.female.intro_before_project')
+            && ($certificate['project_name'] ?? null) === config('certificates.wording.female.project_name')
+            && ($certificate['center_manager_title'] ?? null) === ''
             && ($design['student_gender'] ?? null) === Center::STUDENT_GENDER_FEMALE
             && ($design['achievement_type'] ?? null) === Certificate::ACHIEVEMENT_PART
             && ($design['theme'] ?? null) === 'purple'
@@ -297,9 +415,12 @@ test('a read only design user can download a real pdf preview of unsaved nested 
             && is_string($stylesheet)
             && substr_count($stylesheet, 'data:font/ttf;base64,') === 4
             && str_starts_with((string) ($certificate['images']['frame'] ?? ''), 'data:image/svg+xml;base64,')
-            && str_starts_with((string) ($certificate['images']['left_logo'] ?? ''), 'data:image/png;base64,')
-            && str_starts_with((string) ($certificate['images']['center_stamp'] ?? ''), 'data:image/png;base64,')
-            && str_starts_with((string) ($certificate['images']['center_signature'] ?? ''), 'data:image/png;base64,');
+            && ($certificate['images']['left_logo'] ?? null) === ''
+            && ($certificate['images']['center_stamp'] ?? null) === ''
+            && ($certificate['images']['center_signature'] ?? null) === ''
+            && str_starts_with((string) ($certificate['images']['right_logo'] ?? ''), 'data:image/png;base64,')
+            && str_starts_with((string) ($certificate['images']['project_stamp'] ?? ''), 'data:image/png;base64,')
+            && str_starts_with((string) ($certificate['images']['project_signature'] ?? ''), 'data:image/png;base64,');
     });
 
     expect(SystemSetting::query()
@@ -307,11 +428,47 @@ test('a read only design user can download a real pdf preview of unsaved nested 
         ->exists())->toBeFalse();
 });
 
+test('certificate design pdf preview derives male wording and full identity from the selected center', function () {
+    $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $center = certificateDesignPreviewCenter([
+        'name' => 'مركز الذكور للشهادة',
+        'certificate_name' => null,
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+        'show_center_manager_signature' => true,
+    ]);
+    $point = certificateDesignPreviewPoint();
+    Pdf::fake();
+
+    $this->actingAs($user, 'web')
+        ->postJson(
+            route('admin.certificate-designs.preview.pdf'),
+            certificateDesignPdfPreviewPayload($point->id, $center->id),
+        )
+        ->assertOk();
+
+    Pdf::assertRespondedWithPdf(function (PdfBuilder $pdf): bool {
+        $certificate = $pdf->viewData['certificate'] ?? [];
+        $images = $certificate['images'] ?? [];
+
+        return ($certificate['design']['student_gender'] ?? null) === Center::STUDENT_GENDER_MALE
+            && ($certificate['show_center_manager_signature'] ?? false) === true
+            && ($certificate['center_name'] ?? null) === 'مركز الذكور للشهادة'
+            && ($certificate['intro_after_center'] ?? null) === config('certificates.wording.male.intro_after_center')
+            && ($certificate['achievement_intro'] ?? null) === config('certificates.wording.male.achievement_intro')
+            && ($certificate['closing_text'] ?? null) === config('certificates.wording.male.closing_text')
+            && str_starts_with((string) ($images['left_logo'] ?? ''), 'data:image/png;base64,')
+            && str_starts_with((string) ($images['center_stamp'] ?? ''), 'data:image/png;base64,')
+            && str_starts_with((string) ($images['center_signature'] ?? ''), 'data:image/png;base64,');
+    });
+});
+
 test('certificate design pdf preview strictly validates its whitelisted nested payload', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $center = certificateDesignPreviewCenter();
     $point = certificateDesignPreviewPoint(['requires_certificate' => false]);
 
-    $payload = certificateDesignPdfPreviewPayload($point->id);
+    $payload = certificateDesignPdfPreviewPayload($point->id, $center->id);
+    $payload['center_id'] = $center->id + 999999;
     $payload['gender'] = 'unknown';
     $payload['achievement_type'] = 'unknown';
     $payload['design']['theme'] = 'unknown-theme';
@@ -324,6 +481,7 @@ test('certificate design pdf preview strictly validates its whitelisted nested p
         ->postJson(route('admin.certificate-designs.preview.pdf'), $payload)
         ->assertUnprocessable()
         ->assertJsonValidationErrors([
+            'center_id',
             'gender',
             'achievement_type',
             'plan_point_id',
@@ -339,8 +497,25 @@ test('certificate design pdf preview strictly validates its whitelisted nested p
         ->exists())->toBeFalse();
 });
 
+test('certificate design pdf preview rejects a client supplied gender instead of allowing center gender spoofing', function () {
+    $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $center = certificateDesignPreviewCenter([
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+        'show_center_manager_signature' => true,
+    ]);
+    $point = certificateDesignPreviewPoint();
+    $payload = certificateDesignPdfPreviewPayload($point->id, $center->id);
+    $payload['gender'] = Center::STUDENT_GENDER_FEMALE;
+
+    $this->actingAs($user, 'web')
+        ->postJson(route('admin.certificate-designs.preview.pdf'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('gender');
+});
+
 test('certificate design pdf preview rejects a certificate point without achievement data', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    $center = certificateDesignPreviewCenter();
     $point = certificateDesignPreviewPoint([
         'surah_name' => null,
         'part_name' => '   ',
@@ -350,7 +525,7 @@ test('certificate design pdf preview rejects a certificate point without achieve
     $this->actingAs($user, 'web')
         ->postJson(
             route('admin.certificate-designs.preview.pdf'),
-            certificateDesignPdfPreviewPayload($point->id),
+            certificateDesignPdfPreviewPayload($point->id, $center->id),
         )
         ->assertUnprocessable()
         ->assertJsonValidationErrors('plan_point_id');
@@ -358,13 +533,14 @@ test('certificate design pdf preview rejects a certificate point without achieve
 
 test('certificate design pdf preview requires the view permission', function () {
     $user = User::factory()->create();
+    $center = certificateDesignPreviewCenter();
     $point = certificateDesignPreviewPoint();
     Pdf::fake();
 
     $this->actingAs($user, 'web')
         ->postJson(
             route('admin.certificate-designs.preview.pdf'),
-            certificateDesignPdfPreviewPayload($point->id),
+            certificateDesignPdfPreviewPayload($point->id, $center->id),
         )
         ->assertForbidden();
 });

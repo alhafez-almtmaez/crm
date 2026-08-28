@@ -136,9 +136,10 @@ const downloadingPreviewPdf = ref(false);
 const selectedPreviewPointIds = ref(Object.fromEntries(
     ACHIEVEMENT_TYPE_VALUES.map((type) => [type, null]),
 ));
-const selectedPreviewCenterIds = ref(Object.fromEntries(
+const rememberedPreviewCenterIds = ref(Object.fromEntries(
     GENDER_VALUES.map((gender) => [gender, null]),
 ));
+const selectedPreviewCenterValue = ref(null);
 const warmedFrames = new Map();
 
 const previewCentersByGender = computed(() => Object.fromEntries(
@@ -181,18 +182,24 @@ const previewAchievementsByType = computed(() => Object.fromEntries(
                 && option.achievement_name !== '')];
     }),
 ));
-const currentPreviewCenterOptions = computed(
-    () => previewCentersByGender.value[selectedGender.value] ?? [],
-);
+const previewCenterOptions = computed(() => GENDER_VALUES.flatMap(
+    (gender) => previewCentersByGender.value[gender] ?? [],
+));
 const selectedPreviewCenterId = computed({
-    get: () => selectedPreviewCenterIds.value[selectedGender.value] ?? null,
+    get: () => selectedPreviewCenterValue.value,
     set: (value) => {
-        selectedPreviewCenterIds.value[selectedGender.value] = value === null
-            ? null
-            : Number(value);
+        const normalizedId = value === null ? null : Number(value);
+        const center = previewCenterOptions.value.find((option) => option.id === normalizedId) ?? null;
+
+        selectedPreviewCenterValue.value = center?.id ?? null;
+
+        if (center) {
+            rememberedPreviewCenterIds.value[center.student_gender] = center.id;
+            selectedGender.value = center.student_gender;
+        }
     },
 });
-const currentPreviewCenter = computed(() => currentPreviewCenterOptions.value.find(
+const currentPreviewCenter = computed(() => previewCenterOptions.value.find(
     (option) => option.id === selectedPreviewCenterId.value,
 ) ?? null);
 const currentPreviewAchievementOptions = computed(
@@ -215,15 +222,16 @@ const selectedFont = computed(() => fonts.value.find((font) => font.value === cu
 const selectedGenderLabel = computed(() => genders.value.find((option) => option.value === selectedGender.value)?.label ?? '');
 const selectedTypeLabel = computed(() => achievementTypes.value.find((option) => option.value === selectedAchievementType.value)?.label ?? '');
 
-watch(previewCentersByGender, (optionsByGender) => {
-    GENDER_VALUES.forEach((gender) => {
-        const options = optionsByGender[gender] ?? [];
-        const selectedId = selectedPreviewCenterIds.value[gender];
+watch(previewCenterOptions, (options) => {
+    const selectedCenter = options.find((option) => option.id === selectedPreviewCenterId.value);
 
-        if (!options.some((option) => option.id === selectedId)) {
-            selectedPreviewCenterIds.value[gender] = options[0]?.id ?? null;
-        }
-    });
+    if (selectedCenter) {
+        selectedPreviewCenterId.value = selectedCenter.id;
+
+        return;
+    }
+
+    selectedPreviewCenterId.value = options[0]?.id ?? null;
 }, { immediate: true });
 
 watch(previewAchievementsByType, (optionsByType) => {
@@ -254,8 +262,20 @@ const currentDesignHasInvalidColors = computed(() => cellHasInvalidColors(
 ));
 
 const selectContext = (gender, type) => {
-    selectedGender.value = gender;
     selectedAchievementType.value = type;
+
+    const options = previewCentersByGender.value[gender] ?? [];
+    const rememberedId = rememberedPreviewCenterIds.value[gender];
+    const center = currentPreviewCenter.value?.student_gender === gender
+        ? currentPreviewCenter.value
+        : options.find((option) => option.id === rememberedId) ?? options[0] ?? null;
+
+    if (center) {
+        selectedPreviewCenterId.value = center.id;
+    } else {
+        selectedPreviewCenterValue.value = null;
+        selectedGender.value = gender;
+    }
 };
 const previewAchievementContext = (option) => [option?.plan_name, option?.plan_point_name]
     .map((value) => String(value ?? '').trim())
@@ -264,6 +284,9 @@ const previewAchievementContext = (option) => [option?.plan_name, option?.plan_p
 const previewCenterContext = (option) => option?.name !== option?.center_name
     ? option?.name
     : '';
+const previewCenterGenderLabel = (option) => genders.value.find(
+    (gender) => gender.value === option?.student_gender,
+)?.label ?? option?.student_gender ?? '';
 const selectTheme = (theme) => {
     if (!props.canUpdate) return;
 
@@ -305,6 +328,7 @@ const previewMessage = computed(() => ({
     type: 'certificate-design-preview:update',
     ...previewDesignPayload.value,
     center_id: currentPreviewCenter.value?.id ?? null,
+    gender: selectedGender.value,
     achievement_type: selectedAchievementType.value,
     plan_point_id: currentPreviewAchievement.value?.id ?? null,
 }));
@@ -465,19 +489,6 @@ const submit = () => {
 
                         <div class="mt-5 grid gap-5">
                             <div>
-                                <p id="certificate-design-gender-label" class="mb-2 text-sm font-medium">{{ t('certificateDesign.studentGender') }}</p>
-                                <SelectButton
-                                    v-model="selectedGender"
-                                    :options="genders"
-                                    option-label="label"
-                                    option-value="value"
-                                    :allow-empty="false"
-                                    aria-labelledby="certificate-design-gender-label"
-                                    fluid
-                                />
-                            </div>
-
-                            <div>
                                 <label for="certificate-preview-center" class="mb-2 block text-sm font-medium">
                                     {{ t('certificateDesign.previewCenter') }}
                                 </label>
@@ -486,13 +497,14 @@ const submit = () => {
                                 </p>
 
                                 <Select
-                                    v-if="currentPreviewCenterOptions.length"
+                                    v-if="previewCenterOptions.length"
                                     input-id="certificate-preview-center"
                                     v-model="selectedPreviewCenterId"
-                                    :options="currentPreviewCenterOptions"
+                                    :options="previewCenterOptions"
                                     option-label="center_name"
                                     option-value="id"
                                     :filter-fields="['center_name', 'name']"
+                                    :placeholder="t('certificateDesign.selectPreviewCenter')"
                                     :filter-placeholder="t('certificateDesign.searchPreviewCenter')"
                                     :empty-filter-message="t('certificateDesign.noMatchingPreviewCenter')"
                                     filter
@@ -506,15 +518,20 @@ const submit = () => {
                                                     {{ previewCenterContext(currentPreviewCenter) }}
                                                 </span>
                                             </span>
-                                            <span
-                                                class="shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
-                                                :class="currentPreviewCenter.show_center_manager_signature
-                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
-                                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                                            >
-                                                {{ t(currentPreviewCenter.show_center_manager_signature
-                                                    ? 'certificateDesign.centerIdentityVisible'
-                                                    : 'certificateDesign.centerIdentityHidden') }}
+                                            <span class="flex shrink-0 flex-wrap justify-end gap-1.5">
+                                                <span class="rounded-full bg-sky-100 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
+                                                    {{ previewCenterGenderLabel(currentPreviewCenter) }}
+                                                </span>
+                                                <span
+                                                    class="rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+                                                    :class="currentPreviewCenter.show_center_manager_signature
+                                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
+                                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                                                >
+                                                    {{ t(currentPreviewCenter.show_center_manager_signature
+                                                        ? 'certificateDesign.centerIdentityVisible'
+                                                        : 'certificateDesign.centerIdentityHidden') }}
+                                                </span>
                                             </span>
                                         </div>
                                     </template>
@@ -526,22 +543,35 @@ const submit = () => {
                                                     {{ previewCenterContext(option) }}
                                                 </span>
                                             </span>
-                                            <span
-                                                class="shrink-0 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
-                                                :class="option.show_center_manager_signature
-                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
-                                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
-                                            >
-                                                {{ t(option.show_center_manager_signature
-                                                    ? 'certificateDesign.centerIdentityVisible'
-                                                    : 'certificateDesign.centerIdentityHidden') }}
+                                            <span class="flex shrink-0 flex-wrap justify-end gap-1.5">
+                                                <span class="rounded-full bg-sky-100 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
+                                                    {{ previewCenterGenderLabel(option) }}
+                                                </span>
+                                                <span
+                                                    class="rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+                                                    :class="option.show_center_manager_signature
+                                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
+                                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                                                >
+                                                    {{ t(option.show_center_manager_signature
+                                                        ? 'certificateDesign.centerIdentityVisible'
+                                                        : 'certificateDesign.centerIdentityHidden') }}
+                                                </span>
                                             </span>
                                         </div>
                                     </template>
                                 </Select>
 
                                 <div
-                                    v-else
+                                    v-if="currentPreviewCenter"
+                                    class="mt-2 flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--accent)_8%,transparent)] px-3 py-2 text-xs leading-5 text-(--muted-foreground)"
+                                >
+                                    <i class="pi pi-check-circle mt-0.5 shrink-0 text-[var(--accent)]"></i>
+                                    <p>{{ t('certificateDesign.centerSettingsApplied') }}</p>
+                                </div>
+
+                                <div
+                                    v-if="!previewCenterOptions.length"
                                     class="flex items-start gap-3 rounded-lg border border-dashed border-(--border) bg-(--background) p-3 text-sm text-(--muted-foreground)"
                                 >
                                     <i class="pi pi-building mt-0.5 shrink-0"></i>

@@ -208,7 +208,8 @@ test('certificate issuance snapshots hidden center identity and moves the comple
         ->assertSee('project-stamp.png', false)
         ->assertSee('project-signature.png', false)
         ->assertSee('certificate--project-only', false)
-        ->assertSee('certificate__logo--project-solo', false)
+        ->assertSee('class="certificate__logo certificate__logo--right"', false)
+        ->assertDontSee('certificate__logo--project-solo', false)
         ->assertSee('certificate__signing--project-solo', false);
 
     expect(substr_count($response->getContent(), 'right-logo.png'))->toBe(1);
@@ -311,6 +312,7 @@ test('certificate issuance snapshots the design selected by center gender and ac
         'content_color' => '#345678',
         'accent_color' => '#456789',
     ])->and($issuedWording)->toMatchArray([
+        'schema_version' => 2,
         'student_gender' => Center::STUDENT_GENDER_FEMALE,
         'achievement_type' => Certificate::ACHIEVEMENT_PART,
         'project_name' => config('certificates.wording.female.project_name'),
@@ -350,7 +352,7 @@ test('certificate issuance snapshots the design selected by center gender and ac
         ->assertSee('--certificate-body-font: Certificate Naskh', false);
 });
 
-test('certificates without design or wording snapshots retain the legacy masculine appearance', function () {
+test('certificates without design or wording snapshots retain masculine wording with the corrected center identity', function () {
     [$user, $student, , $partPoint] = certificateFixture();
 
     $this->actingAs($user, 'web')
@@ -378,7 +380,8 @@ test('certificates without design or wording snapshots retain the legacy masculi
         'student_name_color' => '#006F89',
         'content_color' => '#111111',
         'accent_color' => '#006F89',
-    ])->and($payload['project_name'])->toBe('اسم المشروع التاريخي')
+    ])->and($payload['project_name'])->toBe('')
+        ->and($payload['intro_before_project'])->toBe('تَتَقَدَّمُ إِدَارَةُ')
         ->and($payload['closing_text'])->toBe('النص الختامي التاريخي')
         ->and($payload['intro_after_center'])->toBe(config('certificates.wording.male.intro_after_center'))
         ->and($payload['achievement_intro'])->toBe(config('certificates.wording.male.achievement_intro'));
@@ -407,7 +410,8 @@ test('a legacy certificate without wording snapshot infers feminine wording from
 
     $payload = app(StudentCertificateService::class)->viewPayload($student, $certificate->refresh());
 
-    expect($payload['project_name'])->toBe('اسم المشروع الأنثوي التاريخي')
+    expect($payload['project_name'])->toBe('')
+        ->and($payload['intro_before_project'])->toBe('تَتَقَدَّمُ إِدَارَةُ')
         ->and($payload['intro_after_center'])->toBe(config('certificates.wording.female.intro_after_center'))
         ->and($payload['achievement_intro'])->toBe(config('certificates.wording.female.achievement_intro'))
         ->and($payload['closing_text'])->toBe(config('certificates.wording.female.closing_text'));
@@ -434,6 +438,94 @@ test('a legacy certificate without wording snapshot infers feminine wording from
     });
 });
 
+dataset('legacy certificate wording genders', [
+    'male' => [Center::STUDENT_GENDER_MALE],
+    'female' => [Center::STUDENT_GENDER_FEMALE],
+]);
+
+test('v1 certificate wording is upgraded at runtime to use only the saved center identity in html and pdf', function (string $gender) {
+    [$user, $student, , $partPoint] = certificateFixture();
+    Center::query()->findOrFail($student->center_id)->update([
+        'student_gender' => $gender,
+        'certificate_name' => 'اسم المركز الرسمي المحفوظ',
+    ]);
+
+    $this->actingAs($user, 'web')
+        ->postJson(route('admin.students.certificates.store', $student), [
+            'plan_point_id' => $partPoint->id,
+        ])
+        ->assertCreated();
+
+    $certificate = Certificate::query()->sole();
+    $legacyClosing = 'خاتمة تاريخية لا يجوز تغييرها';
+    $legacyWording = $certificate->wording_snapshot;
+    $legacyWording['schema_version'] = 1;
+    $legacyWording['project_name'] = 'الحَافِظِ المُتَمَيِّزِ';
+    $legacyWording['intro_before_project'] = 'تَتَقَدَّمُ إِدَارَةُ مَشْرُوعِ';
+    $legacyWording['closing_text'] = $legacyClosing;
+
+    $certificate->forceFill([
+        'wording_snapshot' => $legacyWording,
+        'project_name' => 'الحَافِظِ المُتَمَيِّزِ',
+        'closing_text' => $legacyClosing,
+    ])->save();
+
+    $wording = app(CertificateWordingService::class)->snapshot(
+        $legacyWording,
+        Certificate::ACHIEVEMENT_PART,
+        [],
+        $gender,
+    );
+    $staleV2Wording = $legacyWording;
+    $staleV2Wording['schema_version'] = 2;
+    $normalizedStaleV2Wording = app(CertificateWordingService::class)->snapshot(
+        $staleV2Wording,
+        Certificate::ACHIEVEMENT_PART,
+        [],
+        $gender,
+    );
+    $payload = app(StudentCertificateService::class)->viewPayload($student, $certificate->refresh());
+
+    expect($wording['schema_version'])->toBe(2)
+        ->and($wording['student_gender'])->toBe($gender)
+        ->and($wording['project_name'])->toBe('')
+        ->and($wording['intro_before_project'])->toBe('تَتَقَدَّمُ إِدَارَةُ')
+        ->and($wording['intro_after_center'])->toBe(config("certificates.wording.{$gender}.intro_after_center"))
+        ->and($wording['closing_text'])->toBe($legacyClosing)
+        ->and($normalizedStaleV2Wording['schema_version'])->toBe(2)
+        ->and($normalizedStaleV2Wording['project_name'])->toBe('')
+        ->and($normalizedStaleV2Wording['intro_before_project'])->toBe('تَتَقَدَّمُ إِدَارَةُ')
+        ->and($payload['project_name'])->toBe('')
+        ->and($payload['center_name'])->toBe('اسم المركز الرسمي المحفوظ')
+        ->and($payload['intro_before_project'])->toBe('تَتَقَدَّمُ إِدَارَةُ')
+        ->and($payload['intro_after_center'])->toBe(config("certificates.wording.{$gender}.intro_after_center"))
+        ->and($payload['closing_text'])->toBe($legacyClosing);
+
+    $this->actingAs($user, 'web')
+        ->get(route('admin.students.certificates.show', [$student, $certificate]))
+        ->assertOk()
+        ->assertSee('تَتَقَدَّمُ إِدَارَةُ')
+        ->assertSee('اسم المركز الرسمي المحفوظ')
+        ->assertDontSee('تَتَقَدَّمُ إِدَارَةُ مَشْرُوعِ')
+        ->assertDontSee('الحَافِظِ المُتَمَيِّزِ');
+
+    Pdf::fake();
+
+    $this->actingAs($user, 'web')
+        ->get(route('admin.students.certificates.pdf', [$student, $certificate]))
+        ->assertOk();
+
+    Pdf::assertRespondedWithPdf(function (PdfBuilder $pdf) use ($gender, $legacyClosing): bool {
+        $payload = $pdf->viewData['certificate'] ?? [];
+
+        return ($payload['project_name'] ?? null) === ''
+            && ($payload['center_name'] ?? null) === 'اسم المركز الرسمي المحفوظ'
+            && ($payload['intro_before_project'] ?? null) === 'تَتَقَدَّمُ إِدَارَةُ'
+            && ($payload['intro_after_center'] ?? null) === config("certificates.wording.{$gender}.intro_after_center")
+            && ($payload['closing_text'] ?? null) === $legacyClosing;
+    });
+})->with('legacy certificate wording genders');
+
 test('issued wording remains historically stable until an explicit redesign', function () {
     [$user, $student, , $partPoint] = certificateFixture();
     Center::query()->findOrFail($student->center_id)->update([
@@ -459,18 +551,22 @@ test('issued wording remains historically stable until an explicit redesign', fu
     ];
     $preserved = Arr::only($certificate->getAttributes(), $preservedKeys);
     $originalWording = config('certificates.wording');
+    $updatedPrefix = 'صياغة افتتاحية أنثوية جديدة للاختبار';
     $updatedIntro = 'صياغة أنثوية جديدة للاختبار';
     $updatedClosing = 'خاتمة أنثوية جديدة للاختبار';
 
     try {
+        config()->set('certificates.wording.female.intro_before_project', $updatedPrefix);
         config()->set('certificates.wording.female.intro_after_center', $updatedIntro);
         config()->set('certificates.wording.female.closing_text', $updatedClosing);
 
         $unchangedPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
 
         expect($certificate->wording_snapshot)->toBe($issuedWording)
+            ->and($unchangedPayload['intro_before_project'])->toBe($issuedWording['intro_before_project'])
             ->and($unchangedPayload['intro_after_center'])->toBe($issuedWording['intro_after_center'])
             ->and($unchangedPayload['closing_text'])->toBe($issuedWording['closing_text'])
+            ->and($unchangedPayload['intro_before_project'])->not->toBe($updatedPrefix)
             ->and($unchangedPayload['intro_after_center'])->not->toBe($updatedIntro)
             ->and($unchangedPayload['closing_text'])->not->toBe($updatedClosing);
 
@@ -482,8 +578,10 @@ test('issued wording remains historically stable until an explicit redesign', fu
         $redesignedPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
 
         expect($certificate->wording_snapshot['student_gender'])->toBe(Center::STUDENT_GENDER_FEMALE)
+            ->and($certificate->wording_snapshot['intro_before_project'])->toBe($updatedPrefix)
             ->and($certificate->wording_snapshot['intro_after_center'])->toBe($updatedIntro)
             ->and($certificate->wording_snapshot['closing_text'])->toBe($updatedClosing)
+            ->and($redesignedPayload['intro_before_project'])->toBe($updatedPrefix)
             ->and($redesignedPayload['intro_after_center'])->toBe($updatedIntro)
             ->and($redesignedPayload['closing_text'])->toBe($updatedClosing)
             ->and(Arr::only($certificate->getAttributes(), $preservedKeys))->toBe($preserved);
@@ -767,7 +865,8 @@ test('certificate redesign snapshots the current center identity visibility with
         ->get(route('admin.students.certificates.show', [$student, $certificate]))
         ->assertOk()
         ->assertSee('certificate--project-only', false)
-        ->assertSee('certificate__logo--project-solo', false)
+        ->assertSee('class="certificate__logo certificate__logo--right"', false)
+        ->assertDontSee('certificate__logo--project-solo', false)
         ->assertSee('certificate__signing--project-solo', false)
         ->assertDontSee('left-logo.png', false)
         ->assertDontSee('center-stamp.png', false)
