@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\CertificateDesignPdfPreviewRequest;
 use App\Http\Requests\Admin\CertificateDesignUpdateRequest;
 use App\Models\Center;
 use App\Models\Certificate;
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\StudentCertificateService;
 use App\Services\System\CertificateAchievementService;
 use App\Services\System\CertificateDesignSettingsService;
@@ -31,6 +32,7 @@ class CertificateDesignController extends Controller implements HasMiddleware
         private readonly CertificateAchievementService $achievements,
         private readonly StudentCertificateService $certificateRenderer,
         private readonly CertificateQrCodeService $certificateQrCodes,
+        private readonly AdminDataScopeService $dataScope,
     ) {}
 
     public static function middleware(): array
@@ -43,26 +45,30 @@ class CertificateDesignController extends Controller implements HasMiddleware
 
     public function index(): Response
     {
+        $centers = $this->centers();
+
         return Inertia::render('Admin/CertificateDesigns', [
             'canUpdate' => (bool) Auth::user()?->can('certificate_designs.update'),
             'catalog' => $this->settings->catalog(),
-            'designs' => $this->settings->get(),
+            'centers' => $centers,
+            'designs' => $this->settings->designsForCenters($centers),
             'previewAchievements' => $this->achievements->previewAchievements(),
-            'previewCenters' => $this->previewCenters(),
+            'previewCenters' => $this->groupCentersByGender($centers),
         ]);
     }
 
     public function preview(): View
     {
         $previewAchievements = $this->achievements->previewAchievements();
-        $previewCenters = $this->previewCenters();
+        $previewCenters = $this->groupCentersByGender($this->centers());
         $achievement = $this->firstPreviewAchievement($previewAchievements);
         $center = $this->firstPreviewCenter($previewCenters);
         $gender = (string) ($center['student_gender'] ?? Center::STUDENT_GENDER_MALE);
         $achievementType = (string) ($achievement['achievement_type'] ?? Certificate::ACHIEVEMENT_SURAH);
-        $design = $this->settings->resolve(
-            $gender,
+        $design = $this->settings->resolveForCenter(
+            $center,
             $achievementType,
+            $gender,
         );
         $wording = $this->wordings->resolve(
             $gender,
@@ -93,6 +99,7 @@ class CertificateDesignController extends Controller implements HasMiddleware
                 'center_id' => __('validation.exists', ['attribute' => 'center id']),
             ]);
         }
+        $this->dataScope->abortUnlessCanAccessCenter($centerModel);
 
         $center = $this->previewCenter($centerModel);
         $achievement = $this->achievements->findPreviewAchievement((int) $validated['plan_point_id']);
@@ -102,8 +109,8 @@ class CertificateDesignController extends Controller implements HasMiddleware
             ]);
         }
 
-        $design = $this->settings->resolveDraft(
-            $center['student_gender'],
+        $design = $this->settings->resolveDraftForCenter(
+            $centerModel,
             $achievement['achievement_type'],
             $validated['design'],
         );
@@ -131,9 +138,14 @@ class CertificateDesignController extends Controller implements HasMiddleware
 
     public function update(CertificateDesignUpdateRequest $request): RedirectResponse
     {
+        /** @var array{center_id: int, designs: array<string, mixed>} $validated */
+        $validated = $request->validated();
+        $center = Center::query()->findOrFail((int) $validated['center_id']);
+        $this->dataScope->abortUnlessCanAccessCenter($center);
+
         /** @var array<string, mixed> $designs */
-        $designs = $request->validated('designs');
-        $this->settings->update($designs);
+        $designs = $validated['designs'];
+        $this->settings->updateForCenter($center, $designs);
 
         return back()->with('success', __('certificates.design_settings_updated'));
     }
@@ -305,16 +317,13 @@ class CertificateDesignController extends Controller implements HasMiddleware
     }
 
     /**
-     * @return array<string, list<array{id: int, name: string, center_name: string, student_gender: string, show_center_manager_signature: bool}>>
+     * @return list<array{id: int, name: string, center_name: string, student_gender: string, show_center_manager_signature: bool}>
      */
-    private function previewCenters(): array
+    private function centers(): array
     {
-        $grouped = [
-            Center::STUDENT_GENDER_MALE => [],
-            Center::STUDENT_GENDER_FEMALE => [],
-        ];
+        $centers = [];
 
-        Center::query()
+        $this->dataScope->applyCenterAccess(Center::query())
             ->orderBy('name')
             ->orderBy('id')
             ->get([
@@ -324,10 +333,27 @@ class CertificateDesignController extends Controller implements HasMiddleware
                 'student_gender',
                 'show_center_manager_signature',
             ])
-            ->each(function (Center $center) use (&$grouped): void {
-                $option = $this->previewCenter($center);
-                $grouped[$option['student_gender']][] = $option;
+            ->each(function (Center $center) use (&$centers): void {
+                $centers[] = $this->previewCenter($center);
             });
+
+        return $centers;
+    }
+
+    /**
+     * @param  list<array{id: int, name: string, center_name: string, student_gender: string, show_center_manager_signature: bool}>  $centers
+     * @return array<string, list<array{id: int, name: string, center_name: string, student_gender: string, show_center_manager_signature: bool}>>
+     */
+    private function groupCentersByGender(array $centers): array
+    {
+        $grouped = [
+            Center::STUDENT_GENDER_MALE => [],
+            Center::STUDENT_GENDER_FEMALE => [],
+        ];
+
+        foreach ($centers as $center) {
+            $grouped[$center['student_gender']][] = $center;
+        }
 
         return $grouped;
     }

@@ -25,7 +25,12 @@
     "/build/assets/Edit-kYU0-LMk.js"
   ],
   "resources/js/Pages/Admin/CertificateDesigns.vue": [
-    "/build/assets/CertificateDesigns-Je5ng5Ad.js"
+    "/build/assets/CertificateDesigns-DbPN-B8o.js",
+    "/build/assets/CertificateDesigns-CugR6M81.css"
+  ],
+  "resources/js/Pages/Admin/CertificateDesigns.vue?vue&type=style&index=0&scoped=ca4b067f&lang.css": [
+    "/build/assets/CertificateDesigns-DbPN-B8o.js",
+    "/build/assets/CertificateDesigns-CugR6M81.css"
   ],
   "resources/js/Pages/Admin/Dashboard.vue": [
     "/build/assets/Dashboard-DdwtErfa.js",

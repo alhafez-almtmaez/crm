@@ -4,6 +4,7 @@ use App\Models\Center;
 use App\Models\Certificate;
 use App\Models\Plan;
 use App\Models\PlanPoint;
+use App\Models\Student;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\System\CertificateDesignSettingsService;
@@ -13,6 +14,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\LaravelPdf\Facades\Pdf;
 use Spatie\LaravelPdf\PdfBuilder;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -26,6 +28,7 @@ function certificateDesignSettingsUser(array $permissions): User
     }
 
     $user = User::factory()->create();
+    $user->assignRole(Role::findOrCreate('admin', 'web'));
     $user->givePermissionTo($permissions);
 
     return $user;
@@ -85,6 +88,14 @@ test('certificate design page exposes the complete defaults and catalog', functi
         'certificate_designs.view',
         'certificate_designs.update',
     ]);
+    $maleCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز افتراضي للذكور',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+    ]);
+    $femaleCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز افتراضي للإناث',
+        'student_gender' => Center::STUDENT_GENDER_FEMALE,
+    ]);
 
     $this->actingAs($user, 'web')
         ->get(route('admin.certificate-designs.index'))
@@ -92,13 +103,13 @@ test('certificate design page exposes the complete defaults and catalog', functi
         ->assertInertia(fn (Assert $page) => $page
             ->component('Admin/CertificateDesigns', false)
             ->where('canUpdate', true)
-            ->where('designs.male.surah.theme', 'blue')
-            ->where('designs.male.part.theme', 'blue')
-            ->where('designs.male.three_parts.theme', 'blue')
-            ->where('designs.female.surah.theme', 'rose')
-            ->where('designs.female.part.theme', 'rose')
-            ->where('designs.female.three_parts.theme', 'rose')
-            ->where('designs.male.surah.font', 'classic')
+            ->where("designs.{$maleCenter->id}.surah.theme", 'blue')
+            ->where("designs.{$maleCenter->id}.part.theme", 'blue')
+            ->where("designs.{$maleCenter->id}.three_parts.theme", 'blue')
+            ->where("designs.{$femaleCenter->id}.surah.theme", 'rose')
+            ->where("designs.{$femaleCenter->id}.part.theme", 'rose')
+            ->where("designs.{$femaleCenter->id}.three_parts.theme", 'rose')
+            ->where("designs.{$maleCenter->id}.surah.font", 'classic')
             ->where('catalog.genders.0.value', Center::STUDENT_GENDER_MALE)
             ->where('catalog.genders.1.value', Center::STUDENT_GENDER_FEMALE)
             ->where('catalog.achievementTypes.0.value', Certificate::ACHIEVEMENT_SURAH)
@@ -106,8 +117,9 @@ test('certificate design page exposes the complete defaults and catalog', functi
             ->where('catalog.achievementTypes.2.value', Certificate::ACHIEVEMENT_THREE_PARTS)
             ->has('catalog.themes', 20)
             ->has('catalog.fonts', 12)
-            ->has('previewCenters.male', 0)
-            ->has('previewCenters.female', 0));
+            ->has('centers', 2)
+            ->has('previewCenters.male', 1)
+            ->has('previewCenters.female', 1));
 });
 
 test('certificate design page groups real centers and resolves their certificate names', function () {
@@ -575,7 +587,9 @@ test('certificate design pdf preview requires the view permission', function () 
 });
 
 test('a read only user can view certificate designs but cannot update them', function () {
-    $user = certificateDesignSettingsUser(['certificate_designs.view']);
+    Permission::findOrCreate('certificate_designs.view', 'web');
+    $user = User::factory()->create();
+    $user->givePermissionTo('certificate_designs.view');
     $designs = app(CertificateDesignSettingsService::class)->defaults();
 
     $this->actingAs($user, 'web')
@@ -590,9 +604,12 @@ test('a read only user can view certificate designs but cannot update them', fun
 
 test('certificate designs can be updated and are cached under an independent setting key', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.update']);
+    $center = certificateDesignPreviewCenter([
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+    ]);
     $service = app(CertificateDesignSettingsService::class);
-    $designs = $service->defaults();
-    $designs['male']['part'] = [
+    $designs = $service->designsForCenter($center);
+    $designs['part'] = [
         'theme' => 'purple',
         'font' => 'naskh',
         'heading_color' => '#123456',
@@ -603,7 +620,10 @@ test('certificate designs can be updated and are cached under an independent set
 
     $this->actingAs($user, 'web')
         ->from(route('admin.certificate-designs.index'))
-        ->put(route('admin.certificate-designs.update'), ['designs' => $designs])
+        ->put(route('admin.certificate-designs.update'), [
+            'center_id' => $center->id,
+            'designs' => $designs,
+        ])
         ->assertRedirect(route('admin.certificate-designs.index'))
         ->assertSessionHas('success');
 
@@ -611,9 +631,10 @@ test('certificate designs can be updated and are cached under an independent set
         ->where('key', CertificateDesignSettingsService::SETTING_KEY)
         ->sole();
 
-    expect($stored->value['version'])->toBe(1)
-        ->and($stored->value['designs']['male']['part']['theme'])->toBe('purple')
-        ->and($service->get()['male']['part'])->toMatchArray([
+    expect($stored->value['version'])->toBe(2)
+        ->and($stored->value['defaults']['male']['part']['theme'])->toBe('blue')
+        ->and($stored->value['centers'][$center->id]['part']['theme'])->toBe('purple')
+        ->and($service->designsForCenter($center)['part'])->toMatchArray([
             'theme' => 'purple',
             'font' => 'naskh',
             'heading_color' => '#123456',
@@ -625,24 +646,152 @@ test('certificate designs can be updated and are cached under an independent set
 
 test('certificate design updates reject unknown catalog values colors and frame injection', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.update']);
-    $designs = app(CertificateDesignSettingsService::class)->defaults();
-    $designs['female']['surah']['theme'] = 'unknown-theme';
-    $designs['female']['surah']['font'] = 'unknown-font';
-    $designs['female']['surah']['heading_color'] = 'red';
-    $designs['female']['surah']['frame'] = '../../outside.svg';
+    $center = certificateDesignPreviewCenter();
+    $designs = app(CertificateDesignSettingsService::class)->designsForCenter($center);
+    $designs['surah']['theme'] = 'unknown-theme';
+    $designs['surah']['font'] = 'unknown-font';
+    $designs['surah']['heading_color'] = 'red';
+    $designs['surah']['frame'] = '../../outside.svg';
 
     $this->actingAs($user, 'web')
-        ->put(route('admin.certificate-designs.update'), ['designs' => $designs])
+        ->put(route('admin.certificate-designs.update'), [
+            'center_id' => $center->id,
+            'designs' => $designs,
+            'gender' => Center::STUDENT_GENDER_FEMALE,
+        ])
         ->assertSessionHasErrors([
-            'designs.female.surah',
-            'designs.female.surah.theme',
-            'designs.female.surah.font',
-            'designs.female.surah.heading_color',
+            'gender',
+            'designs.surah',
+            'designs.surah.theme',
+            'designs.surah.font',
+            'designs.surah.heading_color',
         ]);
 
     expect(SystemSetting::query()
         ->where('key', CertificateDesignSettingsService::SETTING_KEY)
         ->exists())->toBeFalse();
+});
+
+test('a v1 gender design remains the fallback while the first center save is promoted to v2', function () {
+    $firstCenter = certificateDesignPreviewCenter();
+    $secondCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز إناث ثانٍ',
+    ]);
+    $service = app(CertificateDesignSettingsService::class);
+    $legacyDesigns = $service->defaults();
+    $legacyDesigns[Center::STUDENT_GENDER_FEMALE][Certificate::ACHIEVEMENT_PART] = [
+        'theme' => 'purple',
+        'font' => 'naskh',
+        'heading_color' => '#123456',
+        'student_name_color' => '#234567',
+        'content_color' => '#345678',
+        'accent_color' => '#456789',
+    ];
+    SystemSetting::query()->create([
+        'key' => CertificateDesignSettingsService::SETTING_KEY,
+        'value' => [
+            'version' => 1,
+            'designs' => $legacyDesigns,
+        ],
+    ]);
+    $service->clearCache();
+
+    expect($service->designsForCenter($firstCenter)['part']['theme'])->toBe('purple')
+        ->and($service->designsForCenter($secondCenter)['part']['theme'])->toBe('purple');
+
+    $firstDesigns = $service->designsForCenter($firstCenter);
+    $firstDesigns['part'] = [
+        'theme' => 'navy',
+        'font' => 'amiri',
+        'heading_color' => '#654321',
+        'student_name_color' => '#765432',
+        'content_color' => '#876543',
+        'accent_color' => '#987654',
+    ];
+    $service->updateForCenter($firstCenter, $firstDesigns);
+    $newCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز إناث جديد',
+    ]);
+    $stored = SystemSetting::query()
+        ->where('key', CertificateDesignSettingsService::SETTING_KEY)
+        ->sole();
+
+    expect($stored->value['version'])->toBe(2)
+        ->and($stored->value['defaults']['female']['part']['theme'])->toBe('purple')
+        ->and($stored->value['centers'][$firstCenter->id]['part']['theme'])->toBe('navy')
+        ->and($service->designsForCenter($firstCenter)['part']['theme'])->toBe('navy')
+        ->and($service->designsForCenter($secondCenter)['part']['theme'])->toBe('purple')
+        ->and($service->designsForCenter($newCenter)['part']['theme'])->toBe('purple');
+});
+
+test('sequential center saves preserve other centers and isolate certificate types', function () {
+    $firstCenter = certificateDesignPreviewCenter([
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+    ]);
+    $secondCenter = certificateDesignPreviewCenter([
+        'name' => 'مركز ذكور ثانٍ',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+    ]);
+    $service = app(CertificateDesignSettingsService::class);
+    $firstDesigns = $service->designsForCenter($firstCenter);
+    $secondDesigns = $service->designsForCenter($secondCenter);
+    $firstDesigns['part']['theme'] = 'purple';
+    $secondDesigns['part']['theme'] = 'navy';
+
+    $service->updateForCenter($firstCenter, $firstDesigns);
+    $service->updateForCenter($secondCenter, $secondDesigns);
+
+    expect($service->designsForCenter($firstCenter)['part']['theme'])->toBe('purple')
+        ->and($service->designsForCenter($secondCenter)['part']['theme'])->toBe('navy')
+        ->and($service->designsForCenter($firstCenter)['surah']['theme'])->toBe('blue')
+        ->and($service->designsForCenter($secondCenter)['three_parts']['theme'])->toBe('blue');
+});
+
+test('scoped design users only see preview and update centers they can access', function () {
+    foreach (['certificate_designs.view', 'certificate_designs.update'] as $permission) {
+        Permission::findOrCreate($permission, 'web');
+    }
+
+    $user = User::factory()->create();
+    $user->givePermissionTo(['certificate_designs.view', 'certificate_designs.update']);
+    $accessibleCenter = certificateDesignPreviewCenter([
+        'name' => 'المركز المسموح',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+    ]);
+    $hiddenCenter = certificateDesignPreviewCenter([
+        'name' => 'المركز المخفي',
+        'student_gender' => Center::STUDENT_GENDER_MALE,
+    ]);
+    Student::factory()->create([
+        'admin_id' => $user->id,
+        'center_id' => $accessibleCenter->id,
+    ]);
+    $service = app(CertificateDesignSettingsService::class);
+
+    $this->actingAs($user, 'web')
+        ->get(route('admin.certificate-designs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('centers', 1)
+            ->where('centers.0.id', $accessibleCenter->id)
+            ->has("designs.{$accessibleCenter->id}")
+            ->missing("designs.{$hiddenCenter->id}"));
+
+    $this->actingAs($user, 'web')
+        ->putJson(route('admin.certificate-designs.update'), [
+            'center_id' => $hiddenCenter->id,
+            'designs' => $service->designsForCenter($hiddenCenter),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('center_id');
+
+    $this->actingAs($user, 'web')
+        ->put(route('admin.certificate-designs.update'), [
+            'center_id' => $accessibleCenter->id,
+            'designs' => $service->designsForCenter($accessibleCenter),
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
 });
 
 test('cached designs are normalized when the theme catalog changes', function () {

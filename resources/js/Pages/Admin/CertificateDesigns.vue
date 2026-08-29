@@ -38,6 +38,10 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    centers: {
+        type: Array,
+        default: () => [],
+    },
     canUpdate: {
         type: Boolean,
         default: false,
@@ -106,62 +110,56 @@ const normalizeDesign = (design = {}) => {
         accent_color: normalizeHex(design.accent_color) ?? normalizeHex(theme.accent_color) ?? '#2B5F91',
     };
 };
-const normalizeDesignMatrix = (source = {}) => Object.fromEntries(
-    GENDER_VALUES.map((gender) => [
-        gender,
-        Object.fromEntries(ACHIEVEMENT_TYPE_VALUES.map((type) => [
-            type,
-            normalizeDesign(source?.[gender]?.[type]),
-        ])),
+const normalizeCenterDesigns = (source = {}) => Object.fromEntries(
+    ACHIEVEMENT_TYPE_VALUES.map((type) => [
+        type,
+        normalizeDesign(source?.[type]),
     ]),
 );
+const normalizeCenter = (option) => ({
+    id: Number(option?.id),
+    name: String(option?.name ?? '').trim(),
+    center_name: String(option?.center_name ?? '').trim(),
+    student_gender: String(option?.student_gender ?? ''),
+    show_center_manager_signature: option?.show_center_manager_signature === true,
+});
+const previewCenterOptions = computed(() => {
+    const source = Array.isArray(props.centers) ? props.centers : [];
 
-const normalizedDesigns = normalizeDesignMatrix(props.designs);
+    return source
+        .map(normalizeCenter)
+        .filter((option) => Number.isInteger(option.id)
+            && option.id > 0
+            && GENDER_VALUES.includes(option.student_gender)
+            && option.center_name !== '');
+});
+const normalizedDesignsByCenter = Object.fromEntries(
+    previewCenterOptions.value.map((center) => [
+        String(center.id),
+        normalizeCenterDesigns(props.designs?.[String(center.id)] ?? props.designs?.[center.id]),
+    ]),
+);
 const initialAchievementType = ACHIEVEMENT_TYPE_VALUES.find(
     (type) => Array.isArray(props.previewAchievements?.[type])
         && props.previewAchievements[type].length > 0,
 ) ?? ACHIEVEMENT_TYPE_VALUES[0];
-const initialGender = GENDER_VALUES.find(
-    (gender) => Array.isArray(props.previewCenters?.[gender])
-        && props.previewCenters[gender].length > 0,
-) ?? GENDER_VALUES[0];
+const initialCenterId = previewCenterOptions.value[0]?.id ?? null;
+const initialCenterDesigns = initialCenterId === null
+    ? normalizeCenterDesigns()
+    : normalizedDesignsByCenter[String(initialCenterId)];
 const form = useForm({
-    designs: deepClone(normalizedDesigns),
+    center_id: initialCenterId,
+    designs: deepClone(initialCenterDesigns),
 });
-const savedDesigns = ref(deepClone(normalizedDesigns));
-const selectedGender = ref(initialGender);
+const savedDesignsByCenter = ref(deepClone(normalizedDesignsByCenter));
+const draftDesignsByCenter = ref(deepClone(normalizedDesignsByCenter));
 const selectedAchievementType = ref(initialAchievementType);
 const previewFrame = ref(null);
 const downloadingPreviewPdf = ref(false);
 const selectedPreviewPointIds = ref(Object.fromEntries(
     ACHIEVEMENT_TYPE_VALUES.map((type) => [type, null]),
 ));
-const rememberedPreviewCenterIds = ref(Object.fromEntries(
-    GENDER_VALUES.map((gender) => [gender, null]),
-));
-const selectedPreviewCenterValue = ref(null);
 const warmedFrames = new Map();
-
-const previewCentersByGender = computed(() => Object.fromEntries(
-    GENDER_VALUES.map((gender) => {
-        const options = Array.isArray(props.previewCenters?.[gender])
-            ? props.previewCenters[gender]
-            : [];
-
-        return [gender, options
-            .map((option) => ({
-                id: Number(option?.id),
-                name: String(option?.name ?? '').trim(),
-                center_name: String(option?.center_name ?? '').trim(),
-                student_gender: String(option?.student_gender ?? ''),
-                show_center_manager_signature: option?.show_center_manager_signature === true,
-            }))
-            .filter((option) => Number.isInteger(option.id)
-                && option.id > 0
-                && option.student_gender === gender
-                && option.center_name !== '')];
-    }),
-));
 const previewAchievementsByType = computed(() => Object.fromEntries(
     ACHIEVEMENT_TYPE_VALUES.map((type) => {
         const options = Array.isArray(props.previewAchievements?.[type])
@@ -182,21 +180,47 @@ const previewAchievementsByType = computed(() => Object.fromEntries(
                 && option.achievement_name !== '')];
     }),
 ));
-const previewCenterOptions = computed(() => GENDER_VALUES.flatMap(
-    (gender) => previewCentersByGender.value[gender] ?? [],
-));
+const ensureCenterDesigns = (centerId) => {
+    const key = String(centerId);
+
+    if (!savedDesignsByCenter.value[key]) {
+        savedDesignsByCenter.value[key] = normalizeCenterDesigns(
+            props.designs?.[key] ?? props.designs?.[centerId],
+        );
+    }
+    if (!draftDesignsByCenter.value[key]) {
+        draftDesignsByCenter.value[key] = deepClone(savedDesignsByCenter.value[key]);
+    }
+};
 const selectedPreviewCenterId = computed({
-    get: () => selectedPreviewCenterValue.value,
+    get: () => form.center_id,
     set: (value) => {
         const normalizedId = value === null ? null : Number(value);
         const center = previewCenterOptions.value.find((option) => option.id === normalizedId) ?? null;
 
-        selectedPreviewCenterValue.value = center?.id ?? null;
+        if (center?.id === form.center_id) return;
 
-        if (center) {
-            rememberedPreviewCenterIds.value[center.student_gender] = center.id;
-            selectedGender.value = center.student_gender;
+        if (form.center_id !== null) {
+            draftDesignsByCenter.value[String(form.center_id)] = deepClone(form.designs);
         }
+
+        form.clearErrors();
+
+        if (center === null) {
+            form.center_id = null;
+            form.designs = normalizeCenterDesigns();
+            form.defaults({ center_id: null, designs: deepClone(form.designs) });
+
+            return;
+        }
+
+        ensureCenterDesigns(center.id);
+        form.center_id = center.id;
+        form.designs = deepClone(draftDesignsByCenter.value[String(center.id)]);
+        form.defaults({
+            center_id: center.id,
+            designs: deepClone(savedDesignsByCenter.value[String(center.id)]),
+        });
     },
 });
 const currentPreviewCenter = computed(() => previewCenterOptions.value.find(
@@ -216,17 +240,20 @@ const selectedPreviewPointId = computed({
 const currentPreviewAchievement = computed(() => currentPreviewAchievementOptions.value.find(
     (option) => option.id === selectedPreviewPointId.value,
 ) ?? null);
-const currentDesign = computed(() => form.designs[selectedGender.value][selectedAchievementType.value]);
+const currentDesign = computed(() => form.designs[selectedAchievementType.value]);
 const selectedTheme = computed(() => themes.value.find((theme) => theme.value === currentDesign.value.theme) ?? themes.value[0] ?? {});
 const selectedFont = computed(() => fonts.value.find((font) => font.value === currentDesign.value.font) ?? fonts.value[0] ?? {});
-const selectedGenderLabel = computed(() => genders.value.find((option) => option.value === selectedGender.value)?.label ?? '');
+const selectedGenderLabel = computed(() => genders.value.find(
+    (option) => option.value === currentPreviewCenter.value?.student_gender,
+)?.label ?? '');
+const selectedCenterLabel = computed(() => currentPreviewCenter.value?.center_name ?? '');
 const selectedTypeLabel = computed(() => achievementTypes.value.find((option) => option.value === selectedAchievementType.value)?.label ?? '');
 
 watch(previewCenterOptions, (options) => {
     const selectedCenter = options.find((option) => option.id === selectedPreviewCenterId.value);
 
     if (selectedCenter) {
-        selectedPreviewCenterId.value = selectedCenter.id;
+        ensureCenterDesigns(selectedCenter.id);
 
         return;
     }
@@ -250,32 +277,16 @@ const resolvedColor = (field) => normalizeHex(currentDesign.value[field])
     ?? '#222222';
 const pickerValue = (field) => resolvedColor(field).replace(/^#/, '');
 const hasInvalidColor = (design, field) => normalizeHex(design?.[field]) === null;
-const cellHasInvalidColors = (gender, type) => COLOR_FIELDS.some(
-    (field) => hasInvalidColor(form.designs[gender][type], field.key),
+const cellHasInvalidColors = (type) => COLOR_FIELDS.some(
+    (field) => hasInvalidColor(form.designs[type], field.key),
 );
-const hasInvalidColors = computed(() => GENDER_VALUES.some(
-    (gender) => ACHIEVEMENT_TYPE_VALUES.some((type) => cellHasInvalidColors(gender, type)),
+const hasInvalidColors = computed(() => ACHIEVEMENT_TYPE_VALUES.some(
+    (type) => cellHasInvalidColors(type),
 ));
-const currentDesignHasInvalidColors = computed(() => cellHasInvalidColors(
-    selectedGender.value,
-    selectedAchievementType.value,
-));
+const currentDesignHasInvalidColors = computed(() => cellHasInvalidColors(selectedAchievementType.value));
 
-const selectContext = (gender, type) => {
+const selectContext = (type) => {
     selectedAchievementType.value = type;
-
-    const options = previewCentersByGender.value[gender] ?? [];
-    const rememberedId = rememberedPreviewCenterIds.value[gender];
-    const center = currentPreviewCenter.value?.student_gender === gender
-        ? currentPreviewCenter.value
-        : options.find((option) => option.id === rememberedId) ?? options[0] ?? null;
-
-    if (center) {
-        selectedPreviewCenterId.value = center.id;
-    } else {
-        selectedPreviewCenterValue.value = null;
-        selectedGender.value = gender;
-    }
 };
 const previewAchievementContext = (option) => [option?.plan_name, option?.plan_point_name]
     .map((value) => String(value ?? '').trim())
@@ -287,8 +298,11 @@ const previewCenterContext = (option) => option?.name !== option?.center_name
 const previewCenterGenderLabel = (option) => genders.value.find(
     (gender) => gender.value === option?.student_gender,
 )?.label ?? option?.student_gender ?? '';
+const previewCenterGenderIcon = (option) => option?.student_gender === 'female'
+    ? 'pi-venus'
+    : 'pi-mars';
 const selectTheme = (theme) => {
-    if (!props.canUpdate) return;
+    if (!props.canUpdate || currentPreviewCenter.value === null || form.processing) return;
 
     currentDesign.value.theme = theme.value;
     COLOR_FIELDS.forEach(({ key }) => {
@@ -296,9 +310,13 @@ const selectTheme = (theme) => {
     });
 };
 const updateFont = (value) => {
+    if (!props.canUpdate || currentPreviewCenter.value === null || form.processing) return;
+
     currentDesign.value.font = value;
 };
 const updateColor = (field, value) => {
+    if (!props.canUpdate || currentPreviewCenter.value === null || form.processing) return;
+
     const candidate = String(value ?? '');
     currentDesign.value[field] = candidate.startsWith('#') ? candidate : `#${candidate}`;
 };
@@ -307,14 +325,33 @@ const normalizeColorField = (field) => {
     if (normalized) currentDesign.value[field] = normalized;
 };
 const restoreThemeColors = () => {
+    if (!props.canUpdate || currentPreviewCenter.value === null || form.processing) return;
+
     COLOR_FIELDS.forEach(({ key }) => {
         currentDesign.value[key] = normalizeHex(selectedTheme.value[key]) ?? currentDesign.value[key];
     });
 };
-const isCellDirty = (gender, type) => JSON.stringify(form.designs[gender][type])
-    !== JSON.stringify(savedDesigns.value[gender][type]);
-const cellTheme = (gender, type) => themes.value.find((theme) => theme.value === form.designs[gender][type].theme) ?? themes.value[0] ?? {};
-const fieldError = (field) => form.errors[`designs.${selectedGender.value}.${selectedAchievementType.value}.${field}`] ?? '';
+const isCellDirty = (type) => {
+    if (form.center_id === null) return false;
+
+    return JSON.stringify(form.designs[type])
+        !== JSON.stringify(savedDesignsByCenter.value[String(form.center_id)]?.[type]);
+};
+const isCenterDirty = (centerId) => {
+    const key = String(centerId);
+    const draft = form.center_id === Number(centerId)
+        ? form.designs
+        : draftDesignsByCenter.value[key];
+
+    return JSON.stringify(draft) !== JSON.stringify(savedDesignsByCenter.value[key]);
+};
+const hasAnyUnsavedChanges = computed(() => previewCenterOptions.value.some(
+    (center) => isCenterDirty(center.id),
+));
+const cellTheme = (type) => themes.value.find(
+    (theme) => theme.value === form.designs[type].theme,
+) ?? themes.value[0] ?? {};
+const fieldError = (field) => form.errors[`designs.${selectedAchievementType.value}.${field}`] ?? '';
 
 const previewDesignPayload = computed(() => ({
     theme: currentDesign.value.theme,
@@ -328,7 +365,7 @@ const previewMessage = computed(() => ({
     type: 'certificate-design-preview:update',
     ...previewDesignPayload.value,
     center_id: currentPreviewCenter.value?.id ?? null,
-    gender: selectedGender.value,
+    gender: currentPreviewCenter.value?.student_gender ?? GENDER_VALUES[0],
     achievement_type: selectedAchievementType.value,
     plan_point_id: currentPreviewAchievement.value?.id ?? null,
 }));
@@ -419,13 +456,26 @@ const downloadPreviewPdf = async () => {
 };
 
 const submit = () => {
-    if (!props.canUpdate || hasInvalidColors.value) return;
+    if (!props.canUpdate || currentPreviewCenter.value === null || hasInvalidColors.value) return;
+
+    const submittedCenterId = Number(form.center_id);
+    const submittedDesigns = deepClone(form.designs);
 
     form.put('/admin/certificate-designs', {
         preserveScroll: true,
         onSuccess: () => {
-            savedDesigns.value = deepClone(form.designs);
-            form.defaults({ designs: deepClone(form.designs) });
+            const key = String(submittedCenterId);
+
+            savedDesignsByCenter.value[key] = deepClone(submittedDesigns);
+            draftDesignsByCenter.value[key] = deepClone(submittedDesigns);
+
+            if (form.center_id === submittedCenterId) {
+                form.designs = deepClone(submittedDesigns);
+                form.defaults({
+                    center_id: submittedCenterId,
+                    designs: deepClone(submittedDesigns),
+                });
+            }
         },
     });
 };
@@ -458,7 +508,7 @@ const submit = () => {
                     icon="pi pi-save"
                     :label="form.recentlySuccessful ? t('certificateDesign.saved') : t('certificateDesign.save')"
                     :loading="form.processing"
-                    :disabled="!canUpdate || hasInvalidColors || form.processing"
+                    :disabled="!canUpdate || !currentPreviewCenter || hasInvalidColors || form.processing"
                     class="h-11 shrink-0 px-5"
                 />
             </header>
@@ -507,6 +557,7 @@ const submit = () => {
                                     :placeholder="t('certificateDesign.selectPreviewCenter')"
                                     :filter-placeholder="t('certificateDesign.searchPreviewCenter')"
                                     :empty-filter-message="t('certificateDesign.noMatchingPreviewCenter')"
+                                    :disabled="form.processing"
                                     filter
                                     fluid
                                 >
@@ -519,18 +570,35 @@ const submit = () => {
                                                 </span>
                                             </span>
                                             <span class="flex shrink-0 flex-wrap justify-end gap-1.5">
-                                                <span class="rounded-full bg-sky-100 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
-                                                    {{ previewCenterGenderLabel(currentPreviewCenter) }}
+                                                <i
+                                                    v-if="isCenterDirty(currentPreviewCenter.id)"
+                                                    class="pi pi-circle-fill self-center text-[0.45rem] text-amber-500"
+                                                    :title="t('certificateDesign.unsaved')"
+                                                ></i>
+                                                <span class="center-meta-badge center-meta-badge--gender">
+                                                    <i
+                                                        class="pi center-meta-badge__icon"
+                                                        :class="previewCenterGenderIcon(currentPreviewCenter)"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    <span>{{ previewCenterGenderLabel(currentPreviewCenter) }}</span>
                                                 </span>
                                                 <span
-                                                    class="rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+                                                    class="center-meta-badge"
                                                     :class="currentPreviewCenter.show_center_manager_signature
-                                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
-                                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                                                        ? 'center-meta-badge--identity-visible'
+                                                        : 'center-meta-badge--identity-hidden'"
                                                 >
-                                                    {{ t(currentPreviewCenter.show_center_manager_signature
-                                                        ? 'certificateDesign.centerIdentityVisible'
-                                                        : 'certificateDesign.centerIdentityHidden') }}
+                                                    <i
+                                                        class="pi center-meta-badge__icon"
+                                                        :class="currentPreviewCenter.show_center_manager_signature ? 'pi-eye' : 'pi-eye-slash'"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    <span>
+                                                        {{ t(currentPreviewCenter.show_center_manager_signature
+                                                            ? 'certificateDesign.centerIdentityVisible'
+                                                            : 'certificateDesign.centerIdentityHidden') }}
+                                                    </span>
                                                 </span>
                                             </span>
                                         </div>
@@ -544,23 +612,44 @@ const submit = () => {
                                                 </span>
                                             </span>
                                             <span class="flex shrink-0 flex-wrap justify-end gap-1.5">
-                                                <span class="rounded-full bg-sky-100 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-800 dark:bg-sky-950/50 dark:text-sky-200">
-                                                    {{ previewCenterGenderLabel(option) }}
+                                                <i
+                                                    v-if="isCenterDirty(option.id)"
+                                                    class="pi pi-circle-fill self-center text-[0.45rem] text-amber-500"
+                                                    :title="t('certificateDesign.unsaved')"
+                                                ></i>
+                                                <span class="center-meta-badge center-meta-badge--gender">
+                                                    <i
+                                                        class="pi center-meta-badge__icon"
+                                                        :class="previewCenterGenderIcon(option)"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    <span>{{ previewCenterGenderLabel(option) }}</span>
                                                 </span>
                                                 <span
-                                                    class="rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+                                                    class="center-meta-badge"
                                                     :class="option.show_center_manager_signature
-                                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
-                                                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
+                                                        ? 'center-meta-badge--identity-visible'
+                                                        : 'center-meta-badge--identity-hidden'"
                                                 >
-                                                    {{ t(option.show_center_manager_signature
-                                                        ? 'certificateDesign.centerIdentityVisible'
-                                                        : 'certificateDesign.centerIdentityHidden') }}
+                                                    <i
+                                                        class="pi center-meta-badge__icon"
+                                                        :class="option.show_center_manager_signature ? 'pi-eye' : 'pi-eye-slash'"
+                                                        aria-hidden="true"
+                                                    ></i>
+                                                    <span>
+                                                        {{ t(option.show_center_manager_signature
+                                                            ? 'certificateDesign.centerIdentityVisible'
+                                                            : 'certificateDesign.centerIdentityHidden') }}
+                                                    </span>
                                                 </span>
                                             </span>
                                         </div>
                                     </template>
                                 </Select>
+
+                                <small v-if="form.errors.center_id" class="mt-1 block text-xs text-red-600 dark:text-red-400">
+                                    {{ form.errors.center_id }}
+                                </small>
 
                                 <div
                                     v-if="currentPreviewCenter"
@@ -587,6 +676,7 @@ const submit = () => {
                                     option-label="label"
                                     option-value="value"
                                     :allow-empty="false"
+                                    :disabled="!currentPreviewCenter || form.processing"
                                     aria-labelledby="certificate-design-type-label"
                                     fluid
                                 />
@@ -649,51 +739,47 @@ const submit = () => {
                                 <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificateDesign.matrixHint') }}</p>
                             </div>
                             <span class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
-                                {{ t('certificateDesign.configurationsCount', { count: 6 }) }}
+                                {{ t('certificateDesign.configurationsCount', { count: 3 }) }}
                             </span>
                         </div>
 
-                        <div class="mt-4 space-y-3">
-                            <section v-for="gender in genders" :key="`matrix-${gender.value}`">
-                                <p class="mb-2 text-xs font-semibold text-(--muted-foreground)">{{ gender.label }}</p>
-                                <div class="grid gap-2 sm:grid-cols-3">
-                                    <button
-                                        v-for="type in achievementTypes"
-                                        :key="`${gender.value}-${type.value}`"
-                                        type="button"
-                                        class="group relative flex min-w-0 items-center gap-2 rounded-lg border p-2.5 text-start transition"
-                                        :class="[
-                                            selectedGender === gender.value && selectedAchievementType === type.value
-                                                ? 'border-[var(--accent)] bg-[color-mix(in_oklab,var(--accent)_9%,transparent)] shadow-sm'
-                                                : 'border-(--border) bg-(--background) hover:border-[color-mix(in_oklab,var(--accent)_45%,var(--border))]',
-                                            cellHasInvalidColors(gender.value, type.value) ? '!border-red-500 ring-1 ring-red-500/25' : '',
-                                        ]"
-                                        :aria-pressed="selectedGender === gender.value && selectedAchievementType === type.value"
-                                        @click="selectContext(gender.value, type.value)"
-                                    >
-                                        <span
-                                            class="h-8 w-8 shrink-0 rounded-lg border border-black/10 shadow-inner"
-                                            :style="{ backgroundColor: normalizeHex(form.designs[gender.value][type.value].accent_color) ?? '#9ca3af' }"
-                                        ></span>
-                                        <span class="min-w-0 flex-1">
-                                            <span class="block truncate text-xs font-semibold">{{ type.label }}</span>
-                                            <span class="mt-0.5 block truncate text-[0.7rem] text-(--muted-foreground)">
-                                                {{ cellTheme(gender.value, type.value).label || cellTheme(gender.value, type.value).value }}
-                                            </span>
-                                        </span>
-                                        <i
-                                            v-if="cellHasInvalidColors(gender.value, type.value)"
-                                            class="pi pi-exclamation-circle text-sm text-red-500"
-                                            :title="t('certificateDesign.invalidColor')"
-                                        ></i>
-                                        <i
-                                            v-else-if="isCellDirty(gender.value, type.value)"
-                                            class="pi pi-circle-fill text-[0.45rem] text-amber-500"
-                                            :title="t('certificateDesign.unsaved')"
-                                        ></i>
-                                    </button>
-                                </div>
-                            </section>
+                        <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                            <button
+                                v-for="type in achievementTypes"
+                                :key="type.value"
+                                type="button"
+                                class="group relative flex min-w-0 items-center gap-2 rounded-lg border p-2.5 text-start transition"
+                                :class="[
+                                    selectedAchievementType === type.value
+                                        ? 'border-[var(--accent)] bg-[color-mix(in_oklab,var(--accent)_9%,transparent)] shadow-sm'
+                                        : 'border-(--border) bg-(--background) hover:border-[color-mix(in_oklab,var(--accent)_45%,var(--border))]',
+                                    cellHasInvalidColors(type.value) ? '!border-red-500 ring-1 ring-red-500/25' : '',
+                                ]"
+                                :disabled="!currentPreviewCenter || form.processing"
+                                :aria-pressed="selectedAchievementType === type.value"
+                                @click="selectContext(type.value)"
+                            >
+                                <span
+                                    class="h-8 w-8 shrink-0 rounded-lg border border-black/10 shadow-inner"
+                                    :style="{ backgroundColor: normalizeHex(form.designs[type.value].accent_color) ?? '#9ca3af' }"
+                                ></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-xs font-semibold">{{ type.label }}</span>
+                                    <span class="mt-0.5 block truncate text-[0.7rem] text-(--muted-foreground)">
+                                        {{ cellTheme(type.value).label || cellTheme(type.value).value }}
+                                    </span>
+                                </span>
+                                <i
+                                    v-if="cellHasInvalidColors(type.value)"
+                                    class="pi pi-exclamation-circle text-sm text-red-500"
+                                    :title="t('certificateDesign.invalidColor')"
+                                ></i>
+                                <i
+                                    v-else-if="isCellDirty(type.value)"
+                                    class="pi pi-circle-fill text-[0.45rem] text-amber-500"
+                                    :title="t('certificateDesign.unsaved')"
+                                ></i>
+                            </button>
                         </div>
                     </article>
 
@@ -702,7 +788,7 @@ const submit = () => {
                             <div>
                                 <h2 class="text-xl font-semibold">{{ t('certificateDesign.themeTitle') }}</h2>
                                 <p class="mt-1 text-sm text-(--muted-foreground)">
-                                    {{ t('certificateDesign.editingContext', { gender: selectedGenderLabel, type: selectedTypeLabel }) }}
+                                    {{ t('certificateDesign.editingContext', { center: selectedCenterLabel, type: selectedTypeLabel }) }}
                                 </p>
                             </div>
                             <span class="rounded-full border border-(--border) bg-(--background) px-3 py-1 text-xs font-medium">
@@ -720,7 +806,7 @@ const submit = () => {
                                     :class="currentDesign.theme === theme.value
                                         ? 'border-[var(--accent)] ring-2 ring-[color-mix(in_oklab,var(--accent)_24%,transparent)]'
                                         : 'border-(--border) hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--accent)_45%,var(--border))] hover:shadow-sm'"
-                                    :disabled="!canUpdate"
+                                    :disabled="!canUpdate || !currentPreviewCenter || form.processing"
                                     :aria-pressed="currentDesign.theme === theme.value"
                                     @pointerenter="prewarmFrame(theme.frame_url)"
                                     @focus="prewarmFrame(theme.frame_url)"
@@ -766,7 +852,7 @@ const submit = () => {
                                 option-label="label"
                                 option-value="value"
                                 fluid
-                                :disabled="!canUpdate"
+                                :disabled="!canUpdate || !currentPreviewCenter || form.processing"
                                 @update:model-value="updateFont"
                             >
                                 <template #option="{ option }">
@@ -797,7 +883,7 @@ const submit = () => {
                                         :input-id="`certificate-${field.key}-picker`"
                                         :model-value="pickerValue(field.key)"
                                         format="hex"
-                                        :disabled="!canUpdate"
+                                        :disabled="!canUpdate || !currentPreviewCenter || form.processing"
                                         @update:model-value="updateColor(field.key, $event)"
                                     />
                                     <InputText
@@ -806,7 +892,7 @@ const submit = () => {
                                         dir="ltr"
                                         maxlength="7"
                                         class="h-9 min-w-0 flex-1 border-0 bg-transparent font-mono uppercase shadow-none"
-                                        :disabled="!canUpdate"
+                                        :disabled="!canUpdate || !currentPreviewCenter || form.processing"
                                         @update:model-value="updateColor(field.key, $event)"
                                         @blur="normalizeColorField(field.key)"
                                     />
@@ -826,7 +912,7 @@ const submit = () => {
                                 severity="secondary"
                                 outlined
                                 size="small"
-                                :disabled="!canUpdate"
+                                :disabled="!canUpdate || !currentPreviewCenter || form.processing"
                                 @click="restoreThemeColors"
                             />
                         </div>
@@ -887,14 +973,14 @@ const submit = () => {
 
                     <div class="mt-4 flex flex-col gap-3 rounded-(--radius-base) border border-(--border) bg-(--card) p-4 shadow-(--shadow-sm) sm:flex-row sm:items-center sm:justify-between">
                         <p class="text-sm text-(--muted-foreground)">
-                            {{ form.isDirty ? t('certificateDesign.unsavedChanges') : t('certificateDesign.allSaved') }}
+                            {{ hasAnyUnsavedChanges ? t('certificateDesign.unsavedChanges') : t('certificateDesign.allSaved') }}
                         </p>
                         <Button
                             type="submit"
                             icon="pi pi-save"
                             :label="t('certificateDesign.save')"
                             :loading="form.processing"
-                            :disabled="!canUpdate || hasInvalidColors || form.processing"
+                            :disabled="!canUpdate || !currentPreviewCenter || hasInvalidColors || form.processing"
                             class="h-10 shrink-0"
                         />
                     </div>
@@ -903,3 +989,45 @@ const submit = () => {
         </form>
     </AdminLayout>
 </template>
+
+<style scoped>
+.center-meta-badge {
+    --center-badge-tone: var(--muted-foreground);
+    --center-badge-ink: var(--foreground);
+
+    display: inline-flex;
+    height: 1.5rem;
+    align-items: center;
+    gap: 0.3rem;
+    padding-inline: 0.5rem;
+    border: 1px solid color-mix(in oklab, var(--center-badge-tone) 28%, var(--border));
+    border-radius: min(var(--radius-sm), 0.5rem);
+    background: color-mix(in oklab, var(--center-badge-tone) 8%, var(--background));
+    color: var(--center-badge-ink);
+    box-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.center-meta-badge__icon {
+    color: var(--center-badge-tone);
+    font-size: 0.64rem;
+}
+
+.center-meta-badge--gender {
+    --center-badge-tone: color-mix(in oklab, var(--accent) 38%, var(--foreground));
+    --center-badge-ink: color-mix(in oklab, var(--accent) 34%, var(--foreground));
+}
+
+.center-meta-badge--identity-visible {
+    --center-badge-tone: var(--accent);
+    --center-badge-ink: color-mix(in oklab, var(--accent) 48%, var(--foreground));
+}
+
+.center-meta-badge--identity-hidden {
+    --center-badge-tone: var(--muted-foreground);
+    --center-badge-ink: color-mix(in oklab, var(--muted-foreground) 82%, var(--foreground));
+}
+</style>

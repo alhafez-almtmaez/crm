@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Services\Admin\AdminDataScopeService;
 use App\Services\System\CertificateAchievementService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -20,7 +21,12 @@ class CertificateDesignPdfPreviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'center_id' => ['required', 'integer', Rule::exists('centers', 'id')],
+            'center_id' => [
+                'required',
+                'integer',
+                Rule::exists('centers', 'id')
+                    ->where(fn ($query) => app(AdminDataScopeService::class)->applyCenterAccess($query, 'centers')),
+            ],
             'plan_point_id' => [
                 'required',
                 'integer',

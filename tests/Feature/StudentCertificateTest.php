@@ -271,15 +271,17 @@ test('certificate issuance falls back to the center name and shows its manager s
         ->assertDontSee('certificate__signing--project-solo', false);
 });
 
-test('certificate issuance snapshots the design selected by center gender and achievement type', function () {
+test('certificate issuance snapshots the design selected by center and achievement type', function () {
     [$user, $student, , $partPoint] = certificateFixture();
-    Center::query()->findOrFail($student->center_id)->update([
+    $center = Center::query()->findOrFail($student->center_id);
+    $center->update([
         'student_gender' => Center::STUDENT_GENDER_FEMALE,
     ]);
+    $center->refresh();
 
     $designSettings = app(CertificateDesignSettingsService::class);
-    $designs = $designSettings->defaults();
-    $designs[Center::STUDENT_GENDER_FEMALE][Certificate::ACHIEVEMENT_PART] = [
+    $designs = $designSettings->designsForCenter($center);
+    $designs[Certificate::ACHIEVEMENT_PART] = [
         'theme' => 'purple',
         'font' => 'naskh',
         'heading_color' => '#123456',
@@ -287,7 +289,7 @@ test('certificate issuance snapshots the design selected by center gender and ac
         'content_color' => '#345678',
         'accent_color' => '#456789',
     ];
-    $designSettings->update($designs);
+    $designSettings->updateForCenter($center, $designs);
 
     $this->actingAs($user, 'web')
         ->postJson(route('admin.students.certificates.store', $student), [
@@ -300,6 +302,7 @@ test('certificate issuance snapshots the design selected by center gender and ac
     $issuedWording = $certificate->wording_snapshot;
 
     expect($issuedSnapshot)->toMatchArray([
+        'center_id' => $center->id,
         'student_gender' => Center::STUDENT_GENDER_FEMALE,
         'achievement_type' => Certificate::ACHIEVEMENT_PART,
         'theme' => 'purple',
@@ -324,7 +327,7 @@ test('certificate issuance snapshots the design selected by center gender and ac
         'closing_text' => config('certificates.wording.female.closing_text'),
     ]);
 
-    $designs[Center::STUDENT_GENDER_FEMALE][Certificate::ACHIEVEMENT_PART] = [
+    $designs[Certificate::ACHIEVEMENT_PART] = [
         'theme' => 'navy',
         'font' => 'amiri',
         'heading_color' => '#654321',
@@ -332,7 +335,7 @@ test('certificate issuance snapshots the design selected by center gender and ac
         'content_color' => '#876543',
         'accent_color' => '#987654',
     ];
-    $designSettings->update($designs);
+    $designSettings->updateForCenter($center, $designs);
 
     $certificate->refresh();
     $viewPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
@@ -740,13 +743,15 @@ test('an issued certificate can be redesigned with the current center design wit
         'updated_at',
     ]);
 
-    Center::query()->findOrFail($student->center_id)->update([
+    $center = Center::query()->findOrFail($student->center_id);
+    $center->update([
         'student_gender' => Center::STUDENT_GENDER_FEMALE,
     ]);
+    $center->refresh();
 
     $designSettings = app(CertificateDesignSettingsService::class);
-    $designs = $designSettings->defaults();
-    $designs[Center::STUDENT_GENDER_FEMALE][Certificate::ACHIEVEMENT_PART] = [
+    $designs = $designSettings->designsForCenter($center);
+    $designs[Certificate::ACHIEVEMENT_PART] = [
         'theme' => 'purple',
         'font' => 'naskh',
         'heading_color' => '#112233',
@@ -754,9 +759,9 @@ test('an issued certificate can be redesigned with the current center design wit
         'content_color' => '#334455',
         'accent_color' => '#445566',
     ];
-    $designSettings->update($designs);
-    $expectedSnapshot = $designSettings->resolve(
-        Center::STUDENT_GENDER_FEMALE,
+    $designSettings->updateForCenter($center, $designs);
+    $expectedSnapshot = $designSettings->resolveForCenter(
+        $center,
         Certificate::ACHIEVEMENT_PART,
     );
     $expectedWording = app(CertificateWordingService::class)->resolve(

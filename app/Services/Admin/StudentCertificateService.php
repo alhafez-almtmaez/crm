@@ -158,8 +158,8 @@ class StudentCertificateService
                 ]);
             }
 
-            $designSnapshot = $this->certificateDesigns->resolve(
-                $lockedStudent->center?->student_gender,
+            $designSnapshot = $this->certificateDesigns->resolveForCenter(
+                $lockedStudent->center,
                 $achievement['type'],
             );
             $wordingSnapshot = $this->certificateWordings->resolve(
@@ -221,7 +221,7 @@ class StudentCertificateService
                 ? Center::query()
                     ->whereKey($lockedStudent->center_id)
                     ->lockForUpdate()
-                    ->first(['student_gender', 'show_center_manager_signature'])
+                    ->first(['id', 'student_gender', 'show_center_manager_signature'])
                 : null;
 
             /** @var Certificate $lockedCertificate */
@@ -240,9 +240,10 @@ class StudentCertificateService
                     ? $savedGender
                     : Center::STUDENT_GENDER_MALE);
 
-            $designSnapshot = $this->certificateDesigns->resolve(
-                $gender,
+            $designSnapshot = $this->certificateDesigns->resolveForCenter(
+                $currentCenter,
                 (string) $lockedCertificate->achievement_type,
+                $gender,
             );
             $wordingSnapshot = $this->certificateWordings->resolve(
                 $gender,

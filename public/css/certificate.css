@@ -377,6 +377,10 @@ body {
     width: 19.63%;
 }
 
+.certificate--with-verification:not(.certificate--project-only) .certificate__signing--project {
+    left: 36.8%;
+}
+
 .certificate__signing--project-solo {
     left: 8.12%;
     width: 28.43%;
