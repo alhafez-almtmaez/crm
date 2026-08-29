@@ -9,6 +9,7 @@ use App\Models\Student;
 use App\Models\StudentPointTransaction;
 use App\Services\System\CertificateAchievementService;
 use App\Services\System\CertificateDesignSettingsService;
+use App\Services\System\CertificateQrCodeService;
 use App\Services\System\CertificateWordingService;
 use App\Services\System\DateTimeFormatterService;
 use App\Services\System\SystemSettingsService;
@@ -58,6 +59,7 @@ class StudentCertificateService
         private readonly DateTimeFormatterService $dateTimeFormatter,
         private readonly CertificateAchievementService $certificateAchievements,
         private readonly CertificateDesignSettingsService $certificateDesigns,
+        private readonly CertificateQrCodeService $certificateQrCodes,
         private readonly CertificateWordingService $certificateWordings,
     ) {}
 
@@ -104,6 +106,7 @@ class StudentCertificateService
                 ->all(),
             'canIssue' => (bool) Auth::user()?->can('students.update'),
             'canRedesign' => (bool) Auth::user()?->can('students.update'),
+            'canRevoke' => (bool) Auth::user()?->can('certificates.revoke'),
         ];
     }
 
@@ -175,6 +178,7 @@ class StudentCertificateService
                 'plan_point_id' => $planPoint->id,
                 'issued_by' => Auth::id(),
                 'certificate_number' => $this->certificateNumber($ulid, $issuedAt),
+                'status' => Certificate::STATUS_VALID,
                 'student_name' => trim((string) $lockedStudent->full_name),
                 'center_name' => $this->nullableTrim($lockedStudent->center?->certificate_name)
                     ?? $lockedStudent->center?->name,
@@ -259,6 +263,36 @@ class StudentCertificateService
         });
     }
 
+    public function revoke(Student $student, Certificate $certificate, string $reason): Certificate
+    {
+        return DB::transaction(function () use ($student, $certificate, $reason): Certificate {
+            /** @var Certificate $lockedCertificate */
+            $lockedCertificate = Certificate::query()
+                ->whereKey($certificate->id)
+                ->where('student_id', $student->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedCertificate->status === Certificate::STATUS_REVOKED) {
+                return $lockedCertificate;
+            }
+
+            if ($lockedCertificate->status === Certificate::STATUS_REPLACED) {
+                throw ValidationException::withMessages([
+                    'certificate' => __('certificates.replaced_cannot_be_revoked'),
+                ]);
+            }
+
+            $lockedCertificate->forceFill([
+                'status' => Certificate::STATUS_REVOKED,
+                'revoked_at' => now(),
+                'revoked_reason' => trim($reason),
+            ])->save();
+
+            return $lockedCertificate->refresh();
+        });
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -276,9 +310,16 @@ class StudentCertificateService
             'gregorian_date' => $this->gregorianDateYearMonthDay((string) $certificate->gregorian_date),
             'issued_at' => $this->dateTimeFormatter->formatForAdmin($certificate->issued_at),
             'issued_by_name' => $certificate->issuer?->name,
+            'status' => (string) $certificate->status,
+            'status_label' => $this->statusLabel((string) $certificate->status),
+            'verification_url' => $this->verificationUrl($certificate),
             'preview_url' => route('admin.students.certificates.show', [$student, $certificate]),
             'pdf_url' => route('admin.students.certificates.pdf', [$student, $certificate]),
             'redesign_url' => route('admin.students.certificates.redesign', [$student, $certificate]),
+            'revoke_url' => $certificate->status === Certificate::STATUS_VALID
+                && (bool) Auth::user()?->can('certificates.revoke')
+                    ? route('admin.students.certificates.revoke', [$student, $certificate])
+                    : null,
         ];
     }
 
@@ -303,6 +344,10 @@ class StudentCertificateService
         );
         $showCenterIdentity = (bool) $certificate->show_center_manager_signature;
         $renderAssets = $this->renderAssetPayload($design, $pdf, $showCenterIdentity);
+        $qrCode = $this->certificateQrCodes->payload(
+            $this->verificationUrl($certificate),
+            (string) ($design['accent_color'] ?? ''),
+        );
 
         return [
             'page_title' => (string) $certificate->title,
@@ -339,6 +384,7 @@ class StudentCertificateService
             'pdf_mode' => $pdf,
             'back_url' => route('admin.students.certificates.index', $student),
             'pdf_url' => route('admin.students.certificates.pdf', [$student, $certificate]),
+            ...$qrCode,
         ];
     }
 
@@ -518,6 +564,26 @@ class StudentCertificateService
             Certificate::ACHIEVEMENT_THREE_PARTS => __('certificates.types.three_parts'),
             default => __('certificates.types.achievement'),
         };
+    }
+
+    private function statusLabel(string $status): string
+    {
+        return match ($status) {
+            Certificate::STATUS_VALID => __('certificates.statuses.valid'),
+            Certificate::STATUS_REVOKED => __('certificates.statuses.revoked'),
+            Certificate::STATUS_REPLACED => __('certificates.statuses.replaced'),
+            default => __('certificates.statuses.unknown'),
+        };
+    }
+
+    private function verificationUrl(Certificate|string $certificate): string
+    {
+        $publicId = $certificate instanceof Certificate
+            ? (string) $certificate->public_id
+            : $certificate;
+        $path = route('certificates.verify', ['public_id' => $publicId], absolute: false);
+
+        return rtrim((string) config('app.url'), '/').'/'.ltrim($path, '/');
     }
 
     /**

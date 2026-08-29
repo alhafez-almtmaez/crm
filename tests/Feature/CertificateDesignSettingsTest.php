@@ -7,6 +7,7 @@ use App\Models\PlanPoint;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\System\CertificateDesignSettingsService;
+use App\Services\System\CertificateQrCodeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\LaravelPdf\Facades\Pdf;
@@ -260,6 +261,10 @@ test('certificate design preview uses the real certificate and its actual assets
 
     $response->assertOk()
         ->assertSee('certificate-design-preview:update', false)
+        ->assertSee('certificate__verification--preview', false)
+        ->assertSee('fill="currentColor"', false)
+        ->assertSee('--certificate-qr-color', false)
+        ->assertSee('شكل QR تجريبي غير قابل للمسح')
         ->assertSee('left-logo.png', false)
         ->assertSee('right-logo.png', false)
         ->assertSee('center-stamp.png', false)
@@ -271,6 +276,13 @@ test('certificate design preview uses the real certificate and its actual assets
             $wording = $certificate['preview_samples']['wording'] ?? [];
 
             return ($certificate['show_center_manager_signature'] ?? false) === true
+                && ($certificate['verification_preview'] ?? false) === true
+                && ($certificate['qr_foreground_color'] ?? null)
+                    === app(CertificateQrCodeService::class)->foregroundHex(
+                        (string) ($certificate['design']['accent_color'] ?? ''),
+                    )
+                && ! array_key_exists('qr_code_data_uri', $certificate)
+                && ! array_key_exists('verification_url', $certificate)
                 && ($certificate['center_name'] ?? null) === 'المركز الرسمي للذكور'
                 && ($certificate['achievement_name'] ?? null) === 'السابع'
                 && ($certificate['design']['student_gender'] ?? null) === Center::STUDENT_GENDER_MALE
@@ -308,6 +320,18 @@ test('certificate design preview uses the real certificate and its actual assets
         trim((string) config('certificates.wording.male.intro_after_center')),
     ]));
     expect($response->getContent())->not->toContain('data-certificate-preview-project-name');
+
+    expect(preg_match(
+        '/<div class="certificate__verification certificate__verification--preview".*?<\/div>/su',
+        $response->getContent(),
+        $verificationPreviewMatches,
+    ))->toBe(1);
+
+    expect($verificationPreviewMatches[0])
+        ->toContain('<svg')
+        ->not->toContain('href=')
+        ->not->toContain('data:image')
+        ->not->toContain('/verify/');
 
     $unauthorized = User::factory()->create();
 
@@ -393,6 +417,11 @@ test('a read only design user can download a real pdf preview of unsaved nested 
             && $pdf->downloadName === 'certificate-design-preview.pdf'
             && ($certificate['pdf_mode'] ?? false) === true
             && ($certificate['design_preview_mode'] ?? true) === false
+            && ($certificate['verification_preview'] ?? false) === true
+            && ($certificate['qr_foreground_color'] ?? null)
+                === app(CertificateQrCodeService::class)->foregroundHex('#456789')
+            && ! array_key_exists('qr_code_data_uri', $certificate)
+            && ! array_key_exists('verification_url', $certificate)
             && ($certificate['show_center_manager_signature'] ?? true) === false
             && ($certificate['center_name'] ?? null) === 'مركز الإناث في ملف PDF'
             && ($certificate['intro_before_project'] ?? null) === config('certificates.wording.female.intro_before_project')

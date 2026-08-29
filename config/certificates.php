@@ -334,6 +334,7 @@ return [
         'hijri' => 'هِجْرِيّ',
         'gregorian' => 'مِيلَادِيّ',
         'certificate_number' => 'رقم الشهادة',
+        'verify_certificate' => 'امسح الرمز للتحقق من صحة الشهادة',
     ],
     'assets' => [
         'stylesheet' => 'css/certificate.css',

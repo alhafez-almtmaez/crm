@@ -3,6 +3,8 @@
 return [
     'issued_successfully' => 'تم إصدار الشهادة وحفظها بنجاح.',
     'redesigned_successfully' => 'تم تطبيق التصميم الحالي على الشهادة بنجاح.',
+    'revoked_successfully' => 'تم إلغاء الشهادة مع الاحتفاظ بسجلها.',
+    'replaced_cannot_be_revoked' => 'لا يمكن إلغاء شهادة سبق استبدالها.',
     'already_issued' => 'سبق إصدار شهادة لهذه النقطة من الخطة.',
     'not_certificate_checkpoint' => 'النقطة المحددة ليست نقطة إصدار شهادة.',
     'checkpoint_not_reached' => 'لم يصل الطالب إلى هذه النقطة من الخطة بعد.',
@@ -18,5 +20,11 @@ return [
         'part' => 'جزء',
         'three_parts' => 'ثلاثة أجزاء',
         'achievement' => 'إنجاز',
+    ],
+    'statuses' => [
+        'valid' => 'سارية',
+        'revoked' => 'ملغاة',
+        'replaced' => 'مستبدلة',
+        'unknown' => 'غير معروفة',
     ],
 ];

@@ -17,6 +17,7 @@ return [
         'activity_logs.view',
         'certificate_designs.view',
         'certificate_designs.update',
+        'certificates.revoke',
         'whatsapp.view',
     ],
 

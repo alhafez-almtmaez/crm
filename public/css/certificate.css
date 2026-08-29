@@ -195,7 +195,8 @@ body {
 .certificate__achievement,
 .certificate__closing,
 .certificate__signing,
-.certificate__dates {
+.certificate__dates,
+.certificate__verification {
     position: absolute;
     z-index: 2;
     margin: 0;
@@ -422,6 +423,11 @@ body {
     text-align: center;
 }
 
+.certificate--with-verification .certificate__dates {
+    right: 20.6%;
+    width: 17%;
+}
+
 .certificate__dates p {
     width: 82%;
     margin: .55cqw auto 0;
@@ -433,6 +439,51 @@ body {
 
 .certificate__dates h2 + p {
     margin-top: 1.31cqw;
+}
+
+.certificate__verification {
+    top: 70.9%;
+    right: 7.7%;
+    display: flex;
+    width: 11.8%;
+    align-items: center;
+    flex-direction: column;
+    color: var(--certificate-content-color);
+    text-align: center;
+    text-decoration: none;
+}
+
+.certificate__verification-qr {
+    display: block;
+    width: 9.43cqw;
+    height: 9.43cqw;
+    border: .12cqw solid #fff;
+    background: #fff;
+    object-fit: contain;
+}
+
+.certificate__verification-label {
+    width: 100%;
+    margin-top: .12cqw;
+    color: var(--certificate-accent-color);
+    font-size: .67cqw;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.certificate__verification-number {
+    width: 100%;
+    margin-top: .08cqw;
+    color: var(--certificate-content-color);
+    font-size: .58cqw;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.certificate__verification--preview {
+    color: var(--certificate-qr-color, #09232a);
+    cursor: default;
+    user-select: none;
 }
 
 @media (max-width: 760px) {

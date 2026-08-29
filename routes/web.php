@@ -19,10 +19,15 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WhatsAppController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\CertificateVerificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::redirect('/', '/admin');
+
+Route::get('verify/{public_id}', CertificateVerificationController::class)
+    ->middleware('throttle:certificate-verification')
+    ->name('certificates.verify');
 
 Route::get('evaluations/report/{publicId}', [EvaluationController::class, 'report'])
     ->name('evaluations.report');
@@ -100,6 +105,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('students/{student}/certificates', [StudentCertificateController::class, 'index'])->name('students.certificates.index');
         Route::post('students/{student}/certificates', [StudentCertificateController::class, 'store'])->name('students.certificates.store');
         Route::put('students/{student}/certificates/{certificate}/design', [StudentCertificateController::class, 'redesign'])->name('students.certificates.redesign');
+        Route::patch('students/{student}/certificates/{certificate}/revoke', [StudentCertificateController::class, 'revoke'])->name('students.certificates.revoke');
         Route::get('students/{student}/certificates/{certificate}', [StudentCertificateController::class, 'show'])->name('students.certificates.show');
         Route::get('students/{student}/certificates/{certificate}/pdf', [StudentCertificateController::class, 'pdf'])->name('students.certificates.pdf');
         Route::resource('students', StudentController::class)->except(['show']);

@@ -2,16 +2,39 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
+use LogicException;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Certificate extends Model
 {
+    use LogsActivity;
+
     public const ACHIEVEMENT_SURAH = 'surah';
 
     public const ACHIEVEMENT_PART = 'part';
 
     public const ACHIEVEMENT_THREE_PARTS = 'three_parts';
+
+    public const STATUS_VALID = 'valid';
+
+    public const STATUS_REVOKED = 'revoked';
+
+    public const STATUS_REPLACED = 'replaced';
+
+    public const STATUSES = [
+        self::STATUS_VALID,
+        self::STATUS_REVOKED,
+        self::STATUS_REPLACED,
+    ];
+
+    protected $attributes = [
+        'status' => self::STATUS_VALID,
+    ];
 
     protected $fillable = [
         'ulid',
@@ -43,6 +66,9 @@ class Certificate extends Model
         'gregorian_date',
         'achieved_at',
         'issued_at',
+        'status',
+        'revoked_at',
+        'revoked_reason',
     ];
 
     protected function casts(): array
@@ -56,7 +82,30 @@ class Certificate extends Model
             'wording_snapshot' => 'array',
             'achieved_at' => 'datetime',
             'issued_at' => 'datetime',
+            'revoked_at' => 'datetime',
         ];
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('certificates')
+            ->logOnly([
+                'public_id',
+                'certificate_number',
+                'status',
+                'revoked_at',
+                'revoked_reason',
+                'student_name',
+                'achievement_type',
+                'achievement_name',
+                'surah_name',
+                'part_name',
+                'three_parts',
+                'issued_at',
+            ])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
     }
 
     public function getRouteKeyName(): string
@@ -77,5 +126,32 @@ class Certificate extends Model
     public function issuer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Certificate $certificate): void {
+            if (blank($certificate->public_id)) {
+                $certificate->public_id = (string) Str::uuid();
+            }
+        });
+    }
+
+    protected function publicId(): Attribute
+    {
+        return Attribute::set(function (mixed $value): string {
+            $publicId = trim((string) $value);
+
+            if (! Str::isUuid($publicId, version: 4)) {
+                throw new LogicException('Certificate public_id must be a UUID v4.');
+            }
+
+            $original = (string) $this->getRawOriginal('public_id');
+            if ($this->exists && $original !== '' && ! hash_equals($original, $publicId)) {
+                throw new LogicException('Certificate public_id cannot be changed after issuance.');
+            }
+
+            return $publicId;
+        });
     }
 }

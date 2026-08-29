@@ -1027,7 +1027,7 @@ test('certificate preview escapes long student names and its pdf is A4 landscape
         ->assertSee('certificate__student--extra-long', false)
         ->assertSee('٢٠٢٦/٠٨/٢٠')
         ->assertDontSee('٢٠/أغسطس/٢٠٢٦')
-        ->assertDontSee($certificate->certificate_number);
+        ->assertSee($certificate->certificate_number);
 
     Pdf::fake();
 

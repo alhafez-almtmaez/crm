@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\CertificateRevokeRequest;
 use App\Http\Requests\Admin\CertificateStoreRequest;
 use App\Models\Certificate;
 use App\Models\Student;
@@ -29,6 +30,7 @@ class StudentCertificateController extends Controller implements HasMiddleware
         return [
             new Middleware('can:students.view', only: ['index', 'show', 'pdf']),
             new Middleware('can:students.update', only: ['store', 'redesign']),
+            new Middleware('can:certificates.revoke', only: ['revoke']),
         ];
     }
 
@@ -71,6 +73,25 @@ class StudentCertificateController extends Controller implements HasMiddleware
 
         return response()->json([
             'message' => __('certificates.redesigned_successfully'),
+            'certificate' => $this->service->listItem($student, $certificate),
+        ]);
+    }
+
+    public function revoke(
+        CertificateRevokeRequest $request,
+        Student $student,
+        Certificate $certificate,
+    ): JsonResponse {
+        $this->authorizeNestedCertificate($student, $certificate);
+
+        $certificate = $this->service->revoke(
+            $student,
+            $certificate,
+            (string) $request->validated('revoked_reason'),
+        );
+
+        return response()->json([
+            'message' => __('certificates.revoked_successfully'),
             'certificate' => $this->service->listItem($student, $certificate),
         ]);
     }

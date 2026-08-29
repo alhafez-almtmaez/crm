@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Head, router } from '@inertiajs/vue3';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
+import Textarea from 'primevue/textarea';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../../admin/navItems';
@@ -33,6 +34,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    canRevoke: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const issueDialogVisible = ref(false);
@@ -41,6 +46,10 @@ const issuing = ref(false);
 const redesignDialogVisible = ref(false);
 const selectedCertificate = ref(null);
 const redesigning = ref(false);
+const revokeDialogVisible = ref(false);
+const selectedRevokeCertificate = ref(null);
+const revokeReason = ref('');
+const revoking = ref(false);
 const validAvailableCount = computed(() => props.availableCertificates.filter((item) => item.can_issue).length);
 const breadcrumbItems = computed(() => [
     { labelKey: 'breadcrumbs.dashboard', href: '/admin/dashboard' },
@@ -129,6 +138,55 @@ const redesignCertificate = async () => {
         redesigning.value = false;
     }
 };
+
+const openRevokeDialog = (certificate) => {
+    if (!props.canRevoke || !certificate?.revoke_url || revoking.value) {
+        return;
+    }
+
+    selectedRevokeCertificate.value = certificate;
+    revokeReason.value = '';
+    revokeDialogVisible.value = true;
+};
+
+const revokeCertificate = async () => {
+    const reason = revokeReason.value.trim();
+    if (!selectedRevokeCertificate.value?.revoke_url || reason.length < 3 || revoking.value) {
+        return;
+    }
+
+    revoking.value = true;
+
+    try {
+        const { data } = await axios.patch(selectedRevokeCertificate.value.revoke_url, {
+            revoked_reason: reason,
+        });
+
+        appToast.success(data?.message ?? t('certificates.revokeSuccess'));
+        revokeDialogVisible.value = false;
+        selectedRevokeCertificate.value = null;
+        revokeReason.value = '';
+        router.reload({
+            only: ['certificates'],
+            preserveScroll: true,
+            onFinish: () => {
+                revoking.value = false;
+            },
+        });
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.requestFailedTitle'),
+            fallback: t('certificates.revokeFailed'),
+        });
+        revoking.value = false;
+    }
+};
+
+const statusBadgeClass = (status) => ({
+    valid: 'bg-emerald-100 text-emerald-800',
+    revoked: 'bg-red-100 text-red-800',
+    replaced: 'bg-orange-100 text-orange-800',
+}[status] ?? 'bg-slate-100 text-slate-700');
 
 const openUrl = (url) => {
     if (url) {
@@ -251,6 +309,7 @@ const openUrl = (url) => {
                                 <th class="border-b border-(--border) px-4 py-3 text-start font-semibold">{{ t('certificates.achievementDate') }}</th>
                                 <th class="border-b border-(--border) px-4 py-3 text-start font-semibold">{{ t('certificates.issuedAt') }}</th>
                                 <th class="border-b border-(--border) px-4 py-3 text-start font-semibold">{{ t('certificates.issuedBy') }}</th>
+                                <th class="border-b border-(--border) px-4 py-3 text-start font-semibold">{{ t('certificates.status') }}</th>
                                 <th class="border-b border-(--border) px-4 py-3 text-start font-semibold">{{ t('common.actions') }}</th>
                             </tr>
                         </thead>
@@ -265,6 +324,11 @@ const openUrl = (url) => {
                                 <td class="border-b border-(--border) px-4 py-3">{{ item.issued_at }}</td>
                                 <td class="border-b border-(--border) px-4 py-3">{{ item.issued_by_name || t('common.na') }}</td>
                                 <td class="border-b border-(--border) px-4 py-3">
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold" :class="statusBadgeClass(item.status)">
+                                        {{ item.status_label }}
+                                    </span>
+                                </td>
+                                <td class="border-b border-(--border) px-4 py-3">
                                     <div class="flex gap-2">
                                         <Button
                                             v-if="canRedesign"
@@ -278,6 +342,19 @@ const openUrl = (url) => {
                                             :title="t('certificates.redesign')"
                                             :aria-label="t('certificates.redesign')"
                                             @click="openRedesignDialog(item)"
+                                        />
+                                        <Button
+                                            v-if="canRevoke && item.revoke_url"
+                                            type="button"
+                                            size="small"
+                                            severity="danger"
+                                            outlined
+                                            icon="pi pi-ban"
+                                            :loading="revoking && selectedRevokeCertificate?.id === item.id"
+                                            :disabled="revoking"
+                                            :title="t('certificates.revoke')"
+                                            :aria-label="t('certificates.revoke')"
+                                            @click="openRevokeDialog(item)"
                                         />
                                         <Button
                                             type="button"
@@ -363,6 +440,59 @@ const openUrl = (url) => {
                             :label="t('certificates.redesignNow')"
                             :loading="redesigning"
                             @click="redesignCertificate"
+                        />
+                    </div>
+                </div>
+            </Dialog>
+
+            <Dialog
+                v-model:visible="revokeDialogVisible"
+                modal
+                :header="t('certificates.revokeConfirmTitle')"
+                :style="{ width: 'min(34rem, 96vw)' }"
+                :closable="!revoking"
+                :close-on-escape="!revoking"
+            >
+                <div v-if="selectedRevokeCertificate" class="space-y-4">
+                    <p>{{ t('certificates.revokeConfirmMessage') }}</p>
+                    <div class="rounded-md border border-(--border) bg-(--background) p-4">
+                        <p dir="ltr" class="text-end font-mono font-semibold">{{ selectedRevokeCertificate.certificate_number }}</p>
+                        <p class="mt-1 text-sm text-(--muted-foreground)">
+                            {{ selectedRevokeCertificate.achievement_type_label }}: {{ selectedRevokeCertificate.achievement_name }}
+                        </p>
+                    </div>
+                    <div>
+                        <label for="certificate-revoked-reason" class="mb-2 block text-sm font-semibold">
+                            {{ t('certificates.revokeReason') }}
+                        </label>
+                        <Textarea
+                            id="certificate-revoked-reason"
+                            v-model="revokeReason"
+                            rows="4"
+                            maxlength="1000"
+                            class="w-full"
+                            :placeholder="t('certificates.revokeReasonPlaceholder')"
+                            :disabled="revoking"
+                        />
+                        <p class="mt-1 text-xs text-(--muted-foreground)">{{ t('certificates.revokeReasonPrivacy') }}</p>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            severity="secondary"
+                            text
+                            :label="t('common.cancel')"
+                            :disabled="revoking"
+                            @click="revokeDialogVisible = false"
+                        />
+                        <Button
+                            type="button"
+                            severity="danger"
+                            icon="pi pi-ban"
+                            :label="t('certificates.revokeNow')"
+                            :loading="revoking"
+                            :disabled="revokeReason.trim().length < 3"
+                            @click="revokeCertificate"
                         />
                     </div>
                 </div>

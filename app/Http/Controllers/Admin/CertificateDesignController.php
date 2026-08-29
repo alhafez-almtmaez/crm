@@ -10,6 +10,7 @@ use App\Models\Certificate;
 use App\Services\Admin\StudentCertificateService;
 use App\Services\System\CertificateAchievementService;
 use App\Services\System\CertificateDesignSettingsService;
+use App\Services\System\CertificateQrCodeService;
 use App\Services\System\CertificateWordingService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -29,6 +30,7 @@ class CertificateDesignController extends Controller implements HasMiddleware
         private readonly CertificateWordingService $wordings,
         private readonly CertificateAchievementService $achievements,
         private readonly StudentCertificateService $certificateRenderer,
+        private readonly CertificateQrCodeService $certificateQrCodes,
     ) {}
 
     public static function middleware(): array
@@ -244,6 +246,10 @@ class CertificateDesignController extends Controller implements HasMiddleware
             'images' => $renderAssets['images'],
             'pdf_mode' => $pdf,
             'design_preview_mode' => $previewMode,
+            'verification_preview' => true,
+            'qr_foreground_color' => $this->certificateQrCodes->foregroundHex(
+                (string) ($design['accent_color'] ?? ''),
+            ),
             'preview_catalog' => [
                 'themes' => $themes,
                 'fonts' => $fonts,

@@ -37,6 +37,12 @@
         }
     }
 
+    $qrForegroundColor = $certificate['qr_foreground_color'] ?? null;
+    if (is_string($qrForegroundColor)
+        && preg_match('/\A#[0-9A-Fa-f]{6}\z/', $qrForegroundColor) === 1) {
+        $designStyles[] = "--certificate-qr-color: {$qrForegroundColor}";
+    }
+
     $fontVariables = [
         'body_font_family' => '--certificate-body-font',
         'display_font_family' => '--certificate-display-font',
@@ -53,6 +59,12 @@
     }
 
     $designStyle = implode('; ', $designStyles);
+    $qrCodeDataUri = trim((string) ($certificate['qr_code_data_uri'] ?? ''));
+    $verificationUrl = trim((string) ($certificate['verification_url'] ?? ''));
+    $hasVerificationQr = ! $previewMode && $qrCodeDataUri !== '' && $verificationUrl !== '';
+    $hasVerificationPreview = (bool) ($certificate['verification_preview'] ?? false)
+        && ! $hasVerificationQr;
+    $showsVerificationBlock = $hasVerificationQr || $hasVerificationPreview;
 @endphp
 
 <!doctype html>
@@ -83,6 +95,7 @@
         <article @class([
             'certificate',
             'certificate--project-only' => ! $showCenterIdentity,
+            'certificate--with-verification' => $showsVerificationBlock,
         ]) data-certificate-preview-certificate aria-label="{{ $certificate['title'] }}">
             @if ($certificate['images']['frame'] !== '')
                 <img class="certificate__frame"
@@ -172,6 +185,49 @@
                 <p>{{ $certificate['labels']['gregorian'] }}: <bdi>{{ $certificate['gregorian_date'] }}</bdi></p>
             </section>
 
+            @if ($hasVerificationQr)
+                <a class="certificate__verification"
+                   href="{{ $verificationUrl }}"
+                   aria-label="{{ $certificate['labels']['verify_certificate'] }}">
+                    <img class="certificate__verification-qr"
+                         src="{{ $qrCodeDataUri }}"
+                         alt=""
+                         aria-hidden="true">
+                    <span class="certificate__verification-label">{{ $certificate['labels']['verify_certificate'] }}</span>
+                    <span class="certificate__verification-number">
+                        {{ $certificate['labels']['certificate_number'] }}:
+                        <bdi>{{ $certificate['certificate_number'] }}</bdi>
+                    </span>
+                </a>
+            @elseif ($hasVerificationPreview)
+                <div class="certificate__verification certificate__verification--preview"
+                     aria-label="رمز تحقق تجريبي للمعاينة فقط">
+                    <svg class="certificate__verification-qr"
+                         viewBox="0 0 29 29"
+                         role="img"
+                         aria-label="شكل QR تجريبي غير قابل للمسح"
+                         shape-rendering="crispEdges">
+                        <rect width="29" height="29" fill="#fff"/>
+                        <g fill="currentColor">
+                            <path d="M2 2h7v7H2zM20 2h7v7h-7zM2 20h7v7H2z"/>
+                            <path d="M4 4h3v3H4zM22 4h3v3h-3zM4 22h3v3H4z"/>
+                            <path d="M11 2h2v2h-2zM15 2h1v1h-1zM17 3h1v3h-1zM11 6h1v2h-1zM14 5h2v1h-2zM12 10h1v2h-1zM15 9h2v2h-2zM19 10h2v1h-2zM23 11h3v2h-3zM3 11h2v1H3zM7 10h2v3H7zM10 14h2v2h-2zM13 13h1v4h-1zM16 13h3v2h-3zM21 14h2v3h-2zM25 15h2v2h-2zM3 14h2v3H3zM6 16h2v2H6zM9 18h2v1H9zM12 19h2v2h-2zM15 17h2v2h-2zM18 18h1v3h-1zM20 20h2v2h-2zM23 19h3v1h-3zM25 22h2v3h-2zM11 23h2v3h-2zM15 22h1v2h-1zM18 24h3v2h-3z"/>
+                        </g>
+                        <g fill="#fff">
+                            <path d="M3 3h5v5H3zM21 3h5v5h-5zM3 21h5v5H3z"/>
+                        </g>
+                        <g fill="currentColor">
+                            <path d="M4 4h3v3H4zM22 4h3v3h-3zM4 22h3v3H4z"/>
+                        </g>
+                    </svg>
+                    <span class="certificate__verification-label">{{ $certificate['labels']['verify_certificate'] }}</span>
+                    <span class="certificate__verification-number">
+                        {{ $certificate['labels']['certificate_number'] }}:
+                        <bdi>{{ $certificate['certificate_number'] }}</bdi>
+                    </span>
+                </div>
+            @endif
+
         </article>
     </main>
     @if ($previewMode)
@@ -194,6 +250,41 @@
                     student_name_color: '--certificate-student-name-color',
                     content_color: '--certificate-content-color',
                     accent_color: '--certificate-accent-color',
+                };
+                const qrFallbackColor = '#09232A';
+                const normalizeHexColor = (value) => typeof value === 'string'
+                    && /^#[0-9A-Fa-f]{6}$/.test(value)
+                        ? value.toUpperCase()
+                        : null;
+                const relativeLuminance = (hex) => {
+                    const channels = [1, 3, 5].map((offset) => {
+                        const channel = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+
+                        return channel <= 0.04045
+                            ? channel / 12.92
+                            : ((channel + 0.055) / 1.055) ** 2.4;
+                    });
+
+                    return (0.2126 * channels[0]) + (0.7152 * channels[1]) + (0.0722 * channels[2]);
+                };
+                const contrastAgainstWhite = (hex) => 1.05 / (relativeLuminance(hex) + 0.05);
+                const qrColorFromAccent = (value) => {
+                    const accent = normalizeHexColor(value);
+                    if (!accent) return qrFallbackColor;
+
+                    const channels = [1, 3, 5].map(
+                        (offset) => Number.parseInt(accent.slice(offset, offset + 2), 16),
+                    );
+
+                    for (let percentage = 100; percentage >= 0; percentage -= 5) {
+                        const candidate = `#${channels.map((channel) => Math.round(
+                            (channel * percentage) / 100,
+                        ).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+
+                        if (contrastAgainstWhite(candidate) >= 7) return candidate;
+                    }
+
+                    return qrFallbackColor;
                 };
                 const root = document.querySelector('.certificate-page');
                 const certificateElement = document.querySelector('[data-certificate-preview-certificate]');
@@ -228,7 +319,6 @@
                     const match = thresholds.find(({ minimum }) => length > minimum);
                     if (match) container.classList.add(match.className);
                 };
-
                 window.addEventListener('message', (event) => {
                     if (event.origin !== window.location.origin
                         || event.source !== window.parent
@@ -275,6 +365,7 @@
                             root.style.setProperty(cssVariable, color.toUpperCase());
                         }
                     });
+                    root.style.setProperty('--certificate-qr-color', qrColorFromAccent(data.accent_color));
 
                     const requestedGender = ['male', 'female'].includes(data.gender)
                         ? data.gender
