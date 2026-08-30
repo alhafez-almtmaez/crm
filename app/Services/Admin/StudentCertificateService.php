@@ -8,6 +8,7 @@ use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentPointTransaction;
 use App\Services\System\CertificateAchievementService;
+use App\Services\System\CertificateContentTemplateService;
 use App\Services\System\CertificateDesignSettingsService;
 use App\Services\System\CertificateQrCodeService;
 use App\Services\System\CertificateWordingService;
@@ -61,6 +62,7 @@ class StudentCertificateService
         private readonly CertificateDesignSettingsService $certificateDesigns,
         private readonly CertificateQrCodeService $certificateQrCodes,
         private readonly CertificateWordingService $certificateWordings,
+        private readonly CertificateContentTemplateService $certificateContentTemplates,
     ) {}
 
     /**
@@ -162,7 +164,7 @@ class StudentCertificateService
                 $lockedStudent->center,
                 $achievement['type'],
             );
-            $wordingSnapshot = $this->certificateWordings->resolve(
+            $legacyWording = $this->certificateWordings->resolve(
                 (string) $designSnapshot['student_gender'],
                 $achievement['type'],
             );
@@ -171,17 +173,43 @@ class StudentCertificateService
             $dates = $this->certificateDates($achievedAt);
             $issuedAt = now();
             $ulid = (string) Str::ulid();
+            $certificateNumber = $this->certificateNumber($ulid, $issuedAt);
+            $centerName = $this->nullableTrim($lockedStudent->center?->certificate_name)
+                ?? $lockedStudent->center?->name;
+            $displayAchievementName = $this->certificateAchievements->displayName(
+                $achievement['type'],
+                $achievement['name'],
+            );
+            $wordingSnapshot = $this->certificateContentTemplates->resolveSnapshot(
+                $lockedStudent->center,
+                $achievement['type'],
+                [
+                    'student_name' => trim((string) $lockedStudent->full_name),
+                    'center_name' => $centerName ?? (string) __('certificates.default_center_name'),
+                    'achievement_label' => (string) $legacyWording['achievement_label'],
+                    'achievement_name' => $displayAchievementName,
+                    'certificate_number' => $certificateNumber,
+                    'plan_name' => (string) ($lockedStudent->plan?->name ?? ''),
+                    'plan_point_name' => (string) $planPoint->name,
+                    'hijri_date' => $dates['hijri'] ?? '—',
+                    'gregorian_date' => $dates['gregorian'],
+                ],
+                (string) $designSnapshot['student_gender'],
+            ) ?? $legacyWording;
+            $contentSnapshot = $this->certificateContentTemplates->snapshot($wordingSnapshot);
+            $renderedContent = is_array($contentSnapshot['rendered_sections'] ?? null)
+                ? $contentSnapshot['rendered_sections']
+                : [];
 
             return Certificate::query()->create([
                 'ulid' => $ulid,
                 'student_id' => $lockedStudent->id,
                 'plan_point_id' => $planPoint->id,
                 'issued_by' => Auth::id(),
-                'certificate_number' => $this->certificateNumber($ulid, $issuedAt),
+                'certificate_number' => $certificateNumber,
                 'status' => Certificate::STATUS_VALID,
                 'student_name' => trim((string) $lockedStudent->full_name),
-                'center_name' => $this->nullableTrim($lockedStudent->center?->certificate_name)
-                    ?? $lockedStudent->center?->name,
+                'center_name' => $centerName,
                 'show_center_manager_signature' => (bool) ($lockedStudent->center?->show_center_manager_signature ?? true),
                 'design_snapshot' => $designSnapshot,
                 'wording_snapshot' => $wordingSnapshot,
@@ -192,11 +220,11 @@ class StudentCertificateService
                 'surah_name' => $this->nullableTrim($planPoint->surah_name),
                 'part_name' => $this->nullableTrim($planPoint->part_name),
                 'three_parts' => $this->nullableTrim($planPoint->three_parts),
-                'title' => (string) config('certificates.title'),
-                'quote_first' => (string) config('certificates.quote_first'),
-                'quote_second' => (string) config('certificates.quote_second'),
-                'project_name' => (string) $wordingSnapshot['project_name'],
-                'closing_text' => (string) $wordingSnapshot['closing_text'],
+                'title' => (string) ($renderedContent['title'] ?? config('certificates.title')),
+                'quote_first' => (string) ($renderedContent['quote_first'] ?? config('certificates.quote_first')),
+                'quote_second' => (string) ($renderedContent['quote_second'] ?? config('certificates.quote_second')),
+                'project_name' => (string) ($wordingSnapshot['project_name'] ?? ''),
+                'closing_text' => (string) ($renderedContent['closing'] ?? $wordingSnapshot['closing_text'] ?? ''),
                 'center_manager_title' => (string) config('certificates.center_manager_title'),
                 'project_manager_title' => (string) config('certificates.project_manager_title'),
                 'date_title' => (string) config('certificates.date_title'),
@@ -245,20 +273,76 @@ class StudentCertificateService
                 (string) $lockedCertificate->achievement_type,
                 $gender,
             );
-            $wordingSnapshot = $this->certificateWordings->resolve(
+            $legacyWording = $this->certificateWordings->resolve(
                 $gender,
                 (string) $lockedCertificate->achievement_type,
             );
+            $wordingSnapshot = $this->certificateContentTemplates->resolveSnapshot(
+                $currentCenter,
+                (string) $lockedCertificate->achievement_type,
+                [
+                    'student_name' => (string) $lockedCertificate->student_name,
+                    'center_name' => $this->nullableTrim($lockedCertificate->center_name)
+                        ?? (string) __('certificates.default_center_name'),
+                    'achievement_label' => (string) $legacyWording['achievement_label'],
+                    'achievement_name' => $this->certificateAchievements->displayName(
+                        (string) $lockedCertificate->achievement_type,
+                        (string) $lockedCertificate->achievement_name,
+                    ),
+                    'certificate_number' => (string) $lockedCertificate->certificate_number,
+                    'plan_name' => (string) ($lockedCertificate->plan_name ?? ''),
+                    'plan_point_name' => (string) $lockedCertificate->plan_point_name,
+                    'hijri_date' => $this->nullableTrim($lockedCertificate->hijri_date) ?? '—',
+                    'gregorian_date' => $this->gregorianDateYearMonthDay(
+                        (string) $lockedCertificate->gregorian_date,
+                    ),
+                ],
+                $gender,
+            ) ?? $legacyWording;
+            $contentSnapshot = $this->certificateContentTemplates->snapshot($wordingSnapshot);
+            $renderedContent = is_array($contentSnapshot['rendered_sections'] ?? null)
+                ? $contentSnapshot['rendered_sections']
+                : [];
+            $oldTemplateKey = data_get($lockedCertificate->wording_snapshot, 'template_key');
+            $oldTemplateId = data_get($lockedCertificate->wording_snapshot, 'template_id');
+            $oldTemplateRevision = data_get($lockedCertificate->wording_snapshot, 'template_revision');
+            $oldDesign = $lockedCertificate->design_snapshot;
 
             $lockedCertificate->forceFill([
                 'design_snapshot' => $designSnapshot,
                 'wording_snapshot' => $wordingSnapshot,
-                'project_name' => (string) $wordingSnapshot['project_name'],
-                'closing_text' => (string) $wordingSnapshot['closing_text'],
+                'title' => (string) ($renderedContent['title'] ?? $lockedCertificate->title),
+                'quote_first' => (string) ($renderedContent['quote_first'] ?? $lockedCertificate->quote_first),
+                'quote_second' => (string) ($renderedContent['quote_second'] ?? $lockedCertificate->quote_second),
+                'project_name' => (string) ($wordingSnapshot['project_name'] ?? ''),
+                'closing_text' => (string) ($renderedContent['closing'] ?? $wordingSnapshot['closing_text'] ?? ''),
                 'show_center_manager_signature' => $currentCenter !== null
                     ? (bool) $currentCenter->show_center_manager_signature
                     : (bool) $lockedCertificate->show_center_manager_signature,
             ])->save();
+
+            $activity = activity('certificates')
+                ->performedOn($lockedCertificate)
+                ->withProperties([
+                    'action' => 'redesign',
+                    'old_template_key' => is_string($oldTemplateKey) ? $oldTemplateKey : null,
+                    'new_template_key' => data_get($wordingSnapshot, 'template_key'),
+                    'old_template_id' => is_numeric($oldTemplateId) ? (int) $oldTemplateId : null,
+                    'new_template_id' => data_get($wordingSnapshot, 'template_id'),
+                    'old_template_revision' => is_string($oldTemplateRevision)
+                        ? $oldTemplateRevision
+                        : null,
+                    'new_template_revision' => data_get($wordingSnapshot, 'template_revision'),
+                    'center_id' => $currentCenter?->id,
+                    'achievement_type' => (string) $lockedCertificate->achievement_type,
+                    'old_design' => $oldDesign,
+                    'new_design' => $designSnapshot,
+                ])
+                ->event('redesigned');
+            if (Auth::user() !== null) {
+                $activity->causedBy(Auth::user());
+            }
+            $activity->log('certificate_redesigned');
 
             return $lockedCertificate->refresh();
         });
@@ -335,14 +419,23 @@ class StudentCertificateService
             $certificate->design_snapshot,
             (string) $certificate->achievement_type,
         );
-        $wording = $this->certificateWordings->snapshot(
-            $certificate->wording_snapshot,
-            (string) $certificate->achievement_type,
-            [
-                'closing_text' => (string) $certificate->closing_text,
-            ],
-            (string) $design['student_gender'],
-        );
+        $contentTemplate = $this->certificateContentTemplates->snapshot($certificate->wording_snapshot);
+        $wording = $contentTemplate === null
+            ? $this->certificateWordings->snapshot(
+                $certificate->wording_snapshot,
+                (string) $certificate->achievement_type,
+                [
+                    'closing_text' => (string) $certificate->closing_text,
+                ],
+                (string) $design['student_gender'],
+            )
+            : $this->certificateWordings->resolve(
+                (string) $contentTemplate['student_gender'],
+                (string) $certificate->achievement_type,
+            );
+        $renderedContent = is_array($contentTemplate['rendered_sections'] ?? null)
+            ? $contentTemplate['rendered_sections']
+            : [];
         $showCenterIdentity = (bool) $certificate->show_center_manager_signature;
         $renderAssets = $this->renderAssetPayload($design, $pdf, $showCenterIdentity);
         $qrCode = $this->certificateQrCodes->payload(
@@ -351,10 +444,10 @@ class StudentCertificateService
         );
 
         return [
-            'page_title' => (string) $certificate->title,
-            'title' => (string) $certificate->title,
-            'quote_first' => (string) $certificate->quote_first,
-            'quote_second' => (string) $certificate->quote_second,
+            'page_title' => (string) ($renderedContent['title'] ?? $certificate->title),
+            'title' => (string) ($renderedContent['title'] ?? $certificate->title),
+            'quote_first' => (string) ($renderedContent['quote_first'] ?? $certificate->quote_first),
+            'quote_second' => (string) ($renderedContent['quote_second'] ?? $certificate->quote_second),
             'project_name' => (string) $wording['project_name'],
             'center_name' => $centerName,
             'show_center_manager_signature' => $showCenterIdentity,
@@ -366,7 +459,7 @@ class StudentCertificateService
                 (string) $certificate->achievement_name,
             ),
             'achievement_suffix' => (string) $wording['achievement_suffix'],
-            'closing_text' => (string) $wording['closing_text'],
+            'closing_text' => (string) ($renderedContent['closing'] ?? $wording['closing_text']),
             'center_manager_title' => $showCenterIdentity
                 ? (string) $certificate->center_manager_title
                 : '',
@@ -377,6 +470,7 @@ class StudentCertificateService
             'certificate_number' => (string) $certificate->certificate_number,
             'intro_before_project' => (string) $wording['intro_before_project'],
             'intro_after_center' => (string) $wording['intro_after_center'],
+            'content_template' => $contentTemplate,
             'labels' => config('certificates.labels', []),
             'design' => $design,
             'stylesheet_url' => $renderAssets['stylesheet_url'],

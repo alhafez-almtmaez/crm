@@ -7,8 +7,29 @@
     $previewSamples = is_array($certificate['preview_samples'] ?? null)
         ? $certificate['preview_samples']
         : [];
+    $contentTemplate = is_array($certificate['content_template'] ?? null)
+        ? $certificate['content_template']
+        : null;
+    $contentTemplateSegments = is_array($contentTemplate['rendered_segments'] ?? null)
+        ? $contentTemplate['rendered_segments']
+        : [];
+    $usesContentTemplate = $contentTemplate !== null
+        && collect(['title', 'quote_first', 'quote_second', 'intro', 'student_line', 'achievement_line', 'closing'])
+            ->every(static fn (string $key): bool => is_array($contentTemplateSegments[$key] ?? null));
+    $contentTemplateRendered = is_array($contentTemplate['rendered_sections'] ?? null)
+        ? $contentTemplate['rendered_sections']
+        : [];
+    $visualLength = static function (mixed $value): int {
+        $text = is_scalar($value) ? (string) $value : '';
+        $text = preg_replace('/\p{Mn}+/u', '', $text) ?? $text;
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?? trim($text);
+
+        return mb_strlen($text);
+    };
     $studentName = (string) ($certificate['student_name'] ?? '');
-    $studentNameLength = mb_strlen($studentName);
+    $studentNameLength = $usesContentTemplate
+        ? $visualLength($contentTemplateRendered['student_line'] ?? '')
+        : mb_strlen($studentName);
     $studentNameClass = $studentNameLength > 55
         ? 'certificate__student--extra-long'
         : ($studentNameLength > 36
@@ -16,9 +37,31 @@
             : ($studentNameLength > 25 ? 'certificate__student--long' : ''));
 
     $achievementName = (string) ($certificate['achievement_name'] ?? '');
-    $achievementNameClass = mb_strlen($achievementName) > 32
+    $achievementNameLength = $usesContentTemplate
+        ? $visualLength($contentTemplateRendered['achievement_line'] ?? '')
+        : mb_strlen($achievementName);
+    $achievementNameClass = $achievementNameLength > ($usesContentTemplate ? 155 : 32)
         ? 'certificate__achievement--very-long'
-        : (mb_strlen($achievementName) > 20 ? 'certificate__achievement--long' : '');
+        : ($achievementNameLength > ($usesContentTemplate ? 105 : 20)
+            ? 'certificate__achievement--long'
+            : '');
+    $titleLength = $visualLength($contentTemplateRendered['title'] ?? $certificate['title'] ?? '');
+    $titleClass = $titleLength > 45
+        ? 'certificate__title--very-long'
+        : ($titleLength > 32 ? 'certificate__title--long' : '');
+    $quoteLength = $visualLength($contentTemplateRendered['quote_first'] ?? $certificate['quote_first'] ?? '')
+        + $visualLength($contentTemplateRendered['quote_second'] ?? $certificate['quote_second'] ?? '');
+    $quoteClass = $quoteLength > 105
+        ? 'certificate__quote--very-long'
+        : ($quoteLength > 75 ? 'certificate__quote--long' : '');
+    $introLength = $visualLength($contentTemplateRendered['intro'] ?? '');
+    $introClass = $introLength > 170
+        ? 'certificate__intro--very-long'
+        : ($introLength > 115 ? 'certificate__intro--long' : '');
+    $closingLength = $visualLength($contentTemplateRendered['closing'] ?? $certificate['closing_text'] ?? '');
+    $closingClass = $closingLength > 160
+        ? 'certificate__closing--very-long'
+        : ($closingLength > 105 ? 'certificate__closing--long' : '');
 
     $design = is_array($certificate['design'] ?? null) ? $certificate['design'] : [];
     $designStyles = [];
@@ -119,36 +162,54 @@
                      alt="{{ $certificate['labels']['right_logo'] }}">
             @endif
 
-            <h1 class="certificate__title">{{ $certificate['title'] }}</h1>
+            <h1 @class(['certificate__title', $titleClass => $titleClass !== '']) data-certificate-content-section="title" style="white-space: pre-line">@if ($usesContentTemplate)@include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['title']])@else{{ $certificate['title'] }}@endif</h1>
 
-            <div class="certificate__quote" aria-label="{{ $certificate['labels']['poem'] }}">
-                <span>{{ $certificate['quote_first'] }}</span>
+            <div @class(['certificate__quote', $quoteClass => $quoteClass !== '']) aria-label="{{ $certificate['labels']['poem'] }}">
+                <span data-certificate-content-section="quote_first" style="white-space: pre-line">@if ($usesContentTemplate)@include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['quote_first']])@else{{ $certificate['quote_first'] }}@endif</span>
                 <span class="certificate__quote-ornament" aria-hidden="true">✧✦✧</span>
-                <span>{{ $certificate['quote_second'] }}</span>
+                <span data-certificate-content-section="quote_second" style="white-space: pre-line">@if ($usesContentTemplate)@include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['quote_second']])@else{{ $certificate['quote_second'] }}@endif</span>
             </div>
 
-            <p class="certificate__intro">
-                <span data-certificate-preview-intro-before-project>{{ $certificate['intro_before_project'] }}</span>
-                <strong data-certificate-preview-center-name>{{ $certificate['center_name'] }}</strong>
-                <span data-certificate-preview-intro-after-center>{{ $certificate['intro_after_center'] }}</span>
-            </p>
+            @if ($usesContentTemplate)
+                <p @class(['certificate__intro', $introClass => $introClass !== '']) data-certificate-content-section="intro" style="white-space: pre-line">
+                    @include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['intro']])
+                </p>
 
-            <p class="certificate__student {{ $studentNameClass }}">
-                <span class="ornament">﴿</span>
-                <strong data-certificate-preview-student>{{ $studentName }}</strong>
-                <span class="ornament">﴾</span>
-            </p>
+                <p @class(['certificate__student', $studentNameClass => $studentNameClass !== '']) data-certificate-content-section="student_line">
+                    @include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['student_line']])
+                </p>
 
-            <p class="certificate__achievement {{ $achievementNameClass }}">
-                <span data-certificate-preview-achievement-intro>{{ $certificate['achievement_intro'] }}</span>
-                <span data-certificate-preview-achievement-label>{{ $certificate['achievement_label'] }}</span>
-                <span class="ornament">﴿</span>
-                <strong data-certificate-preview-achievement-name>{{ $achievementName }}</strong>
-                <span class="ornament">﴾</span>
-                <span data-certificate-preview-achievement-suffix>{{ $certificate['achievement_suffix'] }}</span>
-            </p>
+                <p @class(['certificate__achievement', $achievementNameClass => $achievementNameClass !== '']) data-certificate-content-section="achievement_line" style="white-space: pre-line">
+                    @include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['achievement_line']])
+                </p>
 
-            <p class="certificate__closing" data-certificate-preview-closing>{{ $certificate['closing_text'] }}</p>
+                <p @class(['certificate__closing', $closingClass => $closingClass !== '']) data-certificate-content-section="closing" style="white-space: pre-line">
+                    @include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['closing']])
+                </p>
+            @else
+                <p class="certificate__intro">
+                    <span data-certificate-preview-intro-before-project>{{ $certificate['intro_before_project'] }}</span>
+                    <strong data-certificate-preview-center-name>{{ $certificate['center_name'] }}</strong>
+                    <span data-certificate-preview-intro-after-center>{{ $certificate['intro_after_center'] }}</span>
+                </p>
+
+                <p class="certificate__student {{ $studentNameClass }}">
+                    <span class="ornament">﴿</span>
+                    <strong data-certificate-preview-student>{{ $studentName }}</strong>
+                    <span class="ornament">﴾</span>
+                </p>
+
+                <p class="certificate__achievement {{ $achievementNameClass }}">
+                    <span data-certificate-preview-achievement-intro>{{ $certificate['achievement_intro'] }}</span>
+                    <span data-certificate-preview-achievement-label>{{ $certificate['achievement_label'] }}</span>
+                    <span class="ornament">﴿</span>
+                    <strong data-certificate-preview-achievement-name>{{ $achievementName }}</strong>
+                    <span class="ornament">﴾</span>
+                    <span data-certificate-preview-achievement-suffix>{{ $certificate['achievement_suffix'] }}</span>
+                </p>
+
+                <p class="certificate__closing" data-certificate-preview-closing>{{ $certificate['closing_text'] }}</p>
+            @endif
 
             @if ($showCenterIdentity || $previewMode)
                 <section class="certificate__signing certificate__signing--center"
@@ -295,6 +356,35 @@
                 const student = document.querySelector('[data-certificate-preview-student]');
                 const achievementLabel = document.querySelector('[data-certificate-preview-achievement-label]');
                 const achievementName = document.querySelector('[data-certificate-preview-achievement-name]');
+                const contentSectionKeys = [
+                    'title',
+                    'quote_first',
+                    'quote_second',
+                    'intro',
+                    'student_line',
+                    'achievement_line',
+                    'closing',
+                ];
+                const contentSectionElements = Object.fromEntries(contentSectionKeys.map((key) => [
+                    key,
+                    document.querySelector(`[data-certificate-content-section="${key}"]`) ?? ({
+                        intro: document.querySelector('.certificate__intro'),
+                        student_line: document.querySelector('.certificate__student'),
+                        achievement_line: document.querySelector('.certificate__achievement'),
+                        closing: document.querySelector('.certificate__closing'),
+                    })[key] ?? null,
+                ]));
+                const allowedTemplateVariables = new Set([
+                    'student_name',
+                    'center_name',
+                    'achievement_label',
+                    'achievement_name',
+                    'certificate_number',
+                    'plan_name',
+                    'plan_point_name',
+                    'hijri_date',
+                    'gregorian_date',
+                ]);
                 const wordingElements = {
                     intro_before_project: document.querySelector('[data-certificate-preview-intro-before-project]'),
                     intro_after_center: document.querySelector('[data-certificate-preview-intro-after-center]'),
@@ -310,6 +400,42 @@
                     const values = samples && typeof samples[group] === 'object' ? samples[group] : {};
                     return owns(values, key) && typeof values[key] === 'string' ? values[key] : null;
                 };
+                const emphasizedTemplateVariables = new Set([
+                    'student_name',
+                    'center_name',
+                    'achievement_name',
+                ]);
+                const renderPlainTemplate = (element, source, values) => {
+                    const fragment = document.createDocumentFragment();
+                    const pattern = /\{\{\s*([a-z_]+)\s*\}\}/gu;
+                    let cursor = 0;
+                    let match;
+
+                    while ((match = pattern.exec(source)) !== null) {
+                        if (match.index > cursor) {
+                            fragment.append(document.createTextNode(source.slice(cursor, match.index)));
+                        }
+
+                        const key = match[1];
+                        if (allowedTemplateVariables.has(key) && typeof values[key] === 'string') {
+                            const variable = document.createElement(
+                                emphasizedTemplateVariables.has(key) ? 'strong' : 'span',
+                            );
+                            variable.dataset.certificateTemplateVariable = key;
+                            variable.textContent = values[key];
+                            fragment.append(variable);
+                        } else {
+                            fragment.append(document.createTextNode(match[0]));
+                        }
+                        cursor = pattern.lastIndex;
+                    }
+
+                    if (cursor < source.length) {
+                        fragment.append(document.createTextNode(source.slice(cursor)));
+                    }
+
+                    element.replaceChildren(fragment);
+                };
                 const setLengthClass = (element, classes, value, thresholds) => {
                     const container = element?.parentElement;
                     if (!container) return;
@@ -318,6 +444,19 @@
                     const length = Array.from(value).length;
                     const match = thresholds.find(({ minimum }) => length > minimum);
                     if (match) container.classList.add(match.className);
+                };
+                const visualLength = (value) => Array.from(String(value ?? '')
+                    .normalize('NFD')
+                    .replace(/\p{Mn}+/gu, '')
+                    .trim()
+                    .replace(/\s+/gu, ' ')).length;
+                const setSectionLengthClass = (element, classes, thresholds, length = null) => {
+                    if (!element) return;
+
+                    element.classList.remove(...classes);
+                    const resolvedLength = length ?? visualLength(element.textContent);
+                    const match = thresholds.find(({ minimum }) => resolvedLength > minimum);
+                    if (match) element.classList.add(match.className);
                 };
                 window.addEventListener('message', (event) => {
                     if (event.origin !== window.location.origin
@@ -448,6 +587,106 @@
                             [
                                 { minimum: 32, className: 'certificate__achievement--very-long' },
                                 { minimum: 20, className: 'certificate__achievement--long' },
+                            ],
+                        );
+                    }
+
+                    const legacySectionsByGender = samples
+                        && typeof samples.legacy_content_sections === 'object'
+                            ? samples.legacy_content_sections
+                            : {};
+                    const draftSections = data.content_sections
+                        && typeof data.content_sections === 'object'
+                            ? data.content_sections
+                            : (owns(data, 'content_sections')
+                                && owns(legacySectionsByGender, gender)
+                                && typeof legacySectionsByGender[gender] === 'object'
+                                    ? legacySectionsByGender[gender]
+                                    : null);
+                    if (draftSections !== null) {
+                        const templateValues = {
+                            student_name: studentName ?? '',
+                            center_name: hasCenter && typeof center.center_name === 'string'
+                                ? center.center_name
+                                : '—',
+                            achievement_label: label ?? '',
+                            achievement_name: resolvedAchievementName,
+                            certificate_number: 'HMT-2026-PREVIEW',
+                            plan_name: typeof achievement?.plan_name === 'string'
+                                ? achievement.plan_name
+                                : '',
+                            plan_point_name: typeof achievement?.plan_point_name === 'string'
+                                ? achievement.plan_point_name
+                                : '',
+                            hijri_date: '١٥ رَبِيع الأَوَّل ١٤٤٨',
+                            gregorian_date: '٢٠٢٦/٠٨/٢٨',
+                        };
+
+                        contentSectionKeys.forEach((key) => {
+                            const element = contentSectionElements[key];
+                            const source = draftSections[key];
+                            if (element && typeof source === 'string') {
+                                renderPlainTemplate(element, source, templateValues);
+                            }
+                        });
+
+                        setSectionLengthClass(
+                            contentSectionElements.title,
+                            ['certificate__title--long', 'certificate__title--very-long'],
+                            [
+                                { minimum: 45, className: 'certificate__title--very-long' },
+                                { minimum: 32, className: 'certificate__title--long' },
+                            ],
+                        );
+                        const quoteLength = visualLength(contentSectionElements.quote_first?.textContent)
+                            + visualLength(contentSectionElements.quote_second?.textContent);
+                        setSectionLengthClass(
+                            document.querySelector('.certificate__quote'),
+                            ['certificate__quote--long', 'certificate__quote--very-long'],
+                            [
+                                { minimum: 105, className: 'certificate__quote--very-long' },
+                                { minimum: 75, className: 'certificate__quote--long' },
+                            ],
+                            quoteLength,
+                        );
+                        setSectionLengthClass(
+                            contentSectionElements.intro,
+                            ['certificate__intro--long', 'certificate__intro--very-long'],
+                            [
+                                { minimum: 170, className: 'certificate__intro--very-long' },
+                                { minimum: 115, className: 'certificate__intro--long' },
+                            ],
+                        );
+                        setSectionLengthClass(
+                            contentSectionElements.student_line,
+                            [
+                                'certificate__student--long',
+                                'certificate__student--very-long',
+                                'certificate__student--extra-long',
+                            ],
+                            [
+                                { minimum: 55, className: 'certificate__student--extra-long' },
+                                { minimum: 36, className: 'certificate__student--very-long' },
+                                { minimum: 25, className: 'certificate__student--long' },
+                            ],
+                        );
+                        setSectionLengthClass(
+                            contentSectionElements.achievement_line,
+                            [
+                                'certificate__achievement--long',
+                                'certificate__achievement--very-long',
+                            ],
+                            [
+                                { minimum: 155, className: 'certificate__achievement--very-long' },
+                                { minimum: 105, className: 'certificate__achievement--long' },
+                            ],
+                        );
+                        setSectionLengthClass(
+                            contentSectionElements.closing,
+                            ['certificate__closing--long', 'certificate__closing--very-long'],
+                            [
+                                { minimum: 160, className: 'certificate__closing--very-long' },
+                                { minimum: 105, className: 'certificate__closing--long' },
                             ],
                         );
                     }

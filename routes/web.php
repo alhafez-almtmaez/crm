@@ -3,6 +3,8 @@
 use App\Http\Controllers\Admin\AbsenceRuleController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\CenterController;
+use App\Http\Controllers\Admin\CertificateContentTemplateAssignmentController;
+use App\Http\Controllers\Admin\CertificateContentTemplateController;
 use App\Http\Controllers\Admin\CertificateDesignController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EvaluationController;
@@ -139,6 +141,16 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
             ->name('certificate-designs.index');
         Route::put('certificate-designs', [CertificateDesignController::class, 'update'])
             ->name('certificate-designs.update');
+        Route::post('certificate-content-templates', [CertificateContentTemplateController::class, 'store'])
+            ->name('certificate-content-templates.store');
+        Route::put('certificate-content-templates/{certificateContentTemplate}', [CertificateContentTemplateController::class, 'update'])
+            ->name('certificate-content-templates.update');
+        Route::delete('certificate-content-templates/{certificateContentTemplate}', [CertificateContentTemplateController::class, 'destroy'])
+            ->name('certificate-content-templates.destroy');
+        Route::put('certificate-content-template-assignments', [CertificateContentTemplateAssignmentController::class, 'update'])
+            ->name('certificate-content-template-assignments.update');
+        Route::delete('certificate-content-template-assignments/{assignment}', [CertificateContentTemplateAssignmentController::class, 'destroy'])
+            ->name('certificate-content-template-assignments.destroy');
 
         Route::get('settings', fn () => Inertia::render('Admin/Settings'))->name('settings');
         Route::put('settings/system', [SystemSettingsController::class, 'update'])->name('settings.update');

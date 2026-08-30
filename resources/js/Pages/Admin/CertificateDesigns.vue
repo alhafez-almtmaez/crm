@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
 import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
 import AdminLayout from '../../components/admin/AdminLayout.vue';
+import CertificateContentTemplatesPanel from '../../components/admin/CertificateContentTemplatesPanel.vue';
 import { useAppToast } from '../../composables/useAppToast';
 
 const GENDER_VALUES = ['male', 'female'];
@@ -46,10 +47,50 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    contentTemplates: {
+        type: Array,
+        default: () => [],
+    },
+    contentTemplateAssignments: {
+        type: Array,
+        default: () => [],
+    },
+    effectiveContentTemplates: {
+        type: [Object, Array],
+        default: () => ({}),
+    },
+    templateVariables: {
+        type: Array,
+        default: () => [],
+    },
+    canManageContentTemplates: {
+        type: Boolean,
+        default: null,
+    },
+    canManageGlobalContentAssignments: {
+        type: Boolean,
+        default: null,
+    },
 });
 
 const { t, te } = useI18n();
 const appToast = useAppToast();
+const activeWorkspace = ref('design');
+const contentPreview = ref({
+    templateId: null,
+    templateName: '',
+    sections: null,
+});
+const canManageContentTemplateDefinitions = computed(() => props.canManageContentTemplates === null
+    ? false
+    : props.canManageContentTemplates);
+const canManageGlobalContentAssignments = computed(() => props.canManageGlobalContentAssignments === null
+    ? false
+    : props.canManageGlobalContentAssignments);
+const workspaceOptions = computed(() => [
+    { value: 'design', label: t('certificateDesign.workspace.design'), icon: 'pi-palette' },
+    { value: 'content', label: t('certificateDesign.workspace.content'), icon: 'pi-file-edit' },
+]);
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value ?? {}));
 const normalizeHex = (value) => {
@@ -368,7 +409,19 @@ const previewMessage = computed(() => ({
     gender: currentPreviewCenter.value?.student_gender ?? GENDER_VALUES[0],
     achievement_type: selectedAchievementType.value,
     plan_point_id: currentPreviewAchievement.value?.id ?? null,
+    content_template_id: contentPreview.value.templateId,
+    content_sections: contentPreview.value.sections,
 }));
+
+const updateContentPreview = (value) => {
+    contentPreview.value = {
+        templateId: Number.isInteger(Number(value?.templateId)) ? Number(value.templateId) : null,
+        templateName: String(value?.templateName ?? '').trim(),
+        sections: value?.sections && typeof value.sections === 'object'
+            ? deepClone(value.sections)
+            : null,
+    };
+};
 
 const sendPreviewUpdate = () => {
     if (typeof window === 'undefined' || !previewFrame.value?.contentWindow) return;
@@ -417,10 +470,16 @@ const downloadPreviewPdf = async () => {
     downloadingPreviewPdf.value = true;
 
     try {
+        const contentPayload = contentPreview.value.sections
+            ? { content_template_sections: deepClone(contentPreview.value.sections) }
+            : (contentPreview.value.templateId
+                ? { content_template_id: contentPreview.value.templateId }
+                : {});
         const response = await axios.post('/admin/certificate-designs/preview/pdf', {
             center_id: currentPreviewCenter.value.id,
             plan_point_id: currentPreviewAchievement.value.id,
             design: previewDesignPayload.value,
+            ...contentPayload,
         }, {
             responseType: 'blob',
         });
@@ -487,50 +546,173 @@ const submit = () => {
     </Head>
 
     <AdminLayout :nav-items="adminNavItems" :page-title="t('certificateDesign.title')">
-        <form class="space-y-6" @submit.prevent="submit">
+        <div class="space-y-6">
             <AdminBreadcrumbs />
 
             <header class="flex flex-col gap-5 rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm) sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div class="flex items-start gap-4">
                     <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_oklab,var(--accent)_14%,transparent)] text-[var(--accent)]">
-                        <i class="pi pi-palette text-xl"></i>
+                        <i class="pi text-xl" :class="activeWorkspace === 'content' ? 'pi-file-edit' : 'pi-palette'"></i>
                     </span>
                     <div>
                         <h1 class="text-2xl font-semibold sm:text-3xl">{{ t('certificateDesign.title') }}</h1>
                         <p class="mt-2 max-w-3xl text-sm leading-6 text-(--muted-foreground) sm:text-base">
-                            {{ t('certificateDesign.description') }}
+                            {{ t(activeWorkspace === 'content'
+                                ? 'certificateDesign.content.pageDescription'
+                                : 'certificateDesign.description') }}
                         </p>
                     </div>
                 </div>
 
                 <Button
-                    type="submit"
+                    v-if="activeWorkspace === 'design'"
+                    type="button"
                     icon="pi pi-save"
                     :label="form.recentlySuccessful ? t('certificateDesign.saved') : t('certificateDesign.save')"
                     :loading="form.processing"
                     :disabled="!canUpdate || !currentPreviewCenter || hasInvalidColors || form.processing"
                     class="h-11 shrink-0 px-5"
+                    @click="submit"
                 />
             </header>
+
+            <nav
+                class="rounded-(--radius-base) border border-(--border) bg-(--card) p-1.5 shadow-(--shadow-sm)"
+                role="tablist"
+                :aria-label="t('certificateDesign.workspace.label')"
+            >
+                <div class="grid gap-1 sm:grid-cols-2">
+                    <button
+                        v-for="workspace in workspaceOptions"
+                        :id="`certificate-workspace-tab-${workspace.value}`"
+                        :key="workspace.value"
+                        type="button"
+                        role="tab"
+                        class="flex min-h-12 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition"
+                        :class="activeWorkspace === workspace.value
+                            ? 'bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm'
+                            : 'text-(--muted-foreground) hover:bg-(--muted) hover:text-(--foreground)'"
+                        :aria-selected="activeWorkspace === workspace.value"
+                        :aria-controls="`certificate-workspace-panel-${workspace.value}`"
+                        @click="activeWorkspace = workspace.value"
+                    >
+                        <i class="pi" :class="workspace.icon" aria-hidden="true"></i>
+                        <span>{{ workspace.label }}</span>
+                    </button>
+                </div>
+            </nav>
 
             <div
                 v-if="!canUpdate"
                 class="flex items-start gap-3 rounded-(--radius-base) border border-amber-300/60 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100"
             >
                 <i class="pi pi-lock mt-0.5"></i>
-                <p>{{ t('certificateDesign.readOnly') }}</p>
+                <p>{{ t(activeWorkspace === 'content'
+                    ? 'certificateDesign.content.readOnly'
+                    : 'certificateDesign.readOnly') }}</p>
             </div>
 
             <div
-                v-if="form.hasErrors"
+                v-if="activeWorkspace === 'design' && form.hasErrors"
                 class="flex items-start gap-3 rounded-(--radius-base) border border-red-300/60 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800/60 dark:bg-red-950/35 dark:text-red-200"
             >
                 <i class="pi pi-exclamation-circle mt-0.5"></i>
                 <p>{{ t('certificateDesign.validationError') }}</p>
             </div>
 
+            <article
+                v-if="activeWorkspace === 'content'"
+                class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)"
+                aria-labelledby="certificate-content-context-title"
+            >
+                <div class="flex items-start gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] text-[var(--accent)]">
+                        <i class="pi pi-sliders-h" aria-hidden="true"></i>
+                    </span>
+                    <div>
+                        <h2 id="certificate-content-context-title" class="text-lg font-semibold">{{ t('certificateDesign.content.contextTitle') }}</h2>
+                        <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificateDesign.content.contextHint') }}</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(14rem,1fr)_minmax(16rem,1fr)_minmax(14rem,1fr)]">
+                    <div>
+                        <label for="certificate-content-context-center" class="mb-2 block text-sm font-medium">{{ t('certificateDesign.previewCenter') }}</label>
+                        <Select
+                            input-id="certificate-content-context-center"
+                            v-model="selectedPreviewCenterId"
+                            :options="previewCenterOptions"
+                            option-label="center_name"
+                            option-value="id"
+                            :filter-fields="['center_name', 'name']"
+                            :placeholder="t('certificateDesign.selectPreviewCenter')"
+                            :filter-placeholder="t('certificateDesign.searchPreviewCenter')"
+                            :empty-filter-message="t('certificateDesign.noMatchingPreviewCenter')"
+                            :disabled="!previewCenterOptions.length"
+                            filter
+                            fluid
+                        >
+                            <template #value>
+                                <div v-if="currentPreviewCenter" class="flex min-w-0 items-center justify-between gap-2 text-start">
+                                    <span class="truncate font-semibold">{{ currentPreviewCenter.center_name }}</span>
+                                    <span class="center-meta-badge center-meta-badge--gender">
+                                        <i class="pi center-meta-badge__icon" :class="previewCenterGenderIcon(currentPreviewCenter)" aria-hidden="true"></i>
+                                        <span>{{ previewCenterGenderLabel(currentPreviewCenter) }}</span>
+                                    </span>
+                                </div>
+                            </template>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <p id="certificate-content-context-type" class="mb-2 text-sm font-medium">{{ t('certificateDesign.certificateType') }}</p>
+                        <SelectButton
+                            v-model="selectedAchievementType"
+                            :options="achievementTypes"
+                            option-label="label"
+                            option-value="value"
+                            :allow-empty="false"
+                            :disabled="!currentPreviewCenter"
+                            aria-labelledby="certificate-content-context-type"
+                            fluid
+                        />
+                    </div>
+
+                    <div>
+                        <label for="certificate-content-context-achievement" class="mb-2 block text-sm font-medium">{{ t('certificateDesign.previewAchievement') }}</label>
+                        <Select
+                            input-id="certificate-content-context-achievement"
+                            v-model="selectedPreviewPointId"
+                            :options="currentPreviewAchievementOptions"
+                            option-label="achievement_name"
+                            option-value="id"
+                            :filter-fields="['achievement_name', 'plan_name', 'plan_point_name']"
+                            :placeholder="t('certificateDesign.previewAchievement')"
+                            :filter-placeholder="t('certificateDesign.searchPreviewAchievement')"
+                            :empty-filter-message="t('certificateDesign.noMatchingPreviewAchievement')"
+                            :disabled="!currentPreviewAchievementOptions.length"
+                            filter
+                            fluid
+                        >
+                            <template #value>
+                                <div v-if="currentPreviewAchievement" class="min-w-0 text-start">
+                                    <span class="block truncate font-semibold">{{ currentPreviewAchievement.achievement_name }}</span>
+                                    <span class="mt-0.5 block truncate text-xs text-(--muted-foreground)">{{ previewAchievementContext(currentPreviewAchievement) }}</span>
+                                </div>
+                            </template>
+                        </Select>
+                    </div>
+                </div>
+            </article>
+
             <div class="grid items-start gap-6 xl:grid-cols-[minmax(24rem,0.88fr)_minmax(36rem,1.35fr)]">
-                <section class="space-y-5">
+                <section
+                    v-show="activeWorkspace === 'design'"
+                    id="certificate-workspace-panel-design"
+                    class="space-y-5"
+                    role="tabpanel"
+                    aria-labelledby="certificate-workspace-tab-design"
+                >
                     <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
                         <div>
                             <h2 class="text-xl font-semibold">{{ t('certificateDesign.contextTitle') }}</h2>
@@ -919,6 +1101,26 @@ const submit = () => {
                     </article>
                 </section>
 
+                <CertificateContentTemplatesPanel
+                    v-show="activeWorkspace === 'content'"
+                    id="certificate-workspace-panel-content"
+                    role="tabpanel"
+                    aria-labelledby="certificate-workspace-tab-content"
+                    :templates="contentTemplates"
+                    :assignments="contentTemplateAssignments"
+                    :effective-templates="effectiveContentTemplates"
+                    :variables="templateVariables"
+                    :centers="previewCenterOptions"
+                    :achievement-types="achievementTypes"
+                    :selected-center="currentPreviewCenter"
+                    :selected-achievement-type="selectedAchievementType"
+                    :selected-achievement="currentPreviewAchievement"
+                    :can-update="canUpdate"
+                    :can-manage-templates="canManageContentTemplateDefinitions"
+                    :can-manage-global-assignments="canManageGlobalContentAssignments"
+                    @preview-change="updateContentPreview"
+                />
+
                 <aside class="xl:sticky xl:top-6">
                     <article class="overflow-hidden rounded-(--radius-base) border border-(--border) bg-(--card) text-(--card-foreground) shadow-(--shadow-sm)">
                         <header class="flex flex-wrap items-center justify-between gap-3 border-b border-(--border) p-4 sm:p-5">
@@ -930,7 +1132,11 @@ const submit = () => {
                                     </span>
                                     <h2 class="text-lg font-semibold">{{ t('certificateDesign.livePreview') }}</h2>
                                 </div>
-                                <p class="mt-1 text-xs text-(--muted-foreground)">{{ t('certificateDesign.previewHint') }}</p>
+                                <p class="mt-1 text-xs text-(--muted-foreground)">
+                                    {{ t(activeWorkspace === 'content'
+                                        ? 'certificateDesign.content.previewHint'
+                                        : 'certificateDesign.previewHint') }}
+                                </p>
                             </div>
                             <div class="flex flex-wrap items-center justify-end gap-2 text-xs font-medium">
                                 <span class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-[var(--accent)]">{{ selectedGenderLabel }}</span>
@@ -966,27 +1172,34 @@ const submit = () => {
                         </div>
 
                         <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-(--border) p-4 text-xs text-(--muted-foreground)">
-                            <span>{{ selectedTheme.label || t('certificateDesign.noTheme') }} · {{ selectedFont.label || t('certificateDesign.noFont') }}</span>
+                            <span v-if="activeWorkspace === 'content'">
+                                {{ contentPreview.templateName || t('certificateDesign.content.legacyTemplate') }}
+                            </span>
+                            <span v-else>{{ selectedTheme.label || t('certificateDesign.noTheme') }} · {{ selectedFont.label || t('certificateDesign.noFont') }}</span>
                             <span>{{ t('certificateDesign.a4Landscape') }}</span>
                         </footer>
                     </article>
 
-                    <div class="mt-4 flex flex-col gap-3 rounded-(--radius-base) border border-(--border) bg-(--card) p-4 shadow-(--shadow-sm) sm:flex-row sm:items-center sm:justify-between">
+                    <div
+                        v-if="activeWorkspace === 'design'"
+                        class="mt-4 flex flex-col gap-3 rounded-(--radius-base) border border-(--border) bg-(--card) p-4 shadow-(--shadow-sm) sm:flex-row sm:items-center sm:justify-between"
+                    >
                         <p class="text-sm text-(--muted-foreground)">
                             {{ hasAnyUnsavedChanges ? t('certificateDesign.unsavedChanges') : t('certificateDesign.allSaved') }}
                         </p>
                         <Button
-                            type="submit"
+                            type="button"
                             icon="pi pi-save"
                             :label="t('certificateDesign.save')"
                             :loading="form.processing"
                             :disabled="!canUpdate || !currentPreviewCenter || hasInvalidColors || form.processing"
                             class="h-10 shrink-0"
+                            @click="submit"
                         />
                     </div>
                 </aside>
             </div>
-        </form>
+        </div>
     </AdminLayout>
 </template>
 

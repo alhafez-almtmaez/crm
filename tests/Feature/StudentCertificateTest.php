@@ -2,6 +2,7 @@
 
 use App\Models\Center;
 use App\Models\Certificate;
+use App\Models\CertificateContentTemplate;
 use App\Models\Group;
 use App\Models\Plan;
 use App\Models\PlanPoint;
@@ -15,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\LaravelPdf\Facades\Pdf;
 use Spatie\LaravelPdf\PdfBuilder;
 use Spatie\Permission\Models\Permission;
@@ -315,17 +317,23 @@ test('certificate issuance snapshots the design selected by center and achieveme
         'content_color' => '#345678',
         'accent_color' => '#456789',
     ])->and($issuedWording)->toMatchArray([
-        'schema_version' => 2,
+        'schema_version' => 3,
+        'template_key' => 'female',
+        'assignment_source' => 'gender_all',
         'student_gender' => Center::STUDENT_GENDER_FEMALE,
         'achievement_type' => Certificate::ACHIEVEMENT_PART,
-        'project_name' => config('certificates.wording.female.project_name'),
-        'intro_before_project' => config('certificates.wording.female.intro_before_project'),
-        'intro_after_center' => config('certificates.wording.female.intro_after_center'),
-        'achievement_intro' => config('certificates.wording.female.achievement_intro'),
-        'achievement_label' => config('certificates.achievement_labels.part'),
-        'achievement_suffix' => config('certificates.wording.female.achievement_suffix'),
-        'closing_text' => config('certificates.wording.female.closing_text'),
-    ]);
+    ])->and($issuedWording['source_sections']['intro'])->toContain('{{ center_name }}')
+        ->and($issuedWording['source_sections']['student_line'])->toContain('{{ student_name }}')
+        ->and($issuedWording['source_sections']['achievement_line'])->toContain('{{ achievement_label }}')
+        ->and($issuedWording['source_sections']['achievement_line'])->toContain('{{ achievement_name }}')
+        ->and($issuedWording['rendered_sections']['intro'])->toContain('مركز السلام القرآني')
+        ->and($issuedWording['rendered_sections']['student_line'])->toContain($student->full_name)
+        ->and($issuedWording['rendered_sections']['achievement_line'])
+        ->toContain((string) config('certificates.achievement_labels.part'))
+        ->and($issuedWording['rendered_sections']['achievement_line'])->toContain('الأول')
+        ->and($issuedWording['rendered_sections']['closing'])
+        ->toBe((string) config('certificates.wording.female.closing_text'))
+        ->and($issuedWording['rendered_segments']['student_line'])->toBeArray()->not->toBeEmpty();
 
     $designs[Certificate::ACHIEVEMENT_PART] = [
         'theme' => 'navy',
@@ -553,44 +561,52 @@ test('issued wording remains historically stable until an explicit redesign', fu
         'gregorian_date',
     ];
     $preserved = Arr::only($certificate->getAttributes(), $preservedKeys);
-    $originalWording = config('certificates.wording');
-    $updatedPrefix = 'صياغة افتتاحية أنثوية جديدة للاختبار';
-    $updatedIntro = 'صياغة أنثوية جديدة للاختبار';
+    $template = CertificateContentTemplate::query()->where('key', 'female')->sole();
+    $updatedIntro = 'صياغة أنثوية جديدة من {{ center_name }} للاختبار';
     $updatedClosing = 'خاتمة أنثوية جديدة للاختبار';
+    $updatedSections = $template->sections;
+    $updatedSections['intro'] = $updatedIntro;
+    $updatedSections['closing'] = $updatedClosing;
+    $template->update(['sections' => $updatedSections]);
 
-    try {
-        config()->set('certificates.wording.female.intro_before_project', $updatedPrefix);
-        config()->set('certificates.wording.female.intro_after_center', $updatedIntro);
-        config()->set('certificates.wording.female.closing_text', $updatedClosing);
+    $unchangedPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
 
-        $unchangedPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
+    expect($certificate->wording_snapshot)->toBe($issuedWording)
+        ->and($unchangedPayload['content_template']['template_revision'])
+        ->toBe($issuedWording['template_revision'])
+        ->and($unchangedPayload['content_template']['rendered_sections']['intro'])
+        ->toBe($issuedWording['rendered_sections']['intro'])
+        ->and($unchangedPayload['content_template']['rendered_sections']['intro'])
+        ->not->toContain('صياغة أنثوية جديدة')
+        ->and($unchangedPayload['closing_text'])->toBe($issuedWording['rendered_sections']['closing'])
+        ->and($unchangedPayload['closing_text'])->not->toBe($updatedClosing);
 
-        expect($certificate->wording_snapshot)->toBe($issuedWording)
-            ->and($unchangedPayload['intro_before_project'])->toBe($issuedWording['intro_before_project'])
-            ->and($unchangedPayload['intro_after_center'])->toBe($issuedWording['intro_after_center'])
-            ->and($unchangedPayload['closing_text'])->toBe($issuedWording['closing_text'])
-            ->and($unchangedPayload['intro_before_project'])->not->toBe($updatedPrefix)
-            ->and($unchangedPayload['intro_after_center'])->not->toBe($updatedIntro)
-            ->and($unchangedPayload['closing_text'])->not->toBe($updatedClosing);
+    $student->update(['full_name' => 'اسم الطالب الحالي الذي لا يدخل snapshot']);
+    Center::query()->findOrFail($student->center_id)->update([
+        'certificate_name' => 'اسم المركز الحالي الذي لا يدخل snapshot',
+    ]);
 
-        $this->actingAs($user, 'web')
-            ->putJson(route('admin.students.certificates.redesign', [$student, $certificate]))
-            ->assertOk();
+    $this->actingAs($user, 'web')
+        ->putJson(route('admin.students.certificates.redesign', [$student, $certificate]))
+        ->assertOk();
 
-        $certificate->refresh();
-        $redesignedPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
+    $certificate->refresh();
+    $redesignedPayload = app(StudentCertificateService::class)->viewPayload($student, $certificate);
 
-        expect($certificate->wording_snapshot['student_gender'])->toBe(Center::STUDENT_GENDER_FEMALE)
-            ->and($certificate->wording_snapshot['intro_before_project'])->toBe($updatedPrefix)
-            ->and($certificate->wording_snapshot['intro_after_center'])->toBe($updatedIntro)
-            ->and($certificate->wording_snapshot['closing_text'])->toBe($updatedClosing)
-            ->and($redesignedPayload['intro_before_project'])->toBe($updatedPrefix)
-            ->and($redesignedPayload['intro_after_center'])->toBe($updatedIntro)
-            ->and($redesignedPayload['closing_text'])->toBe($updatedClosing)
-            ->and(Arr::only($certificate->getAttributes(), $preservedKeys))->toBe($preserved);
-    } finally {
-        config()->set('certificates.wording', $originalWording);
-    }
+    expect($certificate->wording_snapshot['schema_version'])->toBe(3)
+        ->and($certificate->wording_snapshot['student_gender'])->toBe(Center::STUDENT_GENDER_FEMALE)
+        ->and($certificate->wording_snapshot['template_revision'])
+        ->not->toBe($issuedWording['template_revision'])
+        ->and($certificate->wording_snapshot['source_sections']['intro'])->toBe($updatedIntro)
+        ->and($certificate->wording_snapshot['rendered_sections']['intro'])
+        ->toContain('مركز السلام القرآني')
+        ->not->toContain('اسم المركز الحالي الذي لا يدخل snapshot')
+        ->and($certificate->wording_snapshot['rendered_sections']['student_line'])
+        ->toContain('طالب الاختبار')
+        ->not->toContain('اسم الطالب الحالي الذي لا يدخل snapshot')
+        ->and($redesignedPayload['closing_text'])->toBe($updatedClosing)
+        ->and($certificate->closing_text)->toBe($updatedClosing)
+        ->and(Arr::only($certificate->getAttributes(), $preservedKeys))->toBe($preserved);
 });
 
 dataset('female certificate achievement types', [
@@ -625,10 +641,14 @@ test('female wording renders in html and pdf for every achievement type', functi
     $certificate = Certificate::query()->sole();
 
     expect($certificate->achievement_type)->toBe($achievementType)
+        ->and($certificate->wording_snapshot['schema_version'])->toBe(3)
+        ->and($certificate->wording_snapshot['template_key'])->toBe('female')
         ->and($certificate->wording_snapshot['student_gender'])->toBe(Center::STUDENT_GENDER_FEMALE)
         ->and($certificate->wording_snapshot['achievement_type'])->toBe($achievementType)
-        ->and($certificate->wording_snapshot['achievement_label'])
-        ->toBe(config("certificates.achievement_labels.{$achievementType}"));
+        ->and($certificate->wording_snapshot['rendered_sections']['achievement_line'])
+        ->toContain((string) config("certificates.achievement_labels.{$achievementType}"))
+        ->and($certificate->wording_snapshot['rendered_sections']['achievement_line'])
+        ->toContain((string) app(StudentCertificateService::class)->viewPayload($student, $certificate)['achievement_name']);
 
     $this->actingAs($user, 'web')
         ->get(route('admin.students.certificates.show', [$student, $certificate]))
@@ -738,6 +758,9 @@ test('an issued certificate can be redesigned with the current center design wit
     $immutableAttributes = Arr::except($certificate->getAttributes(), [
         'design_snapshot',
         'wording_snapshot',
+        'title',
+        'quote_first',
+        'quote_second',
         'project_name',
         'closing_text',
         'updated_at',
@@ -764,11 +787,6 @@ test('an issued certificate can be redesigned with the current center design wit
         $center,
         Certificate::ACHIEVEMENT_PART,
     );
-    $expectedWording = app(CertificateWordingService::class)->resolve(
-        Center::STUDENT_GENDER_FEMALE,
-        Certificate::ACHIEVEMENT_PART,
-    );
-
     expect($issuedSnapshot)->not->toBe($expectedSnapshot);
 
     $this->actingAs($user, 'web')
@@ -793,17 +811,35 @@ test('an issued certificate can be redesigned with the current center design wit
     $firstRedesignWording = $certificate->wording_snapshot;
 
     expect($firstRedesignSnapshot)->toBe($expectedSnapshot)
-        ->and($firstRedesignWording)->toBe($expectedWording)
-        ->and($certificate->project_name)->toBe($expectedWording['project_name'])
-        ->and($certificate->closing_text)->toBe($expectedWording['closing_text'])
+        ->and($firstRedesignWording['schema_version'])->toBe(3)
+        ->and($firstRedesignWording['template_key'])->toBe('female')
+        ->and($firstRedesignWording['assignment_source'])->toBe('gender_all')
+        ->and($firstRedesignWording['student_gender'])->toBe(Center::STUDENT_GENDER_FEMALE)
+        ->and($firstRedesignWording['achievement_type'])->toBe(Certificate::ACHIEVEMENT_PART)
+        ->and($certificate->project_name)->toBe('')
+        ->and($certificate->title)->toBe($firstRedesignWording['rendered_sections']['title'])
+        ->and($certificate->quote_first)->toBe($firstRedesignWording['rendered_sections']['quote_first'])
+        ->and($certificate->quote_second)->toBe($firstRedesignWording['rendered_sections']['quote_second'])
+        ->and($certificate->closing_text)->toBe($firstRedesignWording['rendered_sections']['closing'])
         ->and(Arr::except($certificate->getAttributes(), [
             'design_snapshot',
             'wording_snapshot',
+            'title',
+            'quote_first',
+            'quote_second',
             'project_name',
             'closing_text',
             'updated_at',
         ]))
-        ->toBe($immutableAttributes);
+        ->toBe($immutableAttributes)
+        ->and(Activity::query()
+            ->where('log_name', 'certificates')
+            ->where('subject_type', Certificate::class)
+            ->where('subject_id', $certificate->id)
+            ->where('event', 'redesigned')
+            ->where('causer_id', $user->id)
+            ->where('properties->action', 'redesign')
+            ->exists())->toBeTrue();
 
     $this->actingAs($user, 'web')
         ->putJson(route('admin.students.certificates.redesign', [$student, $certificate]))
@@ -814,6 +850,9 @@ test('an issued certificate can be redesigned with the current center design wit
         ->and(Arr::except($certificate->getAttributes(), [
             'design_snapshot',
             'wording_snapshot',
+            'title',
+            'quote_first',
+            'quote_second',
             'project_name',
             'closing_text',
             'updated_at',

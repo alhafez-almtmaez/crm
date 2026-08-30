@@ -400,12 +400,12 @@
     "issueSuccess": "Certificate issued successfully.",
     "issueFailed": "Could not issue the certificate.",
     "redesign": "Redesign Certificate",
-    "redesignNow": "Apply Current Design",
-    "redesignSuccess": "The current design was successfully applied to the certificate.",
+    "redesignNow": "Apply Current Design and Content",
+    "redesignSuccess": "The current design and content template were successfully applied to the certificate.",
     "redesignFailed": "Could not redesign the certificate.",
     "redesignConfirmTitle": "Confirm Certificate Redesign",
-    "redesignConfirmMessage": "The currently saved design for this center's student type and achievement type will be applied to this certificate.",
-    "redesignPreservesContent": "The certificate number, student, achievement, and dates stay unchanged; the design, gender-specific wording, and center identity visibility are refreshed from the current center settings.",
+    "redesignConfirmMessage": "The currently effective design and content template for this center and achievement type will be applied to the certificate.",
+    "redesignPreservesContent": "The certificate number, student, achievement, and dates stay unchanged; the design, content template, and center identity visibility are refreshed from the current settings.",
     "revoke": "Revoke Certificate",
     "revokeNow": "Revoke Now",
     "revokeSuccess": "The certificate was revoked and its record was retained.",
@@ -472,6 +472,148 @@
     "a4Landscape": "A4 landscape",
     "unsavedChanges": "Some changes are not saved. Select the center marked with an amber dot, then save its design.",
     "allSaved": "All center designs are saved.",
+    "workspace": {
+      "label": "Certificate settings sections",
+      "design": "Appearance and Design",
+      "content": "Certificate Content"
+    },
+    "content": {
+      "title": "Certificate Content Templates",
+      "description": "Edit certificate wording and assign the right template by center or achievement type.",
+      "pageDescription": "Build polished certificate content templates, insert safe variables, and choose the right wording for each center and certificate type.",
+      "contextTitle": "Content and Preview Context",
+      "contextHint": "Choose the center, certificate type, and achievement to inspect and edit the effective template in the correct context.",
+      "readOnly": "You can preview certificate content and its effective templates, but changing assignments requires certificate settings update permission.",
+      "previewHint": "The preview updates as you edit template sections or change the center, certificate type, and achievement.",
+      "effectiveTemplate": "Currently effective template",
+      "legacyTemplate": "Legacy default wording",
+      "systemTemplate": "System template",
+      "protectedTemplate": "Protected from deletion",
+      "systemCannotDelete": "System templates are protected and cannot be deleted.",
+      "applyCurrentContext": "Apply to Current Center and Type",
+      "templateLibrary": "Template Library",
+      "templateLibraryHint": "Select a template to preview or edit it, or duplicate it before making a custom version.",
+      "searchTemplates": "Search template name",
+      "noTemplates": "No content templates have been created yet.",
+      "noMatchingTemplates": "No template matches your search.",
+      "newTemplate": "New Template",
+      "createTemplate": "Create Template",
+      "editTemplate": "Edit Template",
+      "duplicateTemplate": "Duplicate",
+      "copyName": "Copy of {name}",
+      "saveTemplate": "Save Template",
+      "deleteTemplate": "Delete Template",
+      "templateCreated": "The certificate content template was created.",
+      "templateUpdated": "The certificate content template was updated.",
+      "templateDeleted": "The certificate content template was deleted.",
+      "deleteFailed": "The certificate content template could not be deleted.",
+      "confirmDeleteTemplate": "Delete “{name}”? This action cannot be undone.",
+      "confirmDiscard": "You have unsaved changes. Discard them and continue?",
+      "discardChanges": "Discard Changes",
+      "editorHint": "Each section is rendered in its dedicated position in the certificate preview and PDF.",
+      "templateReadOnly": "You can view and use this template, but editing template definitions requires content template management permission.",
+      "templateName": "Template Name",
+      "templateNamePlaceholder": "Example: Special Quran Center Template",
+      "templateActive": "Template Active",
+      "templateActiveHint": "Available to assign",
+      "assignmentsCount": "{count} assignments",
+      "availableVariables": "Available Variables",
+      "variablesHint": "Place the cursor in a section, then select a variable to insert it at the cursor position.",
+      "safeRenderingHint": "Content is rendered safely without executing HTML or embedded code.",
+      "assignmentTitle": "Template Usage Scope",
+      "assignmentHint": "Choose where this template is used. A center-and-type assignment has priority over broader defaults.",
+      "assignmentTemplate": "Template to Apply",
+      "assignmentScope": "Application Scope",
+      "assignmentAchievementType": "Certificate Type",
+      "assignmentCenter": "Center",
+      "assignmentGender": "Student Type",
+      "allAchievementTypes": "All Certificate Types",
+      "saveAssignment": "Save Assignment",
+      "updateAssignment": "Update Assignment",
+      "removeAssignment": "Remove Assignment",
+      "confirmRemoveAssignment": "Remove this assignment? The next matching template in the priority chain will be used automatically.",
+      "existingAssignment": "This scope is currently assigned to “{name}”.",
+      "assignmentSaved": "The certificate template assignment was saved.",
+      "assignmentRemoved": "The certificate template assignment was removed.",
+      "assignmentFailed": "The certificate template assignment could not be saved.",
+      "assignmentRemoveFailed": "The certificate template assignment could not be removed.",
+      "noActiveTemplates": "There is no active template to assign. Activate or create a template first.",
+      "requestFailed": "Changes could not be saved. Review the fields and try again.",
+      "scopes": {
+        "global": "All Centers",
+        "gender": "By Student Type",
+        "center": "Specific Center"
+      },
+      "sources": {
+        "center_type": "Center and Certificate Type",
+        "center_all": "Center, All Types",
+        "gender_type": "Student and Certificate Type",
+        "gender_all": "Student Type Default",
+        "global_type": "Global Certificate Type",
+        "global_all": "Global Default",
+        "legacy": "Legacy Default Wording"
+      },
+      "variables": {
+        "studentName": "Student Name",
+        "centerName": "Certificate Center Name",
+        "achievementLabel": "Achievement Type",
+        "achievementName": "Achievement Name",
+        "planName": "Plan Name",
+        "planPointName": "Plan Checkpoint Name",
+        "hijriDate": "Hijri Date",
+        "gregorianDate": "Gregorian Date",
+        "certificateNumber": "Certificate Number"
+      },
+      "variableDescriptions": {
+        "studentName": "The student's full name as captured when the certificate is issued.",
+        "centerName": "The center name approved for certificate display.",
+        "achievementLabel": "Surah, Juz, or Three Juz according to the certificate type.",
+        "achievementName": "The Surah or Juz name stored on the plan checkpoint.",
+        "planName": "The student's plan name at issuance.",
+        "planPointName": "The achievement checkpoint name in the plan.",
+        "hijriDate": "The achievement date in the Hijri calendar.",
+        "gregorianDate": "The achievement date in the Gregorian calendar.",
+        "certificateNumber": "The issued certificate's unique number."
+      },
+      "sections": {
+        "title": {
+          "label": "Certificate Title",
+          "hint": "The main heading shown at the top of the certificate."
+        },
+        "quote_first": {
+          "label": "First Half of the Quote",
+          "hint": "Shown on the first side of the center ornament."
+        },
+        "quote_second": {
+          "label": "Second Half of the Quote",
+          "hint": "Shown opposite the first half around the ornament."
+        },
+        "intro": {
+          "label": "Congratulations Introduction",
+          "hint": "Insert the center variable so its certificate name is resolved automatically."
+        },
+        "student_line": {
+          "label": "Student Name Line",
+          "hint": "Insert the student name variable and optionally surround it with ornaments such as ﴿ ﴾."
+        },
+        "achievement_line": {
+          "label": "Achievement Line",
+          "hint": "Use the achievement type and name variables so one template works across certificate types."
+        },
+        "closing": {
+          "label": "Closing Prayer",
+          "hint": "The closing text shown before signatures and dates."
+        }
+      },
+      "validation": {
+        "nameRequired": "Enter a clear template name.",
+        "sectionRequired": "This section is required and cannot be empty.",
+        "requiredVariable": "This section must include the {variable} variable.",
+        "plainTextOnly": "Use plain text and template variables only; HTML tags and Blade directives are not allowed.",
+        "unknownVariables": "Unknown variable found: {variables}",
+        "recommendedVariables": "The following variables are required in their sections: {variables}"
+      }
+    },
     "genders": {
       "male": "Male",
       "female": "Female"

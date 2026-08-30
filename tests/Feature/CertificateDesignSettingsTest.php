@@ -315,7 +315,7 @@ test('certificate design preview uses the real certificate and its actual assets
         });
 
     expect(preg_match(
-        '/<p class="certificate__intro">(.*?)<\/p>/su',
+        '/<p class="certificate__intro"[^>]*>(.*?)<\/p>/su',
         $response->getContent(),
         $introMatches,
     ))->toBe(1);
