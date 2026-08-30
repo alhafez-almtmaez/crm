@@ -6,21 +6,12 @@ import AdminBreadcrumbs from '../../../components/admin/AdminBreadcrumbs.vue';
 import AdminLayout from '../../../components/admin/AdminLayout.vue';
 import CenterFormCard from '../../../components/admin/CenterFormCard.vue';
 
-defineProps({
-    whatsappGroups: {
-        type: Array,
-        default: () => [],
-    },
-});
-
 const form = useForm({
     name: '',
     student_gender: 'male',
     certificate_name: '',
     show_center_manager_signature: true,
     phone: '',
-    group_serialized: '',
-    working_days: [],
 });
 const { t } = useI18n();
 
@@ -42,7 +33,6 @@ const goBack = () => {
 
             <CenterFormCard
                 :form="form"
-                :whatsapp-groups="whatsappGroups"
                 :submit-label="t('centers.createCenter')"
                 :title="t('centers.newCenter')"
                 :description="t('centers.createDescription')"

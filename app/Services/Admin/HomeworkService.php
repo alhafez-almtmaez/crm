@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\Center;
+use App\Models\Group;
 use App\Models\Homework;
 use App\Models\HomeworkStudent;
 use App\Models\HomeworkStudentPoint;
@@ -34,13 +35,16 @@ class HomeworkService
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $centerId = (int) ($filters['center_id'] ?? 0);
+        $groupId = (int) ($filters['group_id'] ?? 0);
         $sortMap = [
             'id' => 'homeworks.id',
             'date' => 'homeworks.date',
             'center_name' => 'centers.name',
+            'group_name' => 'groups.name',
             'admin_name' => 'admins.name',
             'created_at' => 'homeworks.created_at',
         ];
@@ -49,7 +53,8 @@ class HomeworkService
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
 
         $rows = Homework::query()
-            ->leftJoin('centers', 'homeworks.center_id', '=', 'centers.id')
+            ->leftJoin('groups', 'homeworks.group_id', '=', 'groups.id')
+            ->leftJoin('centers', 'groups.center_id', '=', 'centers.id')
             ->leftJoin('users as admins', 'homeworks.admin_id', '=', 'admins.id')
             ->leftJoin('homework_students', 'homeworks.id', '=', 'homework_students.homework_id')
             ->leftJoin('students as homework_scope_students', 'homework_students.student_id', '=', 'homework_scope_students.id')
@@ -58,13 +63,17 @@ class HomeworkService
                 'homeworks.id',
                 'homeworks.date',
                 'homeworks.center_id',
+                'homeworks.group_id',
                 'homeworks.admin_id',
                 'homeworks.created_at',
                 'centers.name as center_name',
+                'groups.name as group_name',
                 'admins.name as admin_name',
                 DB::raw('COUNT(DISTINCT homework_students.id) as students_count'),
                 DB::raw('COALESCE(SUM(CASE WHEN homework_student_points.is_done = true THEN 1 ELSE 0 END), 0) as completed_points_count'),
             ])
+            ->when($centerId > 0, fn ($query) => $query->where('groups.center_id', $centerId))
+            ->when($groupId > 0, fn ($query) => $query->where('homeworks.group_id', $groupId))
             ->when($this->dataScope->shouldScope(), fn ($query) => $this->dataScope->applyStudentAccess($query, 'homework_scope_students'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
@@ -72,6 +81,7 @@ class HomeworkService
                         ->where('homeworks.id', 'like', "%{$search}%")
                         ->orWhere('homeworks.date', 'like', "%{$search}%")
                         ->orWhere('centers.name', 'like', "%{$search}%")
+                        ->orWhere('groups.name', 'like', "%{$search}%")
                         ->orWhere('admins.name', 'like', "%{$search}%");
                 });
             })
@@ -79,9 +89,11 @@ class HomeworkService
                 'homeworks.id',
                 'homeworks.date',
                 'homeworks.center_id',
+                'homeworks.group_id',
                 'homeworks.admin_id',
                 'homeworks.created_at',
                 'centers.name',
+                'groups.name',
                 'admins.name',
             ])
             ->orderBy($sortColumn, $sortDir)
@@ -104,44 +116,71 @@ class HomeworkService
     }
 
     /**
-     * @return array<int, array{id: int, name: string, working_days: array<int, string>}>
+     * @return array<int, array{id: int, name: string, groups: array<int, array{id: int, name: string, center_id: int, working_days: array<int, string>}>}>
      */
     public function centerOptions(): array
     {
         return Center::query()
+            ->active()
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+            ->with(['groups' => function ($query): void {
+                $query
+                    ->tap(fn ($groupQuery) => $this->dataScope->applyGroupAccess($groupQuery, 'groups'))
+                    ->orderBy('name');
+            }])
             ->orderBy('name')
-            ->get(['id', 'name', 'working_days'])
+            ->get(['id', 'name'])
             ->map(static fn (Center $center): array => [
-                'id' => $center->id,
-                'name' => $center->name,
-                'working_days' => is_array($center->working_days) ? $center->working_days : [],
+                'id' => (int) $center->id,
+                'name' => (string) $center->name,
+                'groups' => $center->groups
+                    ->map(static fn (Group $group): array => [
+                        'id' => (int) $group->id,
+                        'name' => (string) $group->name,
+                        'center_id' => (int) $group->center_id,
+                        'working_days' => is_array($group->working_days) ? $group->working_days : [],
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->all();
     }
 
     /**
-     * @return array{selected_center_id: ?int, selected_date: string, students: array<int, array<string, mixed>>, existing_homework_id: ?int}
+     * @return array{selected_center_id: ?int, selected_group_id: ?int, selected_date: string, students: array<int, array<string, mixed>>, existing_homework_id: ?int}
      */
-    public function createFormPayload(?int $centerId, ?string $date): array
+    public function createFormPayload(?int $centerId, ?int $groupId, ?string $date): array
     {
         $resolvedDate = $this->resolveDate($date);
         $resolvedCenterId = $centerId !== null && $centerId > 0 ? $centerId : null;
-        $center = $resolvedCenterId !== null
-            ? Center::query()
-                ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
-                ->find($resolvedCenterId)
-            : null;
+        $resolvedGroupId = $groupId !== null && $groupId > 0 ? $groupId : null;
+        $group = null;
 
-        abort_if($resolvedCenterId !== null && $center === null, 404);
+        if ($resolvedGroupId !== null) {
+            $group = Group::query()
+                ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
+                ->with('center:id,name,working_days')
+                ->find($resolvedGroupId);
 
-        if ($center !== null) {
-            $resolvedDate = $this->resolveWorkingDate($center, $resolvedDate);
+            abort_unless($group instanceof Group, 404);
+            $resolvedCenterId = (int) $group->center_id;
+            $resolvedDate = $this->resolveWorkingDate($group, $resolvedDate);
         }
 
-        if ($resolvedCenterId === null) {
+        if ($resolvedGroupId === null && $resolvedCenterId !== null) {
+            $centerExists = Center::query()
+                ->active()
+                ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+                ->whereKey($resolvedCenterId)
+                ->exists();
+
+            abort_unless($centerExists, 404);
+        }
+
+        if ($resolvedGroupId === null) {
             return [
-                'selected_center_id' => null,
+                'selected_center_id' => $resolvedCenterId,
+                'selected_group_id' => null,
                 'selected_date' => $resolvedDate,
                 'students' => [],
                 'existing_homework_id' => null,
@@ -149,14 +188,15 @@ class HomeworkService
         }
 
         $existingHomeworkId = Homework::query()
-            ->where('center_id', $resolvedCenterId)
+            ->where('group_id', $resolvedGroupId)
             ->whereDate('date', $resolvedDate)
             ->value('id');
 
         return [
             'selected_center_id' => $resolvedCenterId,
+            'selected_group_id' => $resolvedGroupId,
             'selected_date' => $resolvedDate,
-            'students' => $existingHomeworkId === null ? $this->studentRowsForCreate($resolvedCenterId, $resolvedDate) : [],
+            'students' => $existingHomeworkId === null ? $this->studentRowsForCreate($resolvedGroupId, $resolvedDate) : [],
             'existing_homework_id' => $existingHomeworkId !== null ? (int) $existingHomeworkId : null,
         ];
     }
@@ -167,6 +207,7 @@ class HomeworkService
     public function editStudentRows(Homework $homework): array
     {
         $homework->load([
+            'group:id,name,center_id',
             'students.student.center',
             'students.student.groups',
             'students.student.plan',
@@ -175,11 +216,28 @@ class HomeworkService
             'students.points.planPoint',
         ]);
 
-        return $homework->students
+        $groupName = (string) ($homework->group?->name ?? '');
+        $historicalRows = $homework->students
             ->filter(fn (HomeworkStudent $row): bool => $row->student !== null && $this->dataScope->canAccessStudent($row->student))
-            ->sortBy(static fn (HomeworkStudent $row): string => (string) ($row->student?->full_name ?? ''))
+            ->keyBy('student_id');
+        $currentRows = collect($this->studentRowsForCreate(
+            (int) $homework->group_id,
+            $homework->date?->toDateString() ?? now()->toDateString(),
+        ))->keyBy('student_id');
+
+        return $currentRows
+            ->map(function (array $row, int $studentId) use ($groupName, $historicalRows): array {
+                $historical = $historicalRows->get($studentId);
+
+                return $historical instanceof HomeworkStudent
+                    ? $this->studentRowDataFromHomework($historical, $groupName)
+                    : $row;
+            })
+            ->merge($historicalRows
+                ->reject(fn (HomeworkStudent $row): bool => $currentRows->has((int) $row->student_id))
+                ->map(fn (HomeworkStudent $row): array => $this->studentRowDataFromHomework($row, $groupName)))
+            ->sortBy(static fn (array $row): string => (string) ($row['full_name'] ?? ''))
             ->values()
-            ->map(fn (HomeworkStudent $row): array => $this->studentRowDataFromHomework($row))
             ->all();
     }
 
@@ -191,6 +249,7 @@ class HomeworkService
         app()->setLocale('ar');
 
         $homework->loadMissing([
+            'group.center:id,name,working_days',
             'center:id,name,working_days',
             'admin:id,name',
         ]);
@@ -233,13 +292,9 @@ class HomeworkService
         $nextDate = $nextHomeworkDate?->copy()->locale(app()->getLocale());
         $generatedAt = now()->locale(app()->getLocale());
         $fileDate = $homework->date?->format('Y-m-d') ?? now()->toDateString();
-        $groupNames = $students
-            ->pluck('group_name')
-            ->filter(static fn ($name): bool => is_string($name) && trim($name) !== '')
-            ->unique()
-            ->values();
-        $title = $groupNames->count() === 1
-            ? __('homeworks.pdf_group_homework_title', ['group' => $groupNames->first()])
+        $groupName = $homework->group?->name;
+        $title = filled($groupName)
+            ? __('homeworks.pdf_group_homework_title', ['group' => $groupName])
             : __('homeworks.pdf_center_homework_title', ['center' => $homework->center?->name ?? __('homeworks.pdf_none')]);
 
         return [
@@ -255,6 +310,7 @@ class HomeworkService
                 'next_homework_date_numeric' => $nextDate?->format('Y / n / j') ?? '',
                 'next_homework_day_name' => $nextDate?->translatedFormat('l') ?? '',
                 'center_name' => $homework->center?->name,
+                'group_name' => $groupName,
                 'admin_name' => $homework->admin?->name,
                 'generated_at' => $generatedAt->translatedFormat('d/m/Y H:i'),
             ],
@@ -306,11 +362,11 @@ class HomeworkService
 
     private function nextHomeworkDate(Homework $homework): ?Carbon
     {
-        if ($homework->date === null || $homework->center === null) {
+        if ($homework->date === null || $homework->group === null) {
             return null;
         }
 
-        $workingDays = $this->workingDayLookup($homework->center);
+        $workingDays = $this->workingDayLookup($homework->group);
         if ($workingDays === []) {
             return null;
         }
@@ -364,35 +420,38 @@ class HomeworkService
      */
     public function create(array $data): Homework
     {
-        $centerId = (int) $data['center_id'];
+        $groupId = (int) $data['group_id'];
         $date = $this->resolveDate((string) $data['date']);
-        $center = Center::query()
-            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
-            ->find($centerId);
+        $group = Group::query()
+            ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
+            ->with('center:id,name,working_days')
+            ->find($groupId);
 
-        abort_if($center === null, 404);
+        abort_unless($group instanceof Group, 404);
+        $centerId = (int) $group->center_id;
 
-        if ($center !== null && ! $this->isWorkingDate($center, $date)) {
+        if (! $this->isWorkingDate($group, $date)) {
             throw ValidationException::withMessages([
-                'date' => __('homeworks.date_not_in_center_working_days'),
+                'date' => __('homeworks.date_not_in_group_working_days'),
             ]);
         }
 
         $exists = Homework::query()
-            ->where('center_id', $centerId)
+            ->where('group_id', $groupId)
             ->whereDate('date', $date)
             ->exists();
 
         if ($exists) {
             throw ValidationException::withMessages([
-                'date' => __('homeworks.already_exists_for_center_date'),
+                'date' => __('homeworks.already_exists_for_group_date'),
             ]);
         }
 
-        return DB::transaction(function () use ($centerId, $date, $data): Homework {
+        return DB::transaction(function () use ($centerId, $date, $data, $groupId): Homework {
             $homework = Homework::query()->create([
                 'date' => $date,
                 'center_id' => $centerId,
+                'group_id' => $groupId,
                 'admin_id' => Auth::id(),
             ]);
 
@@ -453,11 +512,14 @@ class HomeworkService
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function studentRowsForCreate(int $centerId, string $date): array
+    private function studentRowsForCreate(int $groupId, string $date): array
     {
         $students = Student::query()
-            ->with(['plan:id,name', 'groups:id,name'])
-            ->where('center_id', $centerId)
+            ->with([
+                'plan:id,name',
+                'groups' => fn ($query) => $query->whereKey($groupId)->select(['groups.id', 'groups.name']),
+            ])
+            ->whereHas('groups', fn ($query) => $query->whereKey($groupId))
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
             ->orderBy('full_name')
@@ -471,16 +533,16 @@ class HomeworkService
             ]);
 
         return $students
-            ->map(fn (Student $student): array => $this->studentRowDataForCreate($student, $date))
+            ->map(fn (Student $student): array => $this->studentRowDataForCreate($student, $date, $groupId))
             ->all();
     }
 
-    private function studentRowDataForCreate(Student $student, string $date): array
+    private function studentRowDataForCreate(Student $student, string $date, int $groupId): array
     {
         $planId = $student->plan_type_id !== null ? (int) $student->plan_type_id : null;
         $currentPlanPoint = $planId !== null ? $this->latestCompletedPlanPoint($student, $planId) : null;
         $previousNextHomeworkAssignments = $planId !== null
-            ? $this->previousNextHomeworkAssignments($student, $planId, $date)
+            ? $this->previousNextHomeworkAssignments($student, $planId, $date, $groupId)
             : [];
         $points = $planId !== null
             ? $this->nextPlanPoints($student, $planId, $currentPlanPoint)
@@ -509,7 +571,7 @@ class HomeworkService
         ];
     }
 
-    private function studentRowDataFromHomework(HomeworkStudent $row): array
+    private function studentRowDataFromHomework(HomeworkStudent $row, string $groupName): array
     {
         $student = $row->student;
 
@@ -518,7 +580,7 @@ class HomeworkService
             'full_name' => (string) ($student?->full_name ?? ''),
             'plan_id' => $row->plan_id !== null ? (int) $row->plan_id : null,
             'plan_name' => $row->plan?->name ?? $student?->plan?->name,
-            'group_name' => $student?->groups->pluck('name')->implode(', '),
+            'group_name' => $groupName,
             'is_active' => (int) ($student?->is_active ?? Student::STATUS_INACTIVE),
             'points_balance' => (int) ($student?->points_balance ?? $row->points_balance_after),
             'points_balance_before' => (int) $row->points_balance_before,
@@ -901,7 +963,7 @@ class HomeworkService
     /**
      * @return array<int, array{homework_id: int, date: string, date_formatted: string}>
      */
-    private function previousNextHomeworkAssignments(Student $student, int $planId, string $beforeDate): array
+    private function previousNextHomeworkAssignments(Student $student, int $planId, string $beforeDate, int $groupId): array
     {
         return HomeworkStudentPoint::query()
             ->join('homeworks', 'homework_student_points.homework_id', '=', 'homeworks.id')
@@ -909,6 +971,7 @@ class HomeworkService
             ->where('homework_student_points.student_id', $student->id)
             ->where('homework_student_points.is_next_homework', true)
             ->where('plan_points.plan_id', $planId)
+            ->where('homeworks.group_id', $groupId)
             ->whereDate('homeworks.date', '<', $beforeDate)
             ->whereNotExists(function ($query): void {
                 $query
@@ -968,13 +1031,13 @@ class HomeworkService
         return Carbon::parse($date)->toDateString();
     }
 
-    private function resolveWorkingDate(Center $center, string $date): string
+    private function resolveWorkingDate(Group $group, string $date): string
     {
-        if ($this->isWorkingDate($center, $date)) {
+        if ($this->isWorkingDate($group, $date)) {
             return $date;
         }
 
-        $workingDays = $this->workingDayLookup($center);
+        $workingDays = $this->workingDayLookup($group);
         if ($workingDays === []) {
             return $date;
         }
@@ -991,9 +1054,9 @@ class HomeworkService
         return $date;
     }
 
-    private function isWorkingDate(Center $center, string $date): bool
+    private function isWorkingDate(Group $group, string $date): bool
     {
-        $workingDays = $this->workingDayLookup($center);
+        $workingDays = $this->workingDayLookup($group);
         if ($workingDays === []) {
             return true;
         }
@@ -1004,9 +1067,13 @@ class HomeworkService
     /**
      * @return array<string, true>
      */
-    private function workingDayLookup(Center $center): array
+    private function workingDayLookup(Group $group): array
     {
-        $workingDays = is_array($center->working_days) ? $center->working_days : [];
+        $workingDays = is_array($group->working_days) ? $group->working_days : [];
+        if ($workingDays === []) {
+            $group->loadMissing('center:id,working_days');
+            $workingDays = is_array($group->center?->working_days) ? $group->center->working_days : [];
+        }
 
         return array_fill_keys(array_map(
             static fn (string $day): string => strtolower($day),

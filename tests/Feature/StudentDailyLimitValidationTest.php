@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
 
@@ -30,7 +31,7 @@ function studentDailyLimitPayload(array $overrides = []): array
         'group_id' => $group->id,
         'plan_type_id' => $plan->id,
         'max_daily_weight' => 2,
-        'admin_id' => null,
+        'admin_id' => auth()->id(),
         'is_active' => Student::STATUS_ACTIVE,
         ...$overrides,
     ];
@@ -39,8 +40,10 @@ function studentDailyLimitPayload(array $overrides = []): array
 function studentDailyLimitUserWithCreatePermission(): User
 {
     Permission::findOrCreate('students.create', 'web');
+    Role::findOrCreate('admin', 'web');
 
     $user = User::factory()->create();
+    $user->assignRole('admin');
     $user->givePermissionTo('students.create');
 
     return $user;

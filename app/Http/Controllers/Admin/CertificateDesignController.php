@@ -323,7 +323,7 @@ class CertificateDesignController extends Controller implements HasMiddleware
     {
         $centers = [];
 
-        $this->dataScope->applyCenterAccess(Center::query())
+        $this->dataScope->applyCenterAccess(Center::query()->active())
             ->orderBy('name')
             ->orderBy('id')
             ->get([

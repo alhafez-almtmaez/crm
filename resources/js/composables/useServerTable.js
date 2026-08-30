@@ -7,7 +7,7 @@ export const useServerTable = ({
     endpoint,
     defaultSortBy = 'id',
     defaultSortDir = 'desc',
-    initialPerPage = 10,
+    initialPerPage = 50,
     debounceMs = 300,
     extraParams = () => ({}),
 } = {}) => {

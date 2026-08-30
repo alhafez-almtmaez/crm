@@ -64,13 +64,40 @@ class EvaluationUpdateRequest extends FormRequest
     public function rules(): array
     {
         $evaluation = $this->route('evaluation');
-        $centerId = $evaluation instanceof Evaluation ? (int) $evaluation->center_id : null;
+        $evaluationId = $evaluation instanceof Evaluation ? (int) $evaluation->id : 0;
+        $groupId = $evaluation instanceof Evaluation ? (int) $evaluation->group_id : 0;
         $dataScope = app(AdminDataScopeService::class);
         $studentRule = Rule::exists('students', 'id')
-            ->where(function ($query) use ($centerId, $dataScope): void {
-                if ($centerId !== null) {
-                    $query->where('center_id', $centerId);
-                }
+            ->where(function ($query) use ($dataScope, $evaluationId, $groupId): void {
+                $query->where(function ($allowed) use ($evaluationId, $groupId): void {
+                    $historicalRows = function ($historical) use ($evaluationId): void {
+                        $historical
+                            ->selectRaw('1')
+                            ->from('evaluations_users')
+                            ->where('evaluations_users.evaluation_id', $evaluationId)
+                            ->where(function ($studentReference): void {
+                                $studentReference
+                                    ->whereColumn('evaluations_users.student_id', 'students.id')
+                                    ->orWhereColumn('evaluations_users.user_id', 'students.id');
+                            });
+                    };
+
+                    if ($groupId > 0) {
+                        $allowed->whereExists(function ($membership) use ($groupId): void {
+                            $membership
+                                ->selectRaw('1')
+                                ->from('group_student')
+                                ->whereColumn('group_student.student_id', 'students.id')
+                                ->where('group_student.group_id', $groupId);
+                        });
+
+                        $allowed->orWhereExists($historicalRows);
+
+                        return;
+                    }
+
+                    $allowed->whereExists($historicalRows);
+                });
 
                 $dataScope->applyStudentAccess($query, 'students');
             });
@@ -78,7 +105,7 @@ class EvaluationUpdateRequest extends FormRequest
         return [
             'evaluation_type' => ['required', 'integer', Rule::in([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID])],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.student_id' => ['required', $studentRule],
+            'items.*.student_id' => ['required', 'distinct', $studentRule],
             'items.*.attendances' => ['required', Rule::in([
                 EvaluationStudent::ATTENDANCE_PRESENT,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,

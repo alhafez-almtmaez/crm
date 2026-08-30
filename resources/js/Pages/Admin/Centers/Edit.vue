@@ -11,10 +11,6 @@ const props = defineProps({
         type: Object,
         required: true,
     },
-    whatsappGroups: {
-        type: Array,
-        default: () => [],
-    },
 });
 
 const form = useForm({
@@ -23,8 +19,6 @@ const form = useForm({
     certificate_name: props.center.certificate_name ?? '',
     show_center_manager_signature: Boolean(props.center.show_center_manager_signature ?? true),
     phone: props.center.phone,
-    group_serialized: props.center.group_serialized ?? '',
-    working_days: props.center.working_days ?? [],
 });
 const { t } = useI18n();
 
@@ -46,7 +40,6 @@ const goBack = () => {
 
             <CenterFormCard
                 :form="form"
-                :whatsapp-groups="whatsappGroups"
                 :submit-label="t('common.saveChanges')"
                 :title="t('centers.editCenter')"
                 :description="t('centers.editDescription')"

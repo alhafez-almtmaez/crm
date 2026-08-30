@@ -12,7 +12,9 @@ use App\Services\System\DateTimeFormatterService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class GroupService
 {
@@ -29,18 +31,27 @@ class GroupService
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
-        $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $sortDir = (string) ($filters['sort_dir'] ?? 'asc');
         $allowedSorts = ['id', 'name', 'center_name', 'created_at'];
 
         $sortBy = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'id';
-        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'asc';
         $sortColumn = $sortBy === 'center_name' ? 'centers.name' : "groups.{$sortBy}";
 
         $query = Group::query()
             ->leftJoin('centers', 'groups.center_id', '=', 'centers.id')
-            ->select(['groups.id', 'groups.ulid', 'groups.name', 'groups.center_id', 'groups.created_at', 'centers.name as center_name'])
+            ->select([
+                'groups.id',
+                'groups.ulid',
+                'groups.name',
+                'groups.center_id',
+                'groups.group_serialized',
+                'groups.working_days',
+                'groups.created_at',
+                'centers.name as center_name',
+            ])
             ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
@@ -80,6 +91,8 @@ class GroupService
             'ulid' => (string) Str::ulid(),
             'name' => $data['name'],
             'center_id' => (int) $data['center_id'],
+            'group_serialized' => $data['group_serialized'] ?? null,
+            'working_days' => $data['working_days'],
         ]);
     }
 
@@ -88,9 +101,18 @@ class GroupService
      */
     public function update(Group $group, array $data): Group
     {
+        $nextCenterId = (int) $data['center_id'];
+        if ((int) $group->center_id !== $nextCenterId && $this->hasHistoricalOrStudentData($group)) {
+            throw ValidationException::withMessages([
+                'center_id' => __('groups.cannot_move_with_data'),
+            ]);
+        }
+
         $group->update([
             'name' => $data['name'],
-            'center_id' => (int) $data['center_id'],
+            'center_id' => $nextCenterId,
+            'group_serialized' => $data['group_serialized'] ?? null,
+            'working_days' => $data['working_days'],
         ]);
 
         return $group->refresh();
@@ -98,7 +120,22 @@ class GroupService
 
     public function delete(Group $group): void
     {
+        if ($this->hasHistoricalOrStudentData($group)) {
+            throw ValidationException::withMessages([
+                'group' => __('groups.cannot_delete_with_data'),
+            ]);
+        }
+
         $group->delete();
+    }
+
+    private function hasHistoricalOrStudentData(Group $group): bool
+    {
+        return $group->students()->exists()
+            || $group->evaluations()->exists()
+            || $group->homeworks()->exists()
+            || DB::table('monthly_plans')->where('group_id', $group->id)->exists()
+            || DB::table('student_monthly_plans')->where('group_id', $group->id)->exists();
     }
 
     /**
@@ -115,7 +152,11 @@ class GroupService
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'plan_type_id', 'current_plan_point_id', 'points_balance'])
             ->values()
-            ->map(fn (Student $student, int $index): array => $this->homeworkReportStudentRow($student, $index))
+            ->map(fn (Student $student, int $index): array => $this->homeworkReportStudentRow(
+                $student,
+                $index,
+                (int) $group->id,
+            ))
             ->all();
 
         return [
@@ -186,11 +227,12 @@ class GroupService
     }
 
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, working_days: array<int, string>}>
      */
     public function centerOptions(): array
     {
         return Center::query()
+            ->active()
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name'])
@@ -201,11 +243,13 @@ class GroupService
             ->all();
     }
 
-    private function homeworkReportStudentRow(Student $student, int $index): array
+    private function homeworkReportStudentRow(Student $student, int $index, int $groupId): array
     {
         $planId = $student->plan_type_id !== null ? (int) $student->plan_type_id : null;
         $currentPlanPoint = $planId !== null ? $this->latestCompletedPlanPoint($student, $planId) : null;
-        $tasks = $planId !== null ? $this->latestAssignedNextHomeworkPoints($student, $planId) : collect();
+        $tasks = $planId !== null
+            ? $this->latestAssignedNextHomeworkPoints($student, $planId, $groupId)
+            : collect();
 
         return [
             'number' => $index + 1,
@@ -280,13 +324,14 @@ class GroupService
     /**
      * @return EloquentCollection<int, PlanPoint>
      */
-    private function latestAssignedNextHomeworkPoints(Student $student, int $planId): EloquentCollection
+    private function latestAssignedNextHomeworkPoints(Student $student, int $planId, int $groupId): EloquentCollection
     {
         $latestHomeworkId = HomeworkStudentPoint::query()
             ->join('plan_points', 'homework_student_points.plan_point_id', '=', 'plan_points.id')
             ->join('homeworks', 'homework_student_points.homework_id', '=', 'homeworks.id')
             ->where('homework_student_points.student_id', $student->id)
             ->where('homework_student_points.is_next_homework', true)
+            ->where('homeworks.group_id', $groupId)
             ->where('plan_points.plan_id', $planId)
             ->orderByDesc('homeworks.date')
             ->orderByDesc('homeworks.id')
@@ -373,10 +418,11 @@ class GroupService
             ->where('center_id', $center->id)
             ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'working_days'])
             ->map(static fn (Group $group): array => [
                 'id' => $group->id,
                 'name' => $group->name,
+                'working_days' => is_array($group->working_days) ? $group->working_days : [],
             ])
             ->all();
     }

@@ -2,26 +2,24 @@
 
 namespace App\Services\Admin;
 
+use App\Models\Role;
 use App\Models\User;
 use App\Services\System\DateTimeFormatterService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
-use App\Models\Role;
 
 class UserService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
         $allowedSorts = ['id', 'name', 'email', 'created_at'];
@@ -55,7 +53,7 @@ class UserService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): User
     {
@@ -75,7 +73,7 @@ class UserService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(User $user, array $data): User
     {

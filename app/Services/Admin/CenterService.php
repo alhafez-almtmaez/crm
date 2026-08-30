@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Models\Center;
 use App\Services\System\DateTimeFormatterService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 class CenterService
 {
@@ -19,23 +20,22 @@ class CenterService
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
-        $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $sortDir = (string) ($filters['sort_dir'] ?? 'asc');
         $allowedSorts = ['id', 'name', 'student_gender', 'phone', 'created_at'];
 
         $sortBy = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'id';
-        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'asc';
 
         $query = Center::query()
+            ->active()
             ->select([
                 'id',
                 'name',
                 'certificate_name',
                 'student_gender',
                 'phone',
-                'group_serialized',
-                'working_days',
                 'show_center_manager_signature',
                 'created_at',
             ])
@@ -45,8 +45,7 @@ class CenterService
                     $builder
                         ->where('name', 'like', "%{$search}%")
                         ->orWhere('student_gender', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%")
-                        ->orWhere('group_serialized', 'like', "%{$search}%");
+                        ->orWhere('phone', 'like', "%{$search}%");
                 });
             })
             ->orderBy($sortBy, $sortDir);
@@ -54,9 +53,6 @@ class CenterService
         $centers = $query->paginate($perPage)->withQueryString();
         $centers->setCollection(
             $centers->getCollection()->map(function (Center $center): Center {
-                $days = is_array($center->working_days) ? $center->working_days : [];
-                $dayLabels = array_map(static fn (string $day): string => __('days.'.$day), $days);
-                $center->setAttribute('working_days_display', implode(', ', $dayLabels));
                 $center->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($center->created_at));
 
                 return $center;
@@ -76,8 +72,10 @@ class CenterService
             'certificate_name' => $data['certificate_name'] ?? null,
             'student_gender' => $data['student_gender'],
             'phone' => $data['phone'],
-            'group_serialized' => $data['group_serialized'] ?? null,
-            'working_days' => $data['working_days'],
+            // These legacy columns remain only as a compatibility fallback.
+            // Group messaging and schedules are configured on each group.
+            'group_serialized' => null,
+            'working_days' => [],
             'show_center_manager_signature' => (bool) ($data['show_center_manager_signature'] ?? true),
         ]);
     }
@@ -92,8 +90,6 @@ class CenterService
             'certificate_name' => $data['certificate_name'] ?? null,
             'student_gender' => $data['student_gender'],
             'phone' => $data['phone'],
-            'group_serialized' => $data['group_serialized'] ?? null,
-            'working_days' => $data['working_days'],
             'show_center_manager_signature' => (bool) ($data['show_center_manager_signature'] ?? true),
         ]);
 
@@ -102,6 +98,12 @@ class CenterService
 
     public function delete(Center $center): void
     {
+        if ($center->groups()->exists()) {
+            throw ValidationException::withMessages([
+                'center' => __('centers.cannot_delete_with_groups'),
+            ]);
+        }
+
         $center->delete();
     }
 }

@@ -56,6 +56,26 @@ const dayOptions = [
     { value: 'saturday', dayIndex: 6, labelKey: 'days.saturday' },
 ];
 const dayIndexByName = Object.fromEntries(dayOptions.map((day) => [day.value, day.dayIndex]));
+const normalizeId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const id = Number(value);
+
+    return Number.isNaN(id) ? null : id;
+};
+
+const groupOptions = computed(() => {
+    const centerId = normalizeId(props.form.center_id);
+    if (centerId === null) {
+        return [];
+    }
+
+    const center = props.centers.find((item) => normalizeId(item?.id) === centerId);
+
+    return Array.isArray(center?.groups) ? center.groups : [];
+});
 
 const dateValue = computed({
     get: () => {
@@ -73,6 +93,9 @@ const dateValue = computed({
     },
     set: (value) => {
         if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            if (!props.lockCenterAndDate && props.form.date !== '') {
+                props.form.items = [];
+            }
             props.form.date = '';
             return;
         }
@@ -80,24 +103,35 @@ const dateValue = computed({
         const year = value.getFullYear();
         const month = String(value.getMonth() + 1).padStart(2, '0');
         const day = String(value.getDate()).padStart(2, '0');
-        props.form.date = `${year}-${month}-${day}`;
+        const nextDate = `${year}-${month}-${day}`;
+        if (!props.lockCenterAndDate && props.form.date !== nextDate) {
+            props.form.items = [];
+        }
+        props.form.date = nextDate;
     },
 });
 
-const selectedCenter = computed(() => props.centers.find((center) => Number(center.id) === Number(props.form.center_id)) ?? null);
+const selectedGroup = computed(() => {
+    const groupId = normalizeId(props.form.group_id);
+    if (groupId === null) {
+        return null;
+    }
 
-const selectedCenterWorkingDays = computed(() => {
-    const workingDays = selectedCenter.value?.working_days;
+    return groupOptions.value.find((group) => normalizeId(group?.id) === groupId) ?? null;
+});
+
+const selectedGroupWorkingDays = computed(() => {
+    const workingDays = selectedGroup.value?.working_days;
 
     return Array.isArray(workingDays) ? workingDays : [];
 });
 
-const workingDayIndexes = computed(() => selectedCenterWorkingDays.value
+const workingDayIndexes = computed(() => selectedGroupWorkingDays.value
     .map((day) => dayIndexByName[String(day).toLowerCase()])
     .filter((dayIndex) => Number.isInteger(dayIndex)));
 
 const disabledWeekDays = computed(() => {
-    if (!selectedCenter.value || workingDayIndexes.value.length === 0) {
+    if (!selectedGroup.value || workingDayIndexes.value.length === 0) {
         return [];
     }
 
@@ -107,11 +141,11 @@ const disabledWeekDays = computed(() => {
 });
 
 const workingDaysLabel = computed(() => {
-    if (!selectedCenter.value || selectedCenterWorkingDays.value.length === 0) {
+    if (!selectedGroup.value || selectedGroupWorkingDays.value.length === 0) {
         return '';
     }
 
-    return selectedCenterWorkingDays.value
+    return selectedGroupWorkingDays.value
         .map((day) => dayOptions.find((option) => option.value === String(day).toLowerCase())?.labelKey)
         .filter(Boolean)
         .map((labelKey) => t(labelKey))
@@ -143,9 +177,28 @@ const nextAllowedDate = (value) => {
 };
 
 watch(
-    () => [props.form.center_id, props.form.date, disabledWeekDays.value.join(',')],
+    () => props.form.center_id,
+    (centerId, previousCenterId) => {
+        if (props.lockCenterAndDate || normalizeId(centerId) === normalizeId(previousCenterId)) {
+            return;
+        }
+
+        props.form.group_id = null;
+        props.form.items = [];
+    },
+    { flush: 'sync' },
+);
+
+const onGroupChange = () => {
+    if (!props.lockCenterAndDate) {
+        props.form.items = [];
+    }
+};
+
+watch(
+    () => [props.form.group_id, props.form.date, disabledWeekDays.value.join(',')],
     () => {
-        if (props.lockCenterAndDate || !props.form.center_id || disabledWeekDays.value.length === 0) {
+        if (props.lockCenterAndDate || !props.form.group_id || disabledWeekDays.value.length === 0) {
             return;
         }
 
@@ -316,7 +369,7 @@ const pointCardClass = (point) => {
         <p v-if="description" class="mt-3 text-lg text-(--muted-foreground)">{{ description }}</p>
 
         <form class="mt-6 grid gap-4" @submit.prevent="emit('submit')">
-            <div class="grid gap-4 md:grid-cols-2">
+            <div class="grid gap-4 md:grid-cols-3">
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
                         <Select
@@ -336,6 +389,24 @@ const pointCardClass = (point) => {
 
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
+                        <Select
+                            input-id="homework-group"
+                            v-model="form.group_id"
+                            :options="groupOptions"
+                            option-label="name"
+                            option-value="id"
+                            filter
+                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            :disabled="lockCenterAndDate || !form.center_id"
+                            @change="onGroupChange"
+                        />
+                        <FormFieldLabel for-id="homework-group" :text="t('homeworks.group')" />
+                    </FloatLabel>
+                    <small v-if="form.errors.group_id" class="text-sm text-red-600">{{ form.errors.group_id }}</small>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <FloatLabel variant="on">
                         <DatePicker
                             input-id="homework-date"
                             v-model="dateValue"
@@ -351,7 +422,7 @@ const pointCardClass = (point) => {
                     </FloatLabel>
                     <small v-if="form.errors.date" class="text-sm text-red-600">{{ form.errors.date }}</small>
                     <small v-else-if="workingDaysLabel" class="text-xs text-(--muted-foreground)">
-                        {{ t('homeworks.centerWorkingDaysHint', { days: workingDaysLabel }) }}
+                        {{ t('homeworks.groupWorkingDaysHint', { days: workingDaysLabel }) }}
                     </small>
                 </div>
             </div>
@@ -362,7 +433,7 @@ const pointCardClass = (point) => {
                     icon="pi pi-refresh"
                     :label="t('homeworks.loadStudents')"
                     severity="secondary"
-                    :disabled="!form.center_id || !form.date"
+                    :disabled="!form.center_id || !form.group_id || !form.date"
                     @click="emit('reload')"
                 />
             </div>
@@ -552,7 +623,12 @@ const pointCardClass = (point) => {
 
             <div class="mt-2 flex justify-end gap-2">
                 <Button type="button" :label="t('common.cancel')" severity="secondary" text @click="emit('cancel')" />
-                <Button type="submit" :label="submitLabel" :loading="form.processing" />
+                <Button
+                    type="submit"
+                    :label="submitLabel"
+                    :loading="form.processing"
+                    :disabled="form.items.length === 0 || !form.group_id || !form.date"
+                />
             </div>
         </form>
 

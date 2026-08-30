@@ -28,7 +28,10 @@ class StudentUpdateRequest extends FormRequest
         $student = $this->route('student');
         $dataScope = app(AdminDataScopeService::class);
         $centerRule = Rule::exists('centers', 'id')
-            ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers'));
+            ->where(function ($query) use ($dataScope): void {
+                $query->whereNull('archived_at');
+                $dataScope->applyCenterAccess($query, 'centers');
+            });
         $groupRule = Rule::exists('groups', 'id')
             ->where(function ($query) use ($dataScope): void {
                 $query->where('center_id', (int) $this->input('center_id'));
@@ -59,7 +62,7 @@ class StudentUpdateRequest extends FormRequest
             'email' => ['nullable', 'string', 'email', 'max:255', Rule::unique('students', 'email')->ignore($student->id)],
             'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
             'center_id' => ['required', $centerRule],
-            'group_ids' => ['nullable', 'array'],
+            'group_ids' => ['required', 'array', 'min:1'],
             'group_ids.*' => ['integer', 'distinct', $groupRule],
             'plan_type_id' => ['required', Rule::exists('plan_types', 'id')],
             'current_plan_point_id' => [

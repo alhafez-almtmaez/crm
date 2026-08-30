@@ -31,7 +31,7 @@ const {
 } = useServerTable({
     endpoint: '/admin/centers/records',
     defaultSortBy: 'id',
-    defaultSortDir: 'desc',
+    defaultSortDir: 'asc',
 });
 const historyVisible = ref(false);
 const historyEndpoint = ref('');
@@ -54,7 +54,6 @@ const columns = computed(() => [
     { field: 'name', header: t('centers.centerName'), sortable: true },
     { field: 'student_gender_label', header: t('centers.studentType'), sortable: true, sortField: 'student_gender', badge: true, badgeClassField: 'student_gender_badge_class' },
     { field: 'phone', header: t('centers.phone'), sortable: true, ltr: true },
-    { field: 'working_days_display', header: t('centers.workingDays') },
     { field: 'created_at_formatted', header: t('centers.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
 

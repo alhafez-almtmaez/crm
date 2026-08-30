@@ -49,6 +49,7 @@ const mapStudents = (rows = []) => rows.map((row) => ({
 
 const form = useForm({
     center_id: props.homework.center_id,
+    group_id: props.homework.group_id,
     date: props.homework.date,
     items: mapStudents(props.students),
 });

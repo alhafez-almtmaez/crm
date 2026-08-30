@@ -31,7 +31,7 @@ const {
 } = useServerTable({
     endpoint: '/admin/groups/records',
     defaultSortBy: 'id',
-    defaultSortDir: 'desc',
+    defaultSortDir: 'asc',
 });
 const historyVisible = ref(false);
 const historyEndpoint = ref('');

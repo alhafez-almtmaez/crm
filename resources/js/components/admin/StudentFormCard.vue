@@ -101,9 +101,13 @@ const selectedCenter = computed(() => {
 
     return props.centers.find((center) => Number(center.id) === centerId) ?? null;
 });
-const selectedCenterWorkingDays = computed(() => {
-    if (!props.form.center_id) {
-        return [];
+const selectedWorkingDays = computed(() => {
+    const primaryGroupId = Number(props.form.group_ids?.[0] ?? 0);
+    const selectedGroup = groupOptions.value.find((group) => Number(group.id) === primaryGroupId);
+    const groupWorkingDays = selectedGroup?.working_days;
+
+    if (Array.isArray(groupWorkingDays) && groupWorkingDays.length > 0) {
+        return groupWorkingDays;
     }
 
     const workingDays = selectedCenter.value?.working_days;
@@ -433,7 +437,7 @@ watch(
                             :disabled="!form.center_id"
                             class="min-h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
                         />
-                        <FormFieldLabel for-id="student-group-ids" :text="t('students.groups')" />
+                        <FormFieldLabel for-id="student-group-ids" :text="t('students.groups')" required />
                     </FloatLabel>
                     <small v-if="form.errors.group_ids" class="text-sm text-red-600">{{ form.errors.group_ids }}</small>
                     <small v-else-if="form.errors['group_ids.0']" class="text-sm text-red-600">{{ form.errors['group_ids.0'] }}</small>
@@ -506,7 +510,7 @@ watch(
                 <DailyWeightLimitFields
                     v-model="form.daily_weight_limits"
                     :default-limit="form.max_daily_weight"
-                    :working-days="selectedCenterWorkingDays"
+                    :working-days="selectedWorkingDays"
                     :errors="form.errors"
                 />
 

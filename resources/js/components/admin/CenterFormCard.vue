@@ -1,14 +1,10 @@
 <script setup>
 import Button from 'primevue/button';
-import FloatLabel from 'primevue/floatlabel';
 import IntlTelInput from 'intl-tel-input/vueWithUtils';
-import MultiSelect from 'primevue/multiselect';
-import Select from 'primevue/select';
 import SelectButton from 'primevue/selectbutton';
 import ToggleSwitch from 'primevue/toggleswitch';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import FormFieldLabel from '../form/FormFieldLabel.vue';
 import PrimeFloatField from '../form/PrimeFloatField.vue';
 
 const props = defineProps({
@@ -19,10 +15,6 @@ const props = defineProps({
     form: {
         type: Object,
         required: true,
-    },
-    whatsappGroups: {
-        type: Array,
-        default: () => [],
     },
     submitLabel: {
         type: String,
@@ -54,16 +46,6 @@ const phoneOptions = {
     nationalMode: false,
     strictMode: true,
 };
-
-const dayOptions = computed(() => [
-    { value: 'sunday', label: t('days.sunday') },
-    { value: 'monday', label: t('days.monday') },
-    { value: 'tuesday', label: t('days.tuesday') },
-    { value: 'wednesday', label: t('days.wednesday') },
-    { value: 'thursday', label: t('days.thursday') },
-    { value: 'friday', label: t('days.friday') },
-    { value: 'saturday', label: t('days.saturday') },
-]);
 
 const studentGenderOptions = computed(() => [
     { value: 'male', label: t('centers.maleStudents'), icon: 'pi pi-mars' },
@@ -193,43 +175,6 @@ const onSubmit = () => {
                     @change-error-code="onPhoneErrorCodeChange"
                 />
                 <small v-if="phoneErrorMessage" class="text-sm text-red-600">{{ phoneErrorMessage }}</small>
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <FloatLabel variant="on">
-                    <Select
-                        input-id="center-group-serialized"
-                        v-model="props.form.group_serialized"
-                        :options="props.whatsappGroups"
-                        option-label="label"
-                        option-value="value"
-                        filter
-                        show-clear
-                        class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
-                    />
-                    <FormFieldLabel for-id="center-group-serialized" :text="t('centers.whatsappGroup')" />
-                </FloatLabel>
-                <small v-if="props.form.errors.group_serialized" class="text-sm text-red-600">{{ props.form.errors.group_serialized }}</small>
-                <small v-if="props.whatsappGroups.length === 0" class="text-xs text-(--muted-foreground)">{{ t('centers.noWhatsappGroups') }}</small>
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <FloatLabel variant="on">
-                    <MultiSelect
-                        input-id="center-working-days"
-                        v-model="props.form.working_days"
-                        :options="dayOptions"
-                        option-label="label"
-                        option-value="value"
-                        display="chip"
-                        :max-selected-labels="4"
-                        :selected-items-label="t('common.selectedCount')"
-                        class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
-                    />
-                    <FormFieldLabel for-id="center-working-days" :text="t('centers.workingDays')" required />
-                </FloatLabel>
-                <small v-if="props.form.errors.working_days" class="text-sm text-red-600">{{ props.form.errors.working_days }}</small>
-                <small v-if="props.form.errors['working_days.0']" class="text-sm text-red-600">{{ props.form.errors['working_days.0'] }}</small>
             </div>
 
             <section class="mt-2 overflow-hidden rounded-(--radius-base) border border-(--border) bg-(--background)">

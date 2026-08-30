@@ -34,6 +34,7 @@ test('admin can export a homework pdf report', function () {
     $group = Group::factory()->create([
         'center_id' => $center->id,
         'name' => 'Group A',
+        'working_days' => ['tuesday'],
     ]);
     $plan = Plan::factory()->create(['name' => 'Plan A']);
     $student = Student::factory()
@@ -44,6 +45,7 @@ test('admin can export a homework pdf report', function () {
             'plan_type_id' => $plan->id,
             'full_name' => 'Student One Three',
             'points_balance' => 7,
+            'admin_id' => $admin->id,
         ]);
     $frozenStudent = Student::factory()
         ->frozen()
@@ -52,6 +54,7 @@ test('admin can export a homework pdf report', function () {
             'group_id' => $group->id,
             'plan_type_id' => $plan->id,
             'full_name' => 'Frozen Student Name',
+            'admin_id' => $admin->id,
         ]);
     $studentWithoutNextHomework = Student::factory()
         ->active()
@@ -60,6 +63,7 @@ test('admin can export a homework pdf report', function () {
             'group_id' => $group->id,
             'plan_type_id' => $plan->id,
             'full_name' => 'No Next Homework',
+            'admin_id' => $admin->id,
         ]);
     $planPoint = PlanPoint::factory()->create([
         'plan_id' => $plan->id,
@@ -70,6 +74,7 @@ test('admin can export a homework pdf report', function () {
     $homework = Homework::query()->create([
         'date' => '2026-06-22',
         'center_id' => $center->id,
+        'group_id' => $group->id,
         'admin_id' => $admin->id,
     ]);
     $homeworkStudent = HomeworkStudent::query()->create([
@@ -132,6 +137,7 @@ test('admin can export a homework pdf report', function () {
         return $pdf->viewName === 'pdf.homework'
             && $pdf->downloadName === "homework-{$homework->id}-2026-06-22.pdf"
             && ($pdf->viewData['homework']['id'] ?? null) === $homework->id
+            && ($pdf->viewData['homework']['group_name'] ?? null) === 'Group A'
             && ($pdf->viewData['homework']['next_homework_date'] ?? null) === '2026-06-23'
             && ($pdf->viewData['students'][0]['pdf_name'] ?? null) === 'Student One Three'
             && ($pdf->viewData['students'][0]['pdf_homework_cells'][0] ?? null) === 'Assignment Point'

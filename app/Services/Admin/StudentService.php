@@ -32,7 +32,7 @@ class StudentService
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
         $centerId = $this->nullableInt($filters['center_id'] ?? null);
@@ -165,6 +165,7 @@ class StudentService
     public function centerOptions(): array
     {
         return Center::query()
+            ->active()
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name', 'working_days'])
@@ -177,18 +178,19 @@ class StudentService
     }
 
     /**
-     * @return array<int, array{id: int, name: string, center_id: int|null}>
+     * @return array<int, array{id: int, name: string, center_id: int|null, working_days: array<int, string>}>
      */
     public function groupOptions(): array
     {
         return Group::query()
             ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
             ->orderBy('name')
-            ->get(['id', 'name', 'center_id'])
+            ->get(['id', 'name', 'center_id', 'working_days'])
             ->map(static fn (Group $group): array => [
                 'id' => (int) $group->id,
                 'name' => (string) $group->name,
                 'center_id' => $group->center_id !== null ? (int) $group->center_id : null,
+                'working_days' => is_array($group->working_days) ? $group->working_days : [],
             ])
             ->all();
     }
@@ -312,8 +314,11 @@ class StudentService
     private function buildPayload(array $data): array
     {
         $maxDailyWeight = isset($data['max_daily_weight']) ? (int) $data['max_daily_weight'] : 2;
-        $workingDays = $this->workingDaysForCenter(isset($data['center_id']) ? (int) $data['center_id'] : null);
         $groupIds = $this->groupIdsFromData($data);
+        $workingDays = $this->workingDaysForSelection(
+            isset($data['center_id']) ? (int) $data['center_id'] : null,
+            $groupIds,
+        );
 
         return [
             'first_name' => (string) $data['first_name'],
@@ -397,8 +402,16 @@ class StudentService
     /**
      * @return array<int, string>
      */
-    private function workingDaysForCenter(?int $centerId): array
+    private function workingDaysForSelection(?int $centerId, array $groupIds): array
     {
+        if ($groupIds !== []) {
+            $group = Group::query()->find($groupIds[0], ['id', 'working_days']);
+
+            if ($group !== null && is_array($group->working_days) && $group->working_days !== []) {
+                return DailyWeightLimits::normalizeWorkingDays($group->working_days);
+            }
+        }
+
         if ($centerId === null) {
             return DailyWeightLimits::days();
         }

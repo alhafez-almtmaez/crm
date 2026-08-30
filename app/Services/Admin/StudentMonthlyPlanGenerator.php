@@ -36,7 +36,7 @@ class StudentMonthlyPlanGenerator
         array $holidayDates = [],
     ): array {
         $students = Student::query()
-            ->with(['center:id,working_days', 'groups:id,center_id', 'plan:id,name'])
+            ->with(['center:id,working_days', 'groups:id,center_id,working_days', 'plan:id,name'])
             ->where('center_id', $center->id)
             ->when($groupId !== null, fn ($query) => $query->whereHas(
                 'groups',
@@ -63,7 +63,7 @@ class StudentMonthlyPlanGenerator
         array $holidayDates = [],
     ): array {
         $students = Student::query()
-            ->with(['center:id,working_days', 'groups:id,center_id', 'plan:id,name'])
+            ->with(['center:id,working_days', 'groups:id,center_id,working_days', 'plan:id,name'])
             ->whereHas('groups', static fn ($query) => $query->where('groups.id', $group->id))
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('is_active', Student::STATUS_ACTIVE)
@@ -130,9 +130,9 @@ class StudentMonthlyPlanGenerator
         [$periodStart, $periodEnd] = $this->periodForMonth($month, $year, $startDate, $endDate);
         $holidayDates = $this->normalizeHolidayDates($holidayDates, $periodStart, $periodEnd);
 
-        $student->loadMissing(['center:id,working_days', 'groups:id,center_id']);
+        $student->loadMissing(['center:id,working_days', 'groups:id,center_id,working_days']);
         $resolvedGroupId = $this->resolvedGroupId($student, $groupId);
-        $dates = $this->workingDatesForMonth($student, $month, $year, $periodStart, $periodEnd, $holidayDates);
+        $dates = $this->workingDatesForMonth($student, $resolvedGroupId, $month, $year, $periodStart, $periodEnd, $holidayDates);
         if ($dates->isEmpty()) {
             return null;
         }
@@ -158,15 +158,16 @@ class StudentMonthlyPlanGenerator
                 ->whereKey($student->id)
                 ->lockForUpdate()
                 ->firstOrFail();
-            $lockedStudent->loadMissing('center:id,working_days');
+            $lockedStudent->loadMissing(['center:id,working_days', 'groups:id,center_id,working_days']);
             $startPoint = $this->startPoint($lockedStudent);
+            $workingDays = $this->workingDaysForStudent($lockedStudent, $resolvedGroupId);
 
             $monthlyPlan = $this->monthlyPlanForStudent($lockedStudent, $month, $year, $periodStart, $periodEnd, $holidayDates, $resolvedGroupId);
             $maxDailyWeight = DailyWeightLimits::normalizeLimit($lockedStudent->max_daily_weight ?? 2);
             $dailyWeightLimits = DailyWeightLimits::normalize(
                 $lockedStudent->daily_weight_limits,
                 $maxDailyWeight,
-                $lockedStudent->center?->working_days,
+                $workingDays,
             );
 
             $plan = StudentMonthlyPlan::query()->create([
@@ -213,7 +214,7 @@ class StudentMonthlyPlanGenerator
         return DB::transaction(function () use ($monthlyPlan, $fromDate, $holidayDates): array {
             /** @var MonthlyPlan $lockedMonthlyPlan */
             $lockedMonthlyPlan = MonthlyPlan::query()
-                ->with('center:id,working_days')
+                ->with(['center:id,working_days', 'group:id,working_days'])
                 ->whereKey($monthlyPlan->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -225,9 +226,10 @@ class StudentMonthlyPlanGenerator
 
             $holidayDates = $this->normalizeHolidayDates($holidayDates ?? (array) $lockedMonthlyPlan->holiday_dates, $periodStart, $periodEnd);
             $lockedMonthlyPlan->forceFill(['holiday_dates' => $holidayDates])->save();
+            $workingDays = $this->workingDaysForMonthlyPlan($lockedMonthlyPlan);
 
             $dates = $this->workingDatesForPeriod(
-                $lockedMonthlyPlan->center?->working_days,
+                $workingDays,
                 (int) $lockedMonthlyPlan->month,
                 (int) $lockedMonthlyPlan->year,
                 $fromDate,
@@ -263,7 +265,7 @@ class StudentMonthlyPlanGenerator
                     student: $student,
                     dates: $dates,
                     fromDate: $fromDate,
-                    workingDays: $lockedMonthlyPlan->center?->working_days,
+                    workingDays: $workingDays,
                 );
             }
 
@@ -705,13 +707,61 @@ class StudentMonthlyPlanGenerator
      */
     private function workingDatesForMonth(
         Student $student,
+        ?int $groupId,
         int $month,
         int $year,
         ?CarbonImmutable $startDate = null,
         ?CarbonImmutable $endDate = null,
         array $holidayDates = [],
     ): Collection {
-        return $this->workingDatesForPeriod($student->center?->working_days, $month, $year, $startDate, $endDate, $holidayDates);
+        return $this->workingDatesForPeriod(
+            $this->workingDaysForStudent($student, $groupId),
+            $month,
+            $year,
+            $startDate,
+            $endDate,
+            $holidayDates,
+        );
+    }
+
+    /**
+     * Prefer the selected group's schedule while retaining the center schedule for legacy groups.
+     *
+     * @return array<int, string>|null
+     */
+    private function workingDaysForStudent(Student $student, ?int $groupId): ?array
+    {
+        if ($groupId !== null) {
+            $groupWorkingDays = $student->groups
+                ->firstWhere('id', $groupId)
+                ?->working_days;
+
+            if (is_array($groupWorkingDays) && $groupWorkingDays !== []) {
+                return $groupWorkingDays;
+            }
+        }
+
+        return is_array($student->center?->working_days)
+            ? $student->center->working_days
+            : null;
+    }
+
+    /**
+     * @return array<int, string>|null
+     */
+    private function workingDaysForMonthlyPlan(MonthlyPlan $monthlyPlan): ?array
+    {
+        $groupWorkingDays = $monthlyPlan->group_id !== null
+            ? $monthlyPlan->group?->working_days
+            : null;
+
+        if (is_array($groupWorkingDays) && $groupWorkingDays !== []) {
+            return $groupWorkingDays;
+        }
+
+        return is_array($monthlyPlan->center?->working_days)
+            ? $monthlyPlan->center->working_days
+            : null;
     }
 
     /**

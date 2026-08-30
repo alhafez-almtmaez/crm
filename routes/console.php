@@ -30,4 +30,5 @@ Artisan::command('whatsapp:send-pending {--limit=50 : Maximum pending messages t
     $this->line("Checked: {$summary['checked']}");
     $this->line("Sent: {$summary['sent']}");
     $this->line("Failed: {$summary['failed']}");
+    $this->line("Stale: {$summary['stale']}");
 })->purpose('Send stored pending WhatsApp messages when a device is connected');

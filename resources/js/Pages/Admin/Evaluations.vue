@@ -7,7 +7,7 @@ import DatePicker from 'primevue/datepicker';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
 import { useConfirm } from 'primevue/useconfirm';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
 import AbsenceMessageLogDialog from '../../components/admin/AbsenceMessageLogDialog.vue';
@@ -38,6 +38,7 @@ const messageLogEvaluation = ref(null);
 const filtersVisible = ref(false);
 const defaultFilters = () => ({
     center_id: null,
+    group_id: null,
     date_from: '',
     date_to: '',
     alert_status: null,
@@ -113,6 +114,35 @@ const alertStatusFilterOptions = computed(() => [
     { label: t('evaluations.alertsSent'), value: 'sent' },
     { label: t('evaluations.alertsPending'), value: 'pending' },
 ]);
+const normalizeId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const id = Number(value);
+
+    return Number.isNaN(id) ? null : id;
+};
+const filterGroupOptions = computed(() => {
+    const centerId = normalizeId(filters.value.center_id);
+    if (centerId === null) {
+        return [];
+    }
+
+    const center = props.centers.find((item) => normalizeId(item?.id) === centerId);
+
+    return Array.isArray(center?.groups) ? center.groups : [];
+});
+
+watch(
+    () => filters.value.center_id,
+    (centerId, previousCenterId) => {
+        if (normalizeId(centerId) !== normalizeId(previousCenterId)) {
+            filters.value.group_id = null;
+        }
+    },
+);
+
 const draftFilterCount = computed(() => Object.values(filters.value).filter((value) => value !== null && value !== undefined && value !== '').length);
 const activeFilterCount = computed(() => Object.values(appliedFilters.value).filter((value) => value !== null && value !== undefined && value !== '').length);
 const canClearFilters = computed(() => draftFilterCount.value > 0 || activeFilterCount.value > 0);
@@ -126,6 +156,7 @@ const rows = computed(() => (sourceRows.value ?? []).map((row) => {
     return {
         ...row,
         center_name: row.center_name ?? t('common.na'),
+        group_name: row.group_name ?? t('common.na'),
         admin_name: row.admin_name ?? t('common.na'),
         alert_status_label: row.is_send_absence_alerts
             ? t('evaluations.alertsSent')
@@ -144,6 +175,7 @@ const columns = computed(() => [
     { field: 'id', header: t('common.id'), sortable: true },
     { field: 'date_formatted', header: t('evaluations.date'), sortable: true, sortField: 'date' },
     { field: 'center_name', header: t('evaluations.center'), sortable: true, sortField: 'center_name' },
+    { field: 'group_name', header: t('evaluations.group'), sortable: true, sortField: 'group_name' },
     { field: 'admin_name', header: t('students.admin'), sortable: true, sortField: 'admin_name' },
     {
         field: 'alert_status_label',
@@ -338,6 +370,7 @@ const askDelete = ({ data: row, event }) => {
         target,
         message: t('evaluations.deleteConfirm', {
             center: row.center_name,
+            group: row.group_name,
             date: row.date_formatted,
         }),
         icon: 'pi pi-exclamation-triangle',
@@ -446,7 +479,7 @@ onMounted(() => {
 
                 <template #filters>
                     <form class="flex flex-col gap-3 xl:flex-row xl:items-start" @submit.prevent="applyFilters">
-                        <div class="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div class="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                             <FloatLabel variant="on">
                                 <Select
                                     input-id="evaluations-filter-center"
@@ -459,6 +492,21 @@ onMounted(() => {
                                     class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
                                 />
                                 <label for="evaluations-filter-center">{{ t('evaluations.filters.center') }}</label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <Select
+                                    input-id="evaluations-filter-group"
+                                    v-model="filters.group_id"
+                                    :options="filterGroupOptions"
+                                    option-label="name"
+                                    option-value="id"
+                                    filter
+                                    show-clear
+                                    :disabled="!filters.center_id"
+                                    class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                                />
+                                <label for="evaluations-filter-group">{{ t('evaluations.filters.group') }}</label>
                             </FloatLabel>
 
                             <FloatLabel variant="on">

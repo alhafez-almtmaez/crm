@@ -13,17 +13,15 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class RoleService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
         $allowedSorts = ['id', 'name', 'permissions_count', 'created_at'];
@@ -74,7 +72,7 @@ class RoleService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): Role
     {
@@ -95,7 +93,7 @@ class RoleService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(Role $role, array $data): Role
     {
@@ -166,7 +164,7 @@ class RoleService
     private function ensureWebRole(Role $role): void
     {
         if ($role->guard_name !== 'web') {
-            throw new NotFoundHttpException();
+            throw new NotFoundHttpException;
         }
     }
 }

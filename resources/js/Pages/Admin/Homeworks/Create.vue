@@ -16,6 +16,10 @@ const props = defineProps({
         type: Number,
         default: null,
     },
+    selected_group_id: {
+        type: Number,
+        default: null,
+    },
     selected_date: {
         type: String,
         default: '',
@@ -55,6 +59,7 @@ const mapStudents = (rows = []) => rows.map((row) => ({
 
 const form = useForm({
     center_id: props.selected_center_id,
+    group_id: props.selected_group_id,
     date: props.selected_date,
     items: mapStudents(props.students),
 });
@@ -63,6 +68,13 @@ watch(
     () => props.selected_center_id,
     (value) => {
         form.center_id = value;
+    },
+);
+
+watch(
+    () => props.selected_group_id,
+    (value) => {
+        form.group_id = value;
     },
 );
 
@@ -94,6 +106,7 @@ const goBack = () => {
 const reloadStudents = () => {
     router.get('/admin/homeworks/create', {
         center_id: form.center_id,
+        group_id: form.group_id,
         date: form.date,
     });
 };

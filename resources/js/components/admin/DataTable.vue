@@ -48,7 +48,7 @@ const props = defineProps({
     },
     rowsPerPage: {
         type: Number,
-        default: 10,
+        default: 50,
     },
     searchLabel: {
         type: String,
@@ -155,7 +155,16 @@ const handleSort = (event) => {
 <template>
     <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-4 text-(--card-foreground) shadow-(--shadow-sm) sm:p-6">
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 class="text-xl font-semibold sm:text-2xl">{{ resolvedTableTitle() }}</h3>
+            <div class="flex flex-wrap items-center gap-2">
+                <h3 class="text-xl font-semibold sm:text-2xl">{{ resolvedTableTitle() }}</h3>
+                <span
+                    role="status"
+                    aria-live="polite"
+                    class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-sm font-semibold text-(--foreground)"
+                >
+                    {{ t('common.records') }}: {{ totalRecords }}
+                </span>
+            </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <FloatLabel variant="on" class="w-full sm:w-72">
                     <InputText

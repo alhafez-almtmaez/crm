@@ -21,7 +21,7 @@ class HomeworkUpdateRequest extends HomeworkStoreRequest
     public function rules(): array
     {
         $rules = parent::rules();
-        unset($rules['center_id'], $rules['date']);
+        unset($rules['center_id'], $rules['group_id'], $rules['date']);
 
         return $rules;
     }
@@ -31,10 +31,10 @@ class HomeworkUpdateRequest extends HomeworkStoreRequest
         //
     }
 
-    protected function rowCenterId(): ?int
+    protected function rowGroupId(): ?int
     {
         $homework = $this->route('homework');
 
-        return $homework instanceof Homework ? (int) $homework->center_id : null;
+        return $homework instanceof Homework ? (int) $homework->group_id : null;
     }
 }

@@ -11,12 +11,10 @@ use Illuminate\Support\Facades\Auth;
 
 class StudentCommunicationService
 {
-    public function __construct(private readonly WhatsAppMessagingService $whatsAppMessagingService)
-    {
-    }
+    public function __construct(private readonly WhatsAppMessagingService $whatsAppMessagingService) {}
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function freeze(Student $student, array $data): void
     {
@@ -37,7 +35,7 @@ class StudentCommunicationService
         $this->whatsAppMessagingService->sendMediaCaption(
             $phones,
             $content,
-            $student->center?->group_serialized,
+            $this->groupSerialized($student),
         );
 
         $student->update([
@@ -77,7 +75,7 @@ class StudentCommunicationService
         $this->whatsAppMessagingService->sendMediaCaption(
             $phones,
             $content,
-            $student->center?->group_serialized,
+            $this->groupSerialized($student),
         );
 
         $student->update(['is_active' => 1]);
@@ -92,7 +90,7 @@ class StudentCommunicationService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function congratulatory(Student $student, array $data): void
     {
@@ -110,12 +108,12 @@ class StudentCommunicationService
             ."☘️✨\n\n"
             ."*نسأل الله له التوفيق والسداد، وأن يجعله من أهل القرآن.*🤲🪻\n\n"
             ."[{$day}]، الموافق: [{$date}] مـ\n\n"
-            ."*- إدارة مشروع الحافظ المتميِّز*✨");
+            .'*- إدارة مشروع الحافظ المتميِّز*✨');
 
         $this->whatsAppMessagingService->sendMediaCaption(
             $phones,
             $content,
-            $student->center?->group_serialized,
+            $this->groupSerialized($student),
         );
 
         $student->update([
@@ -131,7 +129,7 @@ class StudentCommunicationService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<int, string>
      */
     private function extractPhones(array $data): array
@@ -140,7 +138,7 @@ class StudentCommunicationService
 
         foreach (['parent_phone_number', 'phone_number'] as $key) {
             $value = $data[$key] ?? null;
-            if (!is_string($value)) {
+            if (! is_string($value)) {
                 continue;
             }
 
@@ -162,5 +160,29 @@ class StudentCommunicationService
             3 => 'في *دار القرآن*',
             default => 'في *المركز*',
         };
+    }
+
+    private function groupSerialized(Student $student): ?string
+    {
+        $student->loadMissing([
+            'group:id,group_serialized',
+            'groups:id,group_serialized',
+            'center:id,group_serialized',
+        ]);
+
+        if ($student->group !== null) {
+            return filled($student->group->group_serialized)
+                ? (string) $student->group->group_serialized
+                : null;
+        }
+
+        $membershipGroup = $student->groups->sortBy('id')->first();
+        if ($membershipGroup !== null) {
+            return filled($membershipGroup->group_serialized)
+                ? (string) $membershipGroup->group_serialized
+                : null;
+        }
+
+        return $student->center?->group_serialized;
     }
 }

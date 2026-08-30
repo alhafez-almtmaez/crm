@@ -29,7 +29,7 @@ class StudentMonthlyPlanService
     public function savedPlansPage(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
         $sortMap = [
@@ -125,6 +125,7 @@ class StudentMonthlyPlanService
     public function centerOptions(): array
     {
         return Center::query()
+            ->active()
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
             ->orderBy('name')
             ->get(['id', 'name', 'working_days'])
@@ -209,7 +210,7 @@ class StudentMonthlyPlanService
     {
         $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
 
-        $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name']);
+        $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name,working_days']);
 
         $studentPlanModels = StudentMonthlyPlan::query()
             ->with([
@@ -239,7 +240,7 @@ class StudentMonthlyPlanService
             ->map(fn (StudentMonthlyPlan $plan): array => $this->studentPlanPayload(
                 $plan,
                 $homeworkCompletionDates[(int) $plan->student_id] ?? [],
-                $evaluationAbsences[(int) $plan->student_id] ?? []
+                $evaluationAbsences[(int) $plan->student_id][(int) $plan->group_id] ?? []
             ))
             ->all();
         $generatedItemsCount = $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count);
@@ -270,8 +271,8 @@ class StudentMonthlyPlanService
                 'refresh_min_date' => $periodStart->toDateString(),
                 'refresh_max_date' => $periodEnd->toDateString(),
             ],
-            'dates' => $monthlyPlan->center !== null
-                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
+            'dates' => $monthlyPlan->center !== null || $monthlyPlan->group !== null
+                ? $this->workingDatesForMonth($monthlyPlan, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
                 : [],
             'plans' => $studentPlans,
         ];
@@ -290,7 +291,7 @@ class StudentMonthlyPlanService
             ->where('ulid', $publicId)
             ->firstOrFail();
 
-        $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name']);
+        $monthlyPlan->loadMissing(['center:id,name,working_days', 'group:id,name,working_days']);
         $periodStart = $this->monthlyPlanStartDate($monthlyPlan);
         $periodEnd = $this->monthlyPlanEndDate($monthlyPlan);
         $holidayDates = $this->monthlyPlanHolidayDates($monthlyPlan, $periodStart, $periodEnd);
@@ -325,8 +326,8 @@ class StudentMonthlyPlanService
                 'generated_items_count' => $studentPlanModels->sum(static fn (StudentMonthlyPlan $plan): int => (int) $plan->generated_items_count),
                 'generated_at' => $this->dateTimeFormatter->formatForAdmin($monthlyPlan->generated_at),
             ],
-            'dates' => $monthlyPlan->center !== null
-                ? $this->workingDatesForMonth($monthlyPlan->center, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
+            'dates' => $monthlyPlan->center !== null || $monthlyPlan->group !== null
+                ? $this->workingDatesForMonth($monthlyPlan, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
                 : [],
             'plans' => $studentPlanModels
                 ->map(fn (StudentMonthlyPlan $plan): array => $this->publicStudentPlanPayload($plan))
@@ -607,7 +608,7 @@ class StudentMonthlyPlanService
 
     /**
      * @param  Collection<int, StudentMonthlyPlan>  $studentPlans
-     * @return array<int, array<string, array<int, array<string, mixed>>>>
+     * @return array<int, array<int, array<string, array<int, array<string, mixed>>>>>
      */
     private function evaluationAbsencesByStudentDate(Collection $studentPlans): array
     {
@@ -626,13 +627,22 @@ class StudentMonthlyPlanService
             ->values()
             ->all();
 
-        if ($studentIds === [] || $dates === []) {
+        $groupIds = $studentPlans
+            ->pluck('group_id')
+            ->filter()
+            ->map(static fn ($groupId): int => (int) $groupId)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($studentIds === [] || $dates === [] || $groupIds === []) {
             return [];
         }
 
         $rows = EvaluationStudent::query()
             ->join('evaluations', 'evaluations_users.evaluation_id', '=', 'evaluations.id')
             ->whereIn('evaluations.date', $dates)
+            ->whereIn('evaluations.group_id', $groupIds)
             ->whereIn('evaluations_users.attendances', [
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
@@ -651,6 +661,7 @@ class StudentMonthlyPlanService
                 'evaluations_users.attendances',
                 'evaluations_users.note',
                 'evaluations.id as evaluation_id',
+                'evaluations.group_id',
                 'evaluations.date as evaluation_date',
                 'evaluations.evaluation_type',
             ]);
@@ -659,14 +670,15 @@ class StudentMonthlyPlanService
         foreach ($rows as $row) {
             $studentId = (int) ($row->student_id ?: $row->user_id);
             $date = CarbonImmutable::parse($row->evaluation_date)->toDateString();
+            $groupId = (int) $row->group_id;
             $attendance = (int) $row->attendances;
             $evaluationType = (int) ($row->evaluation_type ?? Evaluation::TYPE_ALHIFZ);
 
-            if ($studentId === 0 || $date === '') {
+            if ($studentId === 0 || $groupId === 0 || $date === '') {
                 continue;
             }
 
-            $absences[$studentId][$date][] = [
+            $absences[$studentId][$groupId][$date][] = [
                 'evaluation_id' => (int) $row->evaluation_id,
                 'evaluation_student_id' => (int) $row->evaluation_student_id,
                 'date' => $date,
@@ -796,14 +808,19 @@ class StudentMonthlyPlanService
      * @return array<int, array{date: string, day_number: int, day_name: string, day_label: string}>
      */
     private function workingDatesForMonth(
-        Center $center,
+        MonthlyPlan $monthlyPlan,
         int $month,
         int $year,
         ?CarbonImmutable $startDate = null,
         ?CarbonImmutable $endDate = null,
         array $holidayDates = [],
     ): array {
-        $workingDays = is_array($center->working_days) ? $center->working_days : [];
+        $groupWorkingDays = $monthlyPlan->group_id !== null
+            ? $monthlyPlan->group?->working_days
+            : null;
+        $workingDays = is_array($groupWorkingDays) && $groupWorkingDays !== []
+            ? $groupWorkingDays
+            : (is_array($monthlyPlan->center?->working_days) ? $monthlyPlan->center->working_days : []);
         if ($workingDays === []) {
             $workingDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         }

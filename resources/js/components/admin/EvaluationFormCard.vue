@@ -3,7 +3,7 @@ import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import FormFieldLabel from '../form/FormFieldLabel.vue';
 
@@ -69,6 +69,25 @@ const scoreModeOptions = computed(() => [
     { value: EVALUATION_TYPE_ALHIFZ, label: t('evaluations.alhifz') },
     { value: EVALUATION_TYPE_TAJWID, label: t('evaluations.tajwid') },
 ]);
+const normalizeId = (value) => {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const id = Number(value);
+
+    return Number.isNaN(id) ? null : id;
+};
+const groupOptions = computed(() => {
+    const centerId = normalizeId(props.form.center_id);
+    if (centerId === null) {
+        return [];
+    }
+
+    const center = props.centers.find((item) => normalizeId(item?.id) === centerId);
+
+    return Array.isArray(center?.groups) ? center.groups : [];
+});
 const visiblePrimaryScoreField = computed(() => (scoreMode.value === EVALUATION_TYPE_TAJWID ? 'tajwid' : 'alhifz'));
 const visiblePrimaryScoreLabel = computed(() => (
     scoreMode.value === EVALUATION_TYPE_TAJWID
@@ -92,6 +111,9 @@ const dateValue = computed({
     },
     set: (value) => {
         if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            if (!props.lockCenterAndDate && props.form.date !== '') {
+                props.form.items = [];
+            }
             props.form.date = '';
             return;
         }
@@ -99,9 +121,32 @@ const dateValue = computed({
         const year = value.getFullYear();
         const month = String(value.getMonth() + 1).padStart(2, '0');
         const day = String(value.getDate()).padStart(2, '0');
-        props.form.date = `${year}-${month}-${day}`;
+        const nextDate = `${year}-${month}-${day}`;
+        if (!props.lockCenterAndDate && props.form.date !== nextDate) {
+            props.form.items = [];
+        }
+        props.form.date = nextDate;
     },
 });
+
+watch(
+    () => props.form.center_id,
+    (centerId, previousCenterId) => {
+        if (props.lockCenterAndDate || normalizeId(centerId) === normalizeId(previousCenterId)) {
+            return;
+        }
+
+        props.form.group_id = null;
+        props.form.items = [];
+    },
+    { flush: 'sync' },
+);
+
+const onGroupChange = () => {
+    if (!props.lockCenterAndDate) {
+        props.form.items = [];
+    }
+};
 
 const onAttendanceChange = (item) => {
     if (!item) {
@@ -217,7 +262,7 @@ const rowMarkerClass = (item) => {
         <p v-if="description" class="mt-3 text-lg text-(--muted-foreground)">{{ description }}</p>
 
         <form class="mt-6 grid gap-4" @submit.prevent="emit('submit')">
-            <div class="grid gap-4 md:grid-cols-2">
+            <div class="grid gap-4 md:grid-cols-3">
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
                         <Select
@@ -233,6 +278,24 @@ const rowMarkerClass = (item) => {
                         <FormFieldLabel for-id="evaluation-center" :text="t('evaluations.center')" />
                     </FloatLabel>
                     <small v-if="form.errors.center_id" class="text-sm text-red-600">{{ form.errors.center_id }}</small>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <FloatLabel variant="on">
+                        <Select
+                            input-id="evaluation-group"
+                            v-model="form.group_id"
+                            :options="groupOptions"
+                            option-label="name"
+                            option-value="id"
+                            filter
+                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            :disabled="lockCenterAndDate || !form.center_id"
+                            @change="onGroupChange"
+                        />
+                        <FormFieldLabel for-id="evaluation-group" :text="t('evaluations.group')" />
+                    </FloatLabel>
+                    <small v-if="form.errors.group_id" class="text-sm text-red-600">{{ form.errors.group_id }}</small>
                 </div>
 
                 <div class="flex flex-col gap-1">
@@ -276,7 +339,7 @@ const rowMarkerClass = (item) => {
                     icon="pi pi-refresh"
                     :label="t('evaluations.loadStudents')"
                     severity="secondary"
-                    :disabled="!form.center_id || !form.date"
+                    :disabled="!form.center_id || !form.group_id || !form.date"
                     @click="emit('reload')"
                 />
             </div>
@@ -407,7 +470,12 @@ const rowMarkerClass = (item) => {
 
             <div class="mt-2 flex justify-end gap-2">
                 <Button type="button" :label="t('common.cancel')" severity="secondary" text @click="emit('cancel')" />
-                <Button type="submit" :label="submitLabel" :loading="form.processing" />
+                <Button
+                    type="submit"
+                    :label="submitLabel"
+                    :loading="form.processing"
+                    :disabled="form.items.length === 0 || !form.group_id || !form.date"
+                />
             </div>
         </form>
     </article>

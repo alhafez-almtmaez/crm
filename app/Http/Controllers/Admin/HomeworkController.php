@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\LaravelPdf\Facades\Pdf;
@@ -59,16 +60,31 @@ class HomeworkController extends Controller implements HasMiddleware
     public function create(Request $request): Response
     {
         $query = $request->validate([
-            'center_id' => ['nullable', 'integer', 'exists:centers,id'],
+            'center_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('centers', 'id')
+                    ->where(function ($query): void {
+                        $query->whereNull('archived_at');
+                        $this->dataScope->applyCenterAccess($query, 'centers');
+                    }),
+            ],
+            'group_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('groups', 'id')
+                    ->where(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups')),
+            ],
             'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
         $centerId = isset($query['center_id']) ? (int) $query['center_id'] : null;
+        $groupId = isset($query['group_id']) ? (int) $query['group_id'] : null;
         $date = isset($query['date']) ? (string) $query['date'] : null;
 
         return Inertia::render('Admin/Homeworks/Create', [
             'centers' => $this->service->centerOptions(),
-            ...$this->service->createFormPayload($centerId, $date),
+            ...$this->service->createFormPayload($centerId, $groupId, $date),
         ]);
     }
 
@@ -76,13 +92,18 @@ class HomeworkController extends Controller implements HasMiddleware
     {
         $this->dataScope->abortUnlessCanAccessHomework($homework);
 
-        $homework->load('center:id,name');
+        $homework->loadMissing(['group.center', 'center']);
+
+        $centerId = $homework->group?->center_id ?? $homework->center_id;
+        $centerName = $homework->group?->center?->name ?? $homework->center?->name;
 
         return Inertia::render('Admin/Homeworks/Edit', [
             'homework' => [
                 'id' => $homework->id,
-                'center_id' => $homework->center_id,
-                'center_name' => $homework->center?->name,
+                'center_id' => $centerId,
+                'center_name' => $centerName,
+                'group_id' => $homework->group_id,
+                'group_name' => $homework->group?->name,
                 'date' => $homework->date?->format('Y-m-d'),
             ],
             'centers' => $this->service->centerOptions(),

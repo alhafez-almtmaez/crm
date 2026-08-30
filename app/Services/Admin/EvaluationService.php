@@ -2,15 +2,19 @@
 
 namespace App\Services\Admin;
 
+use App\Exceptions\WhatsAppMessageSendException;
 use App\Models\AbsenceRuleExecutionLog;
 use App\Models\Center;
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
+use App\Models\Group;
 use App\Models\Student;
 use App\Models\StudentFreeze;
+use App\Services\Admin\AbsenceRules\AbsenceAlertExecutionLock;
 use App\Services\Admin\AbsenceRules\AbsenceRuleEngine;
 use App\Services\System\DateTimeFormatterService;
 use Carbon\Carbon;
+use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
@@ -25,8 +29,10 @@ class EvaluationService
     public function __construct(
         private readonly DateTimeFormatterService $dateTimeFormatter,
         private readonly AbsenceRuleEngine $absenceRuleEngine,
+        private readonly AbsenceAlertExecutionLock $absenceAlertExecutionLock,
         private readonly AdminDataScopeService $dataScope,
         private readonly WhatsAppMessagingService $whatsAppMessagingService,
+        private readonly WhatsAppPendingMessageService $whatsAppPendingMessageService,
     ) {}
 
     /**
@@ -35,10 +41,11 @@ class EvaluationService
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
         $centerId = isset($filters['center_id']) ? (int) $filters['center_id'] : null;
+        $groupId = isset($filters['group_id']) ? (int) $filters['group_id'] : null;
         $dateFrom = trim((string) ($filters['date_from'] ?? ''));
         $dateTo = trim((string) ($filters['date_to'] ?? ''));
         $alertStatus = (string) ($filters['alert_status'] ?? '');
@@ -46,6 +53,7 @@ class EvaluationService
             'id' => 'evaluations.id',
             'date' => 'evaluations.date',
             'center_name' => 'centers.name',
+            'group_name' => 'groups.name',
             'admin_name' => 'admins.name',
             'is_send_absence_alerts' => 'evaluations.is_send_absence_alerts',
             'created_at' => 'evaluations.created_at',
@@ -54,17 +62,20 @@ class EvaluationService
         $sortColumn = $sortMap[$sortBy] ?? 'evaluations.id';
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
         $rows = Evaluation::query()
-            ->leftJoin('centers', 'evaluations.center_id', '=', 'centers.id')
+            ->leftJoin('groups', 'evaluations.group_id', '=', 'groups.id')
+            ->leftJoin('centers', 'groups.center_id', '=', 'centers.id')
             ->leftJoin('users as admins', 'evaluations.admin_id', '=', 'admins.id')
             ->select([
                 'evaluations.id',
                 'evaluations.ulid',
                 'evaluations.date',
                 'evaluations.center_id',
+                'evaluations.group_id',
                 'evaluations.admin_id',
                 'evaluations.is_send_absence_alerts',
                 'evaluations.created_at',
                 'centers.name as center_name',
+                'groups.name as group_name',
                 'admins.name as admin_name',
             ])
             ->tap(fn ($query) => $this->dataScope->applyEvaluationAccess($query, 'evaluations'))
@@ -74,11 +85,15 @@ class EvaluationService
                         ->where('evaluations.id', 'like', "%{$search}%")
                         ->orWhere('evaluations.date', 'like', "%{$search}%")
                         ->orWhere('centers.name', 'like', "%{$search}%")
+                        ->orWhere('groups.name', 'like', "%{$search}%")
                         ->orWhere('admins.name', 'like', "%{$search}%");
                 });
             })
             ->when($centerId !== null && $centerId > 0, function ($query) use ($centerId): void {
-                $query->where('evaluations.center_id', $centerId);
+                $query->where('groups.center_id', $centerId);
+            })
+            ->when($groupId !== null && $groupId > 0, function ($query) use ($groupId): void {
+                $query->where('evaluations.group_id', $groupId);
             })
             ->when($dateFrom !== '', function ($query) use ($dateFrom): void {
                 $query->whereDate('evaluations.date', '>=', $dateFrom);
@@ -125,30 +140,54 @@ class EvaluationService
     }
 
     /**
-     * @return array<int, array{id: int, name: string}>
+     * @return array<int, array{id: int, name: string, groups: array<int, array{id: int, name: string, center_id: int}>}>
      */
     public function centerOptions(): array
     {
         return Center::query()
+            ->active()
             ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
+            ->with(['groups' => function ($query): void {
+                $query
+                    ->tap(fn ($groupQuery) => $this->dataScope->applyGroupAccess($groupQuery, 'groups'))
+                    ->orderBy('name');
+            }])
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(static fn (Center $center): array => [
-                'id' => $center->id,
-                'name' => $center->name,
+                'id' => (int) $center->id,
+                'name' => (string) $center->name,
+                'groups' => $center->groups
+                    ->map(static fn (Group $group): array => [
+                        'id' => (int) $group->id,
+                        'name' => (string) $group->name,
+                        'center_id' => (int) $group->center_id,
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->all();
     }
 
     /**
-     * @return array{selected_center_id: ?int, selected_date: string, students: array<int, array<string, mixed>>, existing_evaluation_id: ?int}
+     * @return array{selected_center_id: ?int, selected_group_id: ?int, selected_date: string, students: array<int, array<string, mixed>>, existing_evaluation_id: ?int}
      */
-    public function createFormPayload(?int $centerId, ?string $date): array
+    public function createFormPayload(?int $centerId, ?int $groupId, ?string $date): array
     {
         $resolvedDate = $this->resolveDate($date);
         $resolvedCenterId = $centerId !== null && $centerId > 0 ? $centerId : null;
+        $resolvedGroupId = $groupId !== null && $groupId > 0 ? $groupId : null;
 
-        if ($resolvedCenterId !== null) {
+        if ($resolvedGroupId !== null) {
+            $group = Group::query()
+                ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
+                ->find($resolvedGroupId, ['id', 'center_id']);
+
+            abort_unless($group instanceof Group, 404);
+            $resolvedCenterId = (int) $group->center_id;
+        }
+
+        if ($resolvedGroupId === null && $resolvedCenterId !== null) {
             $centerExists = Center::query()
                 ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
                 ->whereKey($resolvedCenterId)
@@ -157,9 +196,10 @@ class EvaluationService
             abort_unless($centerExists, 404);
         }
 
-        if ($resolvedCenterId === null) {
+        if ($resolvedGroupId === null) {
             return [
-                'selected_center_id' => null,
+                'selected_center_id' => $resolvedCenterId,
+                'selected_group_id' => null,
                 'selected_date' => $resolvedDate,
                 'students' => [],
                 'existing_evaluation_id' => null,
@@ -167,16 +207,17 @@ class EvaluationService
         }
 
         $existingEvaluationId = Evaluation::query()
-            ->where('center_id', $resolvedCenterId)
+            ->where('group_id', $resolvedGroupId)
             ->whereDate('date', $resolvedDate)
             ->value('id');
 
         $students = $existingEvaluationId === null
-            ? $this->studentRowsForCenterDate($resolvedCenterId, $resolvedDate)
+            ? $this->studentRowsForGroupDate($resolvedGroupId, $resolvedDate)
             : [];
 
         return [
             'selected_center_id' => $resolvedCenterId,
+            'selected_group_id' => $resolvedGroupId,
             'selected_date' => $resolvedDate,
             'students' => $students,
             'existing_evaluation_id' => $existingEvaluationId !== null ? (int) $existingEvaluationId : null,
@@ -191,9 +232,11 @@ class EvaluationService
         $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
 
         $date = Carbon::parse((string) $evaluation->date)->toDateString();
+        $groupId = (int) $evaluation->group_id;
+        abort_unless($groupId > 0, 404);
 
-        return $this->studentRowsForCenterDate(
-            centerId: (int) $evaluation->center_id,
+        return $this->studentRowsForGroupDate(
+            groupId: $groupId,
             date: $date,
             evaluation: $evaluation,
         );
@@ -204,34 +247,35 @@ class EvaluationService
      */
     public function create(array $data): Evaluation
     {
-        $centerId = (int) $data['center_id'];
+        $groupId = (int) $data['group_id'];
         $date = $this->resolveDate((string) $data['date']);
         $adminId = Auth::id();
         $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? Evaluation::TYPE_ALHIFZ);
 
-        $centerExists = Center::query()
-            ->tap(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers'))
-            ->whereKey($centerId)
-            ->exists();
+        $group = Group::query()
+            ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
+            ->find($groupId, ['id', 'center_id']);
 
-        abort_unless($centerExists, 404);
+        abort_unless($group instanceof Group, 404);
+        $centerId = (int) $group->center_id;
 
         $exists = Evaluation::query()
-            ->where('center_id', $centerId)
+            ->where('group_id', $groupId)
             ->whereDate('date', $date)
             ->exists();
 
         if ($exists) {
             throw ValidationException::withMessages([
-                'date' => __('evaluations.already_exists_for_center_date'),
+                'date' => __('evaluations.already_exists_for_group_date'),
             ]);
         }
 
-        return DB::transaction(function () use ($centerId, $date, $adminId, $data, $evaluationType): Evaluation {
+        return DB::transaction(function () use ($centerId, $date, $adminId, $data, $evaluationType, $groupId): Evaluation {
             $evaluation = Evaluation::query()->create([
                 'ulid' => (string) Str::ulid(),
                 'date' => $date,
                 'center_id' => $centerId,
+                'group_id' => $groupId,
                 'admin_id' => $adminId,
                 'is_send_absence_alerts' => false,
                 'evaluation_type' => $evaluationType,
@@ -250,29 +294,39 @@ class EvaluationService
     public function update(Evaluation $evaluation, array $data): Evaluation
     {
         $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+        $lock = $this->acquireEvaluationExecutionLock($evaluation);
 
-        return DB::transaction(function () use ($evaluation, $data): Evaluation {
-            $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? $evaluation->evaluation_type);
-            if ((int) $evaluation->evaluation_type !== $evaluationType) {
-                $evaluation->update(['evaluation_type' => $evaluationType]);
-            }
+        try {
+            return DB::transaction(function () use ($evaluation, $data): Evaluation {
+                $evaluationType = $this->resolveEvaluationType($data['evaluation_type'] ?? $evaluation->evaluation_type);
+                if ((int) $evaluation->evaluation_type !== $evaluationType) {
+                    $evaluation->update(['evaluation_type' => $evaluationType]);
+                }
 
-            $this->syncEvaluationRows($evaluation, $data['items'] ?? [], $evaluationType);
-            $this->ensureFrozenRows($evaluation);
+                $this->syncEvaluationRows($evaluation, $data['items'] ?? [], $evaluationType);
+                $this->ensureFrozenRows($evaluation);
 
-            if ($evaluation->is_send_absence_alerts) {
-                $evaluation->update(['is_send_absence_alerts' => false]);
-            }
+                if ($evaluation->is_send_absence_alerts) {
+                    $evaluation->update(['is_send_absence_alerts' => false]);
+                }
 
-            return $evaluation->refresh();
-        });
+                return $evaluation->refresh();
+            });
+        } finally {
+            $lock->release();
+        }
     }
 
     public function delete(Evaluation $evaluation): void
     {
         $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+        $lock = $this->acquireEvaluationExecutionLock($evaluation);
 
-        $evaluation->delete();
+        try {
+            $evaluation->delete();
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
@@ -340,14 +394,47 @@ class EvaluationService
             404,
         );
 
+        $lock = $this->acquireEvaluationExecutionLock($evaluation);
+
+        try {
+            if (! $this->absenceAlertExecutionLock->refresh($lock)) {
+                throw ValidationException::withMessages([
+                    'message' => __('evaluations.absence_alert_lock_lost'),
+                ]);
+            }
+
+            return $this->resendAbsenceMessageWhileLocked($evaluation, $log);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resendAbsenceMessageWhileLocked(Evaluation $evaluation, AbsenceRuleExecutionLog $log): array
+    {
+
         /** @var AbsenceRuleExecutionLog $log */
         $log = AbsenceRuleExecutionLog::query()
             ->with(['student.center:id,name,group_serialized', 'center:id,name,group_serialized'])
             ->findOrFail($log->id);
 
-        if ($log->was_message_sent) {
+        if ($log->was_message_sent || $this->hasBlockingSiblingExecution($log)) {
             throw ValidationException::withMessages([
                 'message' => __('evaluations.absence_message_already_sent'),
+            ]);
+        }
+
+        if ($this->hasPartialDelivery($log->meta ?? [])) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_partially_sent'),
+            ]);
+        }
+
+        if ((bool) (($log->meta ?? [])['delivery_unknown'] ?? false)) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_delivery_uncertain'),
             ]);
         }
 
@@ -373,8 +460,17 @@ class EvaluationService
         }
 
         $student->loadMissing('center:id,name,group_serialized');
+        $evaluation->loadMissing('group:id,center_id,group_serialized');
         $recipientPhones = $this->extractUniquePhones($student);
-        $groupSerialized = $log->sent_to_group ? $student->center?->group_serialized : null;
+        $groupSerialized = null;
+        if ($log->sent_to_group) {
+            $groupSerialized = $evaluation->group !== null
+                ? $evaluation->group->group_serialized
+                : $student->center?->group_serialized;
+        }
+        $evaluationCenterId = $evaluation->group?->center_id
+            ?? $evaluation->center_id
+            ?? $student->center_id;
 
         if ($recipientPhones === [] && ($groupSerialized === null || trim($groupSerialized) === '')) {
             throw ValidationException::withMessages([
@@ -382,16 +478,52 @@ class EvaluationService
             ]);
         }
 
+        if (! $this->whatsAppPendingMessageService->canDispatchAbsenceLog($log)) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_business_action_not_applied'),
+            ]);
+        }
+
+        if (! $this->whatsAppPendingMessageService->retirePendingForSource(
+            AbsenceRuleExecutionLog::class,
+            (int) $log->id,
+        )) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_message_pending_processing'),
+            ]);
+        }
+
         try {
             $this->whatsAppMessagingService->sendMediaCaption($recipientPhones, $content, $groupSerialized);
+        } catch (WhatsAppMessageSendException $exception) {
+            $this->updateResentMessageLog(
+                log: $log,
+                student: $student,
+                recipientPhones: $recipientPhones,
+                groupSerialized: $groupSerialized,
+                centerId: $evaluationCenterId !== null ? (int) $evaluationCenterId : null,
+                wasMessageSent: false,
+                errorMessage: $exception->getMessage(),
+                dispatchMeta: $this->whatsAppMessagingService->deliveryFailureMeta(
+                    $recipientPhones,
+                    $groupSerialized,
+                    $exception,
+                ),
+            );
+
+            throw ValidationException::withMessages([
+                'message' => $exception->getMessage(),
+            ]);
         } catch (Throwable $exception) {
             $this->updateResentMessageLog(
                 log: $log,
                 student: $student,
                 recipientPhones: $recipientPhones,
                 groupSerialized: $groupSerialized,
+                centerId: $evaluationCenterId !== null ? (int) $evaluationCenterId : null,
                 wasMessageSent: false,
                 errorMessage: $exception->getMessage(),
+                dispatchMeta: ['delivery_unknown' => true],
             );
 
             throw ValidationException::withMessages([
@@ -404,6 +536,7 @@ class EvaluationService
             student: $student,
             recipientPhones: $recipientPhones,
             groupSerialized: $groupSerialized,
+            centerId: $evaluationCenterId !== null ? (int) $evaluationCenterId : null,
             wasMessageSent: true,
         );
 
@@ -419,7 +552,7 @@ class EvaluationService
         abort_if($publicId === '', 404);
 
         $evaluationQuery = Evaluation::query()
-            ->with('center:id,name')
+            ->with(['group:id,name,center_id', 'group.center:id,name', 'center:id,name'])
             ->where('ulid', $publicId);
 
         if (Schema::hasColumn('evaluations', 'uuid')) {
@@ -500,7 +633,8 @@ class EvaluationService
 
         return [
             'title' => 'تقييمات الطلاب',
-            'center_name' => $evaluation->center?->name ?? '-',
+            'center_name' => $evaluation->group?->center?->name ?? $evaluation->center?->name ?? '-',
+            'group_name' => $evaluation->group?->name ?? '-',
             'date' => $date->copy()->locale('ar')->translatedFormat('l ، j F ، Y'),
             'hijri_date' => $this->formatHijriDate($date),
             'evaluation_type' => $evaluationType,
@@ -613,12 +747,12 @@ class EvaluationService
 
     private function ensureFrozenRows(Evaluation $evaluation): void
     {
-        if ($evaluation->center_id === null || $evaluation->date === null) {
+        if ($evaluation->group_id === null || $evaluation->date === null) {
             return;
         }
 
         $date = Carbon::parse((string) $evaluation->date)->toDateString();
-        $frozenStudentIds = $this->frozenStudentIdsForDate((int) $evaluation->center_id, $date);
+        $frozenStudentIds = $this->frozenStudentIdsForDate((int) $evaluation->group_id, $date);
         if ($frozenStudentIds === []) {
             return;
         }
@@ -663,7 +797,7 @@ class EvaluationService
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function studentRowsForCenterDate(int $centerId, string $date, ?Evaluation $evaluation = null): array
+    private function studentRowsForGroupDate(int $groupId, string $date, ?Evaluation $evaluation = null): array
     {
         $existingItemsByStudent = collect();
         if ($evaluation !== null) {
@@ -681,12 +815,12 @@ class EvaluationService
                 });
         }
 
-        $frozenLookup = array_fill_keys($this->frozenStudentIdsForDate($centerId, $date), true);
+        $frozenLookup = array_fill_keys($this->frozenStudentIdsForDate($groupId, $date), true);
 
         $baseStudents = Student::query()
             ->with(['groups' => static fn ($query) => $query->orderBy('groups.name')])
             ->leftJoin('plan_types', 'students.plan_type_id', '=', 'plan_types.id')
-            ->where('students.center_id', $centerId)
+            ->whereHas('groups', static fn ($query) => $query->where('groups.id', $groupId))
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->where('students.is_active', Student::STATUS_ACTIVE)
             ->orderBy('students.plan_type_id')
@@ -780,11 +914,12 @@ class EvaluationService
     /**
      * @return array<int, int>
      */
-    private function frozenStudentIdsForDate(int $centerId, string $date): array
+    private function frozenStudentIdsForDate(int $groupId, string $date): array
     {
         return StudentFreeze::query()
             ->join('students', 'student_freezes.student_id', '=', 'students.id')
-            ->where('students.center_id', $centerId)
+            ->join('group_student', 'students.id', '=', 'group_student.student_id')
+            ->where('group_student.group_id', $groupId)
             ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
             ->whereDate('student_freezes.from', '<=', $date)
             ->whereDate('student_freezes.to', '>=', $date)
@@ -849,17 +984,23 @@ class EvaluationService
         Student $student,
         array $recipientPhones,
         ?string $groupSerialized,
+        ?int $centerId,
         bool $wasMessageSent,
         ?string $errorMessage = null,
+        array $dispatchMeta = [],
     ): AbsenceRuleExecutionLog {
         $attemptedAt = now();
         $meta = $log->meta ?? [];
+        foreach (['partial_delivery', 'delivered_chat_ids', 'remaining_chat_ids', 'delivery_unknown'] as $key) {
+            unset($meta[$key]);
+        }
         $meta['resend_attempted'] = true;
         $meta['resend_attempted_at'] = $attemptedAt->toIso8601String();
         $meta['resend_attempted_by'] = Auth::id();
-        $meta['resend_source'] = 'current_student_record';
+        $meta['resend_source'] = 'evaluation_group';
         $meta['group_serialized'] = $groupSerialized;
         $meta['error'] = $errorMessage;
+        $meta = array_merge($meta, $dispatchMeta);
 
         if ($wasMessageSent) {
             $meta['resent'] = true;
@@ -868,7 +1009,7 @@ class EvaluationService
         }
 
         $log->update([
-            'center_id' => $student->center_id,
+            'center_id' => $centerId,
             'recipient_phones' => $recipientPhones,
             'was_message_sent' => $wasMessageSent,
             'executed_by' => Auth::id(),
@@ -877,6 +1018,72 @@ class EvaluationService
         ]);
 
         return $log->refresh()->load(['student:id,full_name', 'center:id,name,group_serialized']);
+    }
+
+    /** @param array<string, mixed> $meta */
+    private function hasPartialDelivery(array $meta): bool
+    {
+        if ((bool) ($meta['partial_delivery'] ?? false)
+            || (bool) ($meta['pending_partial_delivery'] ?? false)) {
+            return true;
+        }
+
+        $deliveredChatIds = $meta['delivered_chat_ids'] ?? $meta['pending_delivered_chat_ids'] ?? [];
+
+        return is_array($deliveredChatIds) && $deliveredChatIds !== [];
+    }
+
+    private function acquireEvaluationExecutionLock(Evaluation $evaluation): Lock
+    {
+        $lock = $this->absenceAlertExecutionLock->acquire((int) $evaluation->id);
+        if ($lock === null) {
+            throw ValidationException::withMessages([
+                'message' => __('evaluations.absence_alerts_processing'),
+            ]);
+        }
+
+        return $lock;
+    }
+
+    private function hasBlockingSiblingExecution(AbsenceRuleExecutionLog $log): bool
+    {
+        if ($log->evaluation_student_id === null) {
+            return false;
+        }
+
+        return AbsenceRuleExecutionLog::query()
+            ->where('evaluation_student_id', $log->evaluation_student_id)
+            ->whereKeyNot($log->id)
+            ->get()
+            ->reject(static fn (AbsenceRuleExecutionLog $sibling): bool => (bool) (($sibling->meta ?? [])['local_preview'] ?? false))
+            ->contains(fn (AbsenceRuleExecutionLog $sibling): bool => ! $this->isKnownZeroDeliveryFailure($sibling));
+    }
+
+    private function isKnownZeroDeliveryFailure(AbsenceRuleExecutionLog $log): bool
+    {
+        $meta = $log->meta ?? [];
+        $deliveredChatIds = $meta['delivered_chat_ids'] ?? [];
+        $remainingChatIds = $meta['remaining_chat_ids'] ?? [];
+
+        if (! is_array($deliveredChatIds) || $deliveredChatIds !== [] || ! is_array($remainingChatIds)) {
+            return false;
+        }
+
+        $groupSerialized = array_key_exists('group_serialized', $meta)
+            ? $meta['group_serialized']
+            : null;
+        $intendedChatIds = $this->whatsAppMessagingService->recipientChatIds(
+            is_array($log->recipient_phones) ? $log->recipient_phones : [],
+            is_string($groupSerialized) ? $groupSerialized : null,
+        );
+        $remainingChatIds = array_values(array_unique(array_map(
+            static fn (mixed $chatId): string => trim((string) $chatId),
+            $remainingChatIds,
+        )));
+        sort($intendedChatIds);
+        sort($remainingChatIds);
+
+        return $intendedChatIds !== [] && $intendedChatIds === $remainingChatIds;
     }
 
     /**
@@ -1012,6 +1219,13 @@ class EvaluationService
     private function absenceMessageLogPayload(AbsenceRuleExecutionLog $log): array
     {
         $meta = $log->meta ?? [];
+        $groupSerialized = array_key_exists('group_serialized', $meta)
+            ? $meta['group_serialized']
+            : $log->center?->group_serialized;
+        $requiresDeliveryReview = $this->hasPartialDelivery($meta)
+            || (bool) ($meta['delivery_unknown'] ?? false)
+            || (bool) ($meta['processing'] ?? false);
+        $error = $meta['error'] ?? null;
 
         return [
             'id' => (int) $log->id,
@@ -1024,11 +1238,16 @@ class EvaluationService
             'action' => $log->action,
             'recipient_phones' => $log->recipient_phones ?? [],
             'sent_to_group' => (bool) $log->sent_to_group,
-            'group_serialized' => $meta['group_serialized'] ?? $log->center?->group_serialized,
+            'group_serialized' => $groupSerialized,
             'message_content' => $log->message_content,
             'was_message_sent' => (bool) $log->was_message_sent,
             'local_preview' => (bool) ($meta['local_preview'] ?? false),
-            'error' => $meta['error'] ?? null,
+            'error' => $error,
+            'requires_delivery_review' => $requiresDeliveryReview,
+            'can_resend' => ! $log->was_message_sent
+                && ! $requiresDeliveryReview
+                && is_string($error)
+                && trim($error) !== '',
             'created_at_formatted' => $this->dateTimeFormatter->formatForAdmin($log->created_at),
             'executed_at_formatted' => $this->dateTimeFormatter->formatForAdmin($log->executed_at),
         ];

@@ -8,17 +8,15 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class MessageTemplateService
 {
-    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter)
-    {
-    }
+    public function __construct(private readonly DateTimeFormatterService $dateTimeFormatter) {}
 
     /**
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
 
@@ -67,7 +65,7 @@ class MessageTemplateService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): MessageTemplate
     {
@@ -75,7 +73,7 @@ class MessageTemplateService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(MessageTemplate $template, array $data): MessageTemplate
     {
@@ -90,7 +88,7 @@ class MessageTemplateService
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function payload(array $data): array

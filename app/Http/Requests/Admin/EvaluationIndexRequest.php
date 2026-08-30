@@ -28,6 +28,12 @@ class EvaluationIndexRequest extends FormRequest
                 Rule::exists('centers', 'id')
                     ->where(fn ($query) => app(AdminDataScopeService::class)->applyCenterAccess($query, 'centers')),
             ],
+            'group_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('groups', 'id')
+                    ->where(fn ($query) => app(AdminDataScopeService::class)->applyGroupAccess($query, 'groups')),
+            ],
             'date_from' => ['nullable', 'date_format:Y-m-d'],
             'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
             'alert_status' => ['nullable', Rule::in(['sent', 'pending'])],
@@ -35,6 +41,7 @@ class EvaluationIndexRequest extends FormRequest
                 'id',
                 'date',
                 'center_name',
+                'group_name',
                 'admin_name',
                 'is_send_absence_alerts',
                 'created_at',

@@ -2,7 +2,8 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Models\Center;
+use App\Models\Group;
+use App\Models\Homework;
 use App\Services\Admin\AdminDataScopeService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
@@ -19,7 +20,8 @@ class HomeworkStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'center_id' => (int) $this->input('center_id'),
+            'center_id' => filled($this->input('center_id')) ? (int) $this->input('center_id') : null,
+            'group_id' => (int) $this->input('group_id'),
             'date' => (string) $this->input('date'),
             'items' => $this->normalizedItems(),
         ]);
@@ -31,25 +33,61 @@ class HomeworkStoreRequest extends FormRequest
     public function rules(): array
     {
         $dataScope = app(AdminDataScopeService::class);
-        $centerId = $this->rowCenterId();
+        $groupId = $this->rowGroupId();
+        $homework = $this->route('homework');
+        $homeworkId = $homework instanceof Homework ? (int) $homework->id : null;
         $studentRule = Rule::exists('students', 'id')
-            ->where(function ($query) use ($centerId, $dataScope): void {
-                if ($centerId !== null) {
-                    $query->where('center_id', $centerId);
-                }
+            ->where(function ($query) use ($dataScope, $groupId, $homeworkId): void {
+                $query->where(function ($allowed) use ($groupId, $homeworkId): void {
+                    if ($groupId !== null) {
+                        $allowed->whereExists(function ($membership) use ($groupId): void {
+                            $membership
+                                ->selectRaw('1')
+                                ->from('group_student')
+                                ->whereColumn('group_student.student_id', 'students.id')
+                                ->where('group_student.group_id', $groupId);
+                        });
+                    }
+
+                    if ($homeworkId !== null) {
+                        $method = $groupId !== null ? 'orWhereExists' : 'whereExists';
+                        $allowed->{$method}(function ($historical) use ($homeworkId): void {
+                            $historical
+                                ->selectRaw('1')
+                                ->from('homework_students')
+                                ->whereColumn('homework_students.student_id', 'students.id')
+                                ->where('homework_students.homework_id', $homeworkId);
+                        });
+                    }
+                });
 
                 $dataScope->applyStudentAccess($query, 'students');
             });
 
         return [
             'center_id' => [
-                'required',
+                'nullable',
+                'integer',
                 Rule::exists('centers', 'id')
-                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+                    ->where(function ($query) use ($dataScope): void {
+                        $query->whereNull('archived_at');
+                        $dataScope->applyCenterAccess($query, 'centers');
+                    }),
             ],
-            'date' => ['required', 'date_format:Y-m-d'],
+            'group_id' => [
+                'required',
+                'integer',
+                Rule::exists('groups', 'id')
+                    ->where(fn ($query) => $dataScope->applyGroupAccess($query, 'groups')),
+            ],
+            'date' => [
+                'required',
+                'date_format:Y-m-d',
+                Rule::unique('homeworks', 'date')
+                    ->where(fn ($query) => $query->where('group_id', $groupId)),
+            ],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.student_id' => ['required', $studentRule],
+            'items.*.student_id' => ['required', 'distinct', $studentRule],
             'items.*.points_adjustment' => ['nullable', 'integer', 'min:-1000000', 'max:1000000'],
             'items.*.points' => ['array'],
             'items.*.points.*.plan_point_id' => ['required', Rule::exists('plan_points', 'id')],
@@ -61,18 +99,18 @@ class HomeworkStoreRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if ($validator->errors()->has('center_id') || $validator->errors()->has('date')) {
+            if ($validator->errors()->has('group_id') || $validator->errors()->has('date')) {
                 return;
             }
 
-            $center = Center::query()
-                ->tap(fn ($query) => app(AdminDataScopeService::class)->applyCenterAccess($query, 'centers'))
-                ->find((int) $this->input('center_id'));
-            if ($center === null || $this->dateMatchesCenterWorkingDays($center, (string) $this->input('date'))) {
+            $group = Group::query()
+                ->tap(fn ($query) => app(AdminDataScopeService::class)->applyGroupAccess($query, 'groups'))
+                ->find($this->rowGroupId());
+            if ($group === null || $this->dateMatchesGroupWorkingDays($group, (string) $this->input('date'))) {
                 return;
             }
 
-            $validator->errors()->add('date', __('homeworks.date_not_in_center_working_days'));
+            $validator->errors()->add('date', __('homeworks.date_not_in_group_working_days'));
         });
     }
 
@@ -108,16 +146,16 @@ class HomeworkStoreRequest extends FormRequest
         }, $items);
     }
 
-    protected function rowCenterId(): ?int
+    protected function rowGroupId(): ?int
     {
-        $centerId = (int) $this->input('center_id');
+        $groupId = (int) $this->input('group_id');
 
-        return $centerId > 0 ? $centerId : null;
+        return $groupId > 0 ? $groupId : null;
     }
 
-    private function dateMatchesCenterWorkingDays(Center $center, string $date): bool
+    private function dateMatchesGroupWorkingDays(Group $group, string $date): bool
     {
-        $workingDays = is_array($center->working_days) ? $center->working_days : [];
+        $workingDays = is_array($group->working_days) ? $group->working_days : [];
         if ($workingDays === []) {
             return true;
         }

@@ -47,7 +47,8 @@ class EvaluationStoreRequest extends FormRequest
         }, $items);
 
         $this->merge([
-            'center_id' => (int) $this->input('center_id'),
+            'center_id' => filled($this->input('center_id')) ? (int) $this->input('center_id') : null,
+            'group_id' => (int) $this->input('group_id'),
             'evaluation_type' => (int) $this->input('evaluation_type', Evaluation::TYPE_ALHIFZ),
             'date' => (string) $this->input('date'),
             'items' => $normalizedItems,
@@ -60,23 +61,44 @@ class EvaluationStoreRequest extends FormRequest
     public function rules(): array
     {
         $dataScope = app(AdminDataScopeService::class);
-        $centerId = (int) $this->input('center_id');
+        $groupId = (int) $this->input('group_id');
         $studentRule = Rule::exists('students', 'id')
-            ->where(function ($query) use ($centerId, $dataScope): void {
-                $query->where('center_id', $centerId);
+            ->where(function ($query) use ($groupId, $dataScope): void {
+                $query->whereExists(function ($membership) use ($groupId): void {
+                    $membership
+                        ->selectRaw('1')
+                        ->from('group_student')
+                        ->whereColumn('group_student.student_id', 'students.id')
+                        ->where('group_student.group_id', $groupId);
+                });
                 $dataScope->applyStudentAccess($query, 'students');
             });
 
         return [
             'center_id' => [
-                'required',
+                'nullable',
+                'integer',
                 Rule::exists('centers', 'id')
-                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+                    ->where(function ($query) use ($dataScope): void {
+                        $query->whereNull('archived_at');
+                        $dataScope->applyCenterAccess($query, 'centers');
+                    }),
+            ],
+            'group_id' => [
+                'required',
+                'integer',
+                Rule::exists('groups', 'id')
+                    ->where(fn ($query) => $dataScope->applyGroupAccess($query, 'groups')),
             ],
             'evaluation_type' => ['required', 'integer', Rule::in([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID])],
-            'date' => ['required', 'date_format:Y-m-d'],
+            'date' => [
+                'required',
+                'date_format:Y-m-d',
+                Rule::unique('evaluations', 'date')
+                    ->where(fn ($query) => $query->where('group_id', $groupId)),
+            ],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.student_id' => ['required', $studentRule],
+            'items.*.student_id' => ['required', 'distinct', $studentRule],
             'items.*.attendances' => ['required', Rule::in([
                 EvaluationStudent::ATTENDANCE_PRESENT,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,

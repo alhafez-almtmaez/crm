@@ -16,7 +16,7 @@ class RuleExecutionSupport
         $group = $context->shouldSendToGroup() ? $context->groupSerialized : null;
 
         if ($content === '') {
-            return MessageDispatchResult::notSent();
+            return MessageDispatchResult::notSent($group);
         }
 
         if ($this->shouldCreateLocalPreview()) {
@@ -24,12 +24,12 @@ class RuleExecutionSupport
         }
 
         if ($context->recipientPhones === [] && ($group === null || trim($group) === '')) {
-            return MessageDispatchResult::notSent();
+            return MessageDispatchResult::notSent($group);
         }
 
         $this->messagingService->sendMediaCaption($context->recipientPhones, $content, $group);
 
-        return MessageDispatchResult::sent();
+        return MessageDispatchResult::sent($group);
     }
 
     public function freezeStudent(RuleExecutionContext $context): ?StudentFreeze

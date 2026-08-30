@@ -262,6 +262,7 @@ const copyReportLink = async () => {
 
                 <div class="report-meta">
                     <p class="report-center">{{ report.center_name }}</p>
+                    <p v-if="report.group_name" class="report-center">{{ report.group_name }}</p>
                     <div class="date-row">
                         <span><i class="pi pi-calendar" aria-hidden="true" />{{ report.date }}</span>
                         <span v-if="report.hijri_date"><i class="pi pi-moon" aria-hidden="true" />{{ report.hijri_date }}</span>

@@ -12,6 +12,7 @@ class Evaluation extends Model
     use HasFactory;
 
     public const TYPE_ALHIFZ = 1;
+
     public const TYPE_TAJWID = 2;
 
     protected $fillable = [
@@ -19,6 +20,7 @@ class Evaluation extends Model
         'date',
         'admin_id',
         'center_id',
+        'group_id',
         'is_send_absence_alerts',
         'evaluation_type',
     ];
@@ -32,6 +34,11 @@ class Evaluation extends Model
     public function center(): BelongsTo
     {
         return $this->belongsTo(Center::class);
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(Group::class);
     }
 
     public function admin(): BelongsTo

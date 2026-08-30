@@ -3,6 +3,7 @@
 use App\Models\Center;
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
+use App\Models\Group;
 use App\Models\Student;
 use App\Services\Admin\EvaluationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -11,12 +12,17 @@ uses(RefreshDatabase::class);
 
 test('evaluation creation stores exempt attendance as its own row without scores', function () {
     $center = Center::factory()->create();
+    $group = Group::factory()->create(['center_id' => $center->id]);
     $student = Student::factory()
         ->active()
-        ->create(['center_id' => $center->id]);
+        ->create([
+            'center_id' => $center->id,
+            'group_id' => $group->id,
+        ]);
 
     app(EvaluationService::class)->create([
         'center_id' => $center->id,
+        'group_id' => $group->id,
         'date' => '2026-06-16',
         'evaluation_type' => Evaluation::TYPE_ALHIFZ,
         'items' => [
@@ -42,11 +48,16 @@ test('evaluation creation stores exempt attendance as its own row without scores
 
 test('evaluation update can change an existing row to exempt attendance', function () {
     $center = Center::factory()->create();
+    $group = Group::factory()->create(['center_id' => $center->id]);
     $student = Student::factory()
         ->active()
-        ->create(['center_id' => $center->id]);
+        ->create([
+            'center_id' => $center->id,
+            'group_id' => $group->id,
+        ]);
     $evaluation = Evaluation::factory()->create([
         'center_id' => $center->id,
+        'group_id' => $group->id,
         'date' => '2026-06-16',
         'evaluation_type' => Evaluation::TYPE_ALHIFZ,
     ]);

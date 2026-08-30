@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Center;
+use App\Models\Group;
 use App\Models\Student;
 use App\Services\Admin\AdminDataScopeService;
 use App\Support\DailyWeightLimits;
@@ -124,9 +125,12 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             'center_id' => [
                 'required',
                 Rule::exists('centers', 'id')
-                    ->where(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers')),
+                    ->where(function ($query): void {
+                        $query->whereNull('archived_at');
+                        $this->dataScope->applyCenterAccess($query, 'centers');
+                    }),
             ],
-            'group_ids' => ['nullable', 'array'],
+            'group_ids' => ['required', 'array', 'min:1'],
             'group_ids.*' => ['integer', 'distinct', Rule::exists('groups', 'id')
                 ->where(function ($query) use ($payload): void {
                     $query->where('center_id', (int) ($payload['center_id'] ?? 0));
@@ -214,7 +218,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             $payload['daily_weight_limits'] = DailyWeightLimits::normalize(
                 $validated['daily_weight_limits'] ?? null,
                 $maxDailyWeight,
-                $this->workingDaysForCenter((int) $validated['center_id']),
+                $this->workingDaysForSelection((int) $validated['center_id'], $groupIds),
             );
         }
 
@@ -371,8 +375,16 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
     /**
      * @return array<int, string>
      */
-    private function workingDaysForCenter(int $centerId): array
+    private function workingDaysForSelection(int $centerId, array $groupIds): array
     {
+        if ($groupIds !== []) {
+            $group = Group::query()->find((int) $groupIds[0], ['id', 'working_days']);
+
+            if ($group !== null && is_array($group->working_days) && $group->working_days !== []) {
+                return DailyWeightLimits::normalizeWorkingDays($group->working_days);
+            }
+        }
+
         $center = Center::query()->find($centerId, ['id', 'working_days']);
 
         return DailyWeightLimits::normalizeWorkingDays($center?->working_days);

@@ -11,6 +11,7 @@ use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanItem;
 use App\Models\User;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
+use App\Services\Admin\StudentMonthlyPlanService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -133,6 +134,74 @@ test('weekday daily limits control monthly plan distribution', function () {
         ->and($days[1]->date->format('Y-m-d'))->toBe('2026-06-02')
         ->and($days[1]->items_count)->toBe(2)
         ->and((float) $days[1]->total_weight)->toBe(2.0);
+});
+
+test('group working days override the center schedule for generation reports and regeneration', function () {
+    [$center, $group, $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $center->update(['working_days' => ['monday']]);
+    $group->update(['working_days' => ['wednesday']]);
+
+    createPlanPoint($plan, 'تسميع 1', 1, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 2', 2, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 3', 3, ['weight' => 1]);
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent(
+        student: $student->refresh(),
+        month: 6,
+        year: 2026,
+        startDate: CarbonImmutable::create(2026, 6, 1),
+        endDate: CarbonImmutable::create(2026, 6, 17),
+    );
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+    $initialDates = $studentPlan->days()
+        ->orderBy('date')
+        ->pluck('date')
+        ->map(fn ($date) => CarbonImmutable::parse($date)->toDateString())
+        ->all();
+    $savedPayload = app(StudentMonthlyPlanService::class)->savedPlanPayload($monthlyPlan);
+    $publicPayload = app(StudentMonthlyPlanService::class)->publicReportPayload((string) $monthlyPlan->ulid);
+
+    expect($initialDates)->toBe(['2026-06-03', '2026-06-10', '2026-06-17'])
+        ->and($studentPlan->daily_weight_limits)->toBe(['wednesday' => 1])
+        ->and(array_column($savedPayload['dates'], 'date'))->toBe($initialDates)
+        ->and(array_column($publicPayload['dates'], 'date'))->toBe($initialDates);
+
+    $group->update(['working_days' => ['friday']]);
+    app(StudentMonthlyPlanGenerator::class)->regenerateFutureForMonthlyPlan(
+        $monthlyPlan,
+        CarbonImmutable::create(2026, 6, 4),
+    );
+
+    $regeneratedDates = $studentPlan->refresh()->days()
+        ->orderBy('date')
+        ->pluck('date')
+        ->map(fn ($date) => CarbonImmutable::parse($date)->toDateString())
+        ->all();
+
+    expect($regeneratedDates)->toBe(['2026-06-03', '2026-06-05', '2026-06-12'])
+        ->and($studentPlan->daily_weight_limits)->toBe(['friday' => 1]);
+});
+
+test('monthly generation falls back to center working days for legacy groups', function () {
+    [$center, $group, $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $center->update(['working_days' => ['sunday']]);
+    $group->update(['working_days' => null]);
+
+    createPlanPoint($plan, 'تسميع 1', 1, ['weight' => 1]);
+    createPlanPoint($plan, 'تسميع 2', 2, ['weight' => 1]);
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent(
+        student: $student->refresh(),
+        month: 6,
+        year: 2026,
+        startDate: CarbonImmutable::create(2026, 6, 1),
+        endDate: CarbonImmutable::create(2026, 6, 14),
+    );
+
+    expect($studentPlan->days()->orderBy('date')->pluck('date')->map(
+        fn ($date) => CarbonImmutable::parse($date)->toDateString(),
+    )->all())->toBe(['2026-06-07', '2026-06-14'])
+        ->and($studentPlan->daily_weight_limits)->toBe(['sunday' => 1]);
 });
 
 test('monthly generation respects the selected start and end dates', function () {

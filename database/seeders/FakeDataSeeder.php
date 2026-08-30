@@ -13,6 +13,7 @@ use App\Models\MessageTemplate;
 use App\Models\Plan;
 use App\Models\Role;
 use App\Models\Student;
+use App\Models\StudentCongratulatory;
 use App\Models\StudentFreeze;
 use App\Models\SystemSetting;
 use App\Models\User;
@@ -39,7 +40,7 @@ class FakeDataSeeder extends Seeder
 
         $templates = $this->seedMessageTemplates();
         $this->seedAbsenceRules($centers, $templates);
-        $this->seedEvaluations($centers, $studentsByCenter, $admins);
+        $this->seedEvaluations($groupsByCenter->flatten(1)->values(), $admins);
         $this->seedAbsenceExecutionLogs($admins);
     }
 
@@ -110,16 +111,16 @@ class FakeDataSeeder extends Seeder
      */
     private function seedCenters(): Collection
     {
-        $missing = max(0, 4 - Center::query()->count());
+        $missing = max(0, 4 - Center::query()->active()->count());
         if ($missing > 0) {
             Center::factory()->count($missing)->create();
         }
 
-        return Center::query()->get()->values();
+        return Center::query()->active()->get()->values();
     }
 
     /**
-     * @param Collection<int, Center> $centers
+     * @param  Collection<int, Center>  $centers
      * @return Collection<int, Collection<int, Group>>
      */
     private function seedGroups(Collection $centers): Collection
@@ -142,10 +143,10 @@ class FakeDataSeeder extends Seeder
     }
 
     /**
-     * @param Collection<int, Center> $centers
-     * @param Collection<int, Collection<int, Group>> $groupsByCenter
-     * @param Collection<int, Plan> $plans
-     * @param Collection<int, User> $admins
+     * @param  Collection<int, Center>  $centers
+     * @param  Collection<int, Collection<int, Group>>  $groupsByCenter
+     * @param  Collection<int, Plan>  $plans
+     * @param  Collection<int, User>  $admins
      * @return Collection<int, Collection<int, Student>>
      */
     private function seedStudents(
@@ -186,8 +187,8 @@ class FakeDataSeeder extends Seeder
     }
 
     /**
-     * @param Collection<int, Collection<int, Student>> $studentsByCenter
-     * @param Collection<int, User> $admins
+     * @param  Collection<int, Collection<int, Student>>  $studentsByCenter
+     * @param  Collection<int, User>  $admins
      */
     private function seedStudentRecords(Collection $studentsByCenter, Collection $admins): void
     {
@@ -246,9 +247,9 @@ class FakeDataSeeder extends Seeder
                 ->create();
         }
 
-        $congratulatoryMissing = max(0, 25 - \App\Models\StudentCongratulatory::query()->count());
+        $congratulatoryMissing = max(0, 25 - StudentCongratulatory::query()->count());
         for ($i = 0; $i < $congratulatoryMissing; $i++) {
-            \App\Models\StudentCongratulatory::factory()
+            StudentCongratulatory::factory()
                 ->state([
                     'student_id' => $allStudents->random()->id,
                     'sent_by' => $admins->random()->id,
@@ -271,8 +272,8 @@ class FakeDataSeeder extends Seeder
     }
 
     /**
-     * @param Collection<int, Center> $centers
-     * @param Collection<int, MessageTemplate> $templates
+     * @param  Collection<int, Center>  $centers
+     * @param  Collection<int, MessageTemplate>  $templates
      */
     private function seedAbsenceRules(Collection $centers, Collection $templates): void
     {
@@ -335,13 +336,11 @@ class FakeDataSeeder extends Seeder
     }
 
     /**
-     * @param Collection<int, Center> $centers
-     * @param Collection<int, Collection<int, Student>> $studentsByCenter
-     * @param Collection<int, User> $admins
+     * @param  Collection<int, Group>  $groups
+     * @param  Collection<int, User>  $admins
      */
     private function seedEvaluations(
-        Collection $centers,
-        Collection $studentsByCenter,
+        Collection $groups,
         Collection $admins,
     ): void {
         $dates = collect(range(0, 7))
@@ -353,17 +352,18 @@ class FakeDataSeeder extends Seeder
             ->get()
             ->groupBy('student_id');
 
-        foreach ($centers as $center) {
-            /** @var Collection<int, Student> $centerStudents */
-            $centerStudents = $studentsByCenter
-                ->get((int) $center->id, collect())
+        foreach ($groups as $group) {
+            /** @var Collection<int, Student> $groupStudents */
+            $groupStudents = $group->students()
+                ->get()
                 ->filter(static fn (Student $student): bool => (int) $student->is_active !== Student::STATUS_INACTIVE)
                 ->values();
 
             foreach ($dates as $date) {
                 $defaults = Evaluation::factory()
-                    ->for($center)
                     ->state([
+                        'center_id' => $group->center_id,
+                        'group_id' => $group->id,
                         'date' => $date,
                         'admin_id' => $admins->random()->id,
                         'is_send_absence_alerts' => fake()->boolean(35),
@@ -373,17 +373,17 @@ class FakeDataSeeder extends Seeder
 
                 $evaluation = Evaluation::query()->firstOrCreate(
                     [
-                        'center_id' => $center->id,
+                        'group_id' => $group->id,
                         'date' => $date,
                     ],
-                    Arr::except($defaults, ['center_id', 'date']),
+                    Arr::except($defaults, ['group_id', 'date']),
                 );
 
                 if ($evaluation->evaluationStudents()->exists()) {
                     continue;
                 }
 
-                foreach ($centerStudents as $student) {
+                foreach ($groupStudents as $student) {
                     $isFrozenOnDate = $this->isStudentFrozenOnDate((int) $student->id, $date, $freezesByStudent);
                     $attendance = $isFrozenOnDate
                         ? EvaluationStudent::ATTENDANCE_FROZEN
@@ -396,21 +396,25 @@ class FakeDataSeeder extends Seeder
 
                     if ($attendance === EvaluationStudent::ATTENDANCE_FROZEN) {
                         $builder->frozen()->create();
+
                         continue;
                     }
 
                     if ($attendance === EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE) {
                         $builder->excusedAbsence()->create();
+
                         continue;
                     }
 
                     if ($attendance === EvaluationStudent::ATTENDANCE_ABSENCE) {
                         $builder->absence()->create();
+
                         continue;
                     }
 
                     if ($attendance === EvaluationStudent::ATTENDANCE_EXEMPT) {
                         $builder->exempt()->create();
+
                         continue;
                     }
 
@@ -419,6 +423,7 @@ class FakeDataSeeder extends Seeder
                             'alhifz' => null,
                             'tajwid' => fake()->numberBetween(4, 10),
                         ])->create();
+
                         continue;
                     }
 
@@ -431,7 +436,7 @@ class FakeDataSeeder extends Seeder
     }
 
     /**
-     * @param Collection<int, User> $admins
+     * @param  Collection<int, User>  $admins
      */
     private function seedAbsenceExecutionLogs(Collection $admins): void
     {
@@ -565,7 +570,7 @@ class FakeDataSeeder extends Seeder
     }
 
     /**
-     * @param Collection<int, Collection<int, StudentFreeze>> $freezesByStudent
+     * @param  Collection<int, Collection<int, StudentFreeze>>  $freezesByStudent
      */
     private function isStudentFrozenOnDate(
         int $studentId,

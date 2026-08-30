@@ -81,7 +81,7 @@ const statusClass = (log) => ({
     notSent: 'bg-amber-600 text-white',
 }[statusKey(log)]);
 
-const canResend = (log) => statusKey(log) === 'failed';
+const canResend = (log) => log.can_resend === true;
 
 const isExpanded = (log) => expandedLogIds.value.includes(log.id);
 
@@ -225,6 +225,10 @@ const actionLabel = (log) => {
 
                         <p v-if="log.error" class="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
                             {{ log.error }}
+                        </p>
+
+                        <p v-if="log.requires_delivery_review" class="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                            {{ t('evaluations.messageLog.reviewRequired') }}
                         </p>
 
                         <div v-if="canResend(log)" class="mt-4 flex justify-end">

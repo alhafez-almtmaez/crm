@@ -11,6 +11,7 @@ use App\Models\Group;
 use App\Services\Admin\ActivityLogService;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\GroupService;
+use App\Services\Admin\WhatsAppGroupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -23,6 +24,7 @@ class GroupController extends Controller implements HasMiddleware
     public function __construct(
         private readonly GroupService $groupService,
         private readonly ActivityLogService $activityLogService,
+        private readonly WhatsAppGroupService $whatsAppGroupService,
         private readonly AdminDataScopeService $dataScope,
     ) {}
 
@@ -86,6 +88,7 @@ class GroupController extends Controller implements HasMiddleware
     {
         return Inertia::render('Admin/Groups/Create', [
             'centers' => $this->groupService->centerOptions(),
+            'whatsappGroups' => $this->whatsAppGroupService->options(),
         ]);
     }
 
@@ -94,8 +97,12 @@ class GroupController extends Controller implements HasMiddleware
         $this->dataScope->abortUnlessCanAccessGroup($group);
 
         return Inertia::render('Admin/Groups/Edit', [
-            'group' => $group->only(['id', 'name', 'center_id']),
+            'group' => [
+                ...$group->only(['id', 'name', 'center_id', 'group_serialized']),
+                'working_days' => is_array($group->working_days) ? $group->working_days : [],
+            ],
             'centers' => $this->groupService->centerOptions(),
+            'whatsappGroups' => $this->whatsAppGroupService->options(),
         ]);
     }
 

@@ -36,6 +36,7 @@ const {
 const rows = computed(() => (sourceRows.value ?? []).map((row) => ({
     ...row,
     center_name: row.center_name ?? t('common.na'),
+    group_name: row.group_name ?? t('common.na'),
     admin_name: row.admin_name ?? t('common.na'),
 })));
 
@@ -43,6 +44,7 @@ const columns = computed(() => [
     { field: 'id', header: t('common.id'), sortable: true },
     { field: 'date_formatted', header: t('homeworks.date'), sortable: true, sortField: 'date' },
     { field: 'center_name', header: t('homeworks.center'), sortable: true, sortField: 'center_name' },
+    { field: 'group_name', header: t('homeworks.group'), sortable: true, sortField: 'group_name' },
     { field: 'admin_name', header: t('students.admin'), sortable: true, sortField: 'admin_name' },
     { field: 'students_count', header: t('homeworks.studentsCount') },
     { field: 'completed_points_count', header: t('homeworks.completedPointsCount') },
@@ -100,6 +102,7 @@ const askDelete = ({ data: row, event }) => {
         target,
         message: t('homeworks.deleteConfirm', {
             center: row.center_name,
+            group: row.group_name,
             date: row.date_formatted,
         }),
         icon: 'pi pi-exclamation-triangle',

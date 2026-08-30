@@ -22,13 +22,13 @@ class PlanService
     public function list(array $filters): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
-        $perPage = (int) ($filters['per_page'] ?? 10);
+        $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
-        $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+        $sortDir = (string) ($filters['sort_dir'] ?? 'asc');
         $allowedSorts = ['id', 'name', 'created_at'];
 
         $sortBy = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'id';
-        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'asc';
 
         $query = Plan::query()
             ->select(['id', 'name', 'created_at'])

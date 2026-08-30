@@ -74,6 +74,7 @@ const mapStudents = (rows = []) => rows.map((row) => {
 
 const form = useForm({
     center_id: props.evaluation.center_id,
+    group_id: props.evaluation.group_id,
     date: props.evaluation.date,
     evaluation_type: Number(props.evaluation.evaluation_type ?? 1) === 2 ? 2 : 1,
     items: mapStudents(props.students),

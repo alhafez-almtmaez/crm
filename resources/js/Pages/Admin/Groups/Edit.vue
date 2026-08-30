@@ -15,11 +15,17 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    whatsappGroups: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const form = useForm({
     name: props.group.name,
     center_id: props.group.center_id,
+    group_serialized: props.group.group_serialized ?? '',
+    working_days: props.group.working_days ?? [],
 });
 const { t } = useI18n();
 
@@ -42,6 +48,7 @@ const goBack = () => {
             <GroupFormCard
                 :form="form"
                 :centers="centers"
+                :whatsapp-groups="whatsappGroups"
                 :submit-label="t('common.saveChanges')"
                 :title="t('groups.editGroup')"
                 :description="t('groups.editDescription')"

@@ -58,7 +58,9 @@ test('an admin can create a center with certificate settings', function () {
 
     expect($center->certificate_name)->toBe('مركز الإتقان القرآني')
         ->and($center->student_gender)->toBe(Center::STUDENT_GENDER_MALE)
-        ->and($center->show_center_manager_signature)->toBeFalse();
+        ->and($center->show_center_manager_signature)->toBeFalse()
+        ->and($center->group_serialized)->toBeNull()
+        ->and($center->working_days)->toBe([]);
 
     $this->assertDatabaseHas('centers', [
         'id' => $center->id,
@@ -74,6 +76,8 @@ test('an admin can update center certificate settings', function () {
         'certificate_name' => 'الاسم القديم',
         'student_gender' => Center::STUDENT_GENDER_MALE,
         'show_center_manager_signature' => false,
+        'group_serialized' => 'legacy-center-group@g.us',
+        'working_days' => ['friday'],
     ]);
 
     $this->actingAs($admin, 'web')
@@ -90,7 +94,9 @@ test('an admin can update center certificate settings', function () {
 
     expect($center->certificate_name)->toBeNull()
         ->and($center->student_gender)->toBe(Center::STUDENT_GENDER_FEMALE)
-        ->and($center->show_center_manager_signature)->toBeTrue();
+        ->and($center->show_center_manager_signature)->toBeTrue()
+        ->and($center->group_serialized)->toBe('legacy-center-group@g.us')
+        ->and($center->working_days)->toBe(['friday']);
 });
 
 test('the center edit page exposes certificate settings', function () {

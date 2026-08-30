@@ -314,15 +314,18 @@ class DashboardService
     private function recentActivity(): array
     {
         $evaluations = $this->evaluationsQuery()
-            ->with('center:id,name')
+            ->with(['center:id,name', 'group:id,name,center_id'])
             ->orderByDesc('created_at')
             ->limit(4)
             ->get()
             ->map(fn (Evaluation $evaluation): array => [
                 'type' => 'evaluation',
                 'icon' => 'pi pi-clipboard',
-                'title' => $evaluation->center?->name ?? '-',
-                'meta' => $this->fullDateLabel($evaluation->date),
+                'title' => $evaluation->group?->name ?? $evaluation->center?->name ?? '-',
+                'meta' => collect([
+                    $evaluation->center?->name,
+                    $this->fullDateLabel($evaluation->date),
+                ])->filter()->implode(' / '),
                 'date' => $this->dateTimeFormatter->formatForAdmin($evaluation->created_at),
                 'timestamp' => $evaluation->created_at?->getTimestamp() ?? 0,
                 'href' => "/admin/evaluations/{$evaluation->id}/edit",
@@ -380,7 +383,7 @@ class DashboardService
 
     private function centersQuery(): Builder
     {
-        return $this->dataScope->applyCenterAccess(Center::query());
+        return $this->dataScope->applyCenterAccess(Center::query()->active());
     }
 
     private function groupsQuery(): Builder

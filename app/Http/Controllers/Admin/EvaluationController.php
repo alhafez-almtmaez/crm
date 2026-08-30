@@ -47,7 +47,11 @@ class EvaluationController extends Controller implements HasMiddleware
     {
         $report = $this->service->reportPayload($publicId);
         $title = 'تقييمات الطلاب | مشروع الحافظ المتميز';
-        $description = trim(($report['center_name'] ?? '').' / '.($report['date'] ?? ''));
+        $description = collect([
+            $report['center_name'] ?? null,
+            $report['group_name'] ?? null,
+            $report['date'] ?? null,
+        ])->filter()->implode(' / ');
         $imageUrl = asset('media/logos/logo.png');
 
         return Inertia::render('Evaluations/Report', [
@@ -84,16 +88,26 @@ class EvaluationController extends Controller implements HasMiddleware
                 'nullable',
                 'integer',
                 Rule::exists('centers', 'id')
-                    ->where(fn ($query) => $this->dataScope->applyCenterAccess($query, 'centers')),
+                    ->where(function ($query): void {
+                        $query->whereNull('archived_at');
+                        $this->dataScope->applyCenterAccess($query, 'centers');
+                    }),
+            ],
+            'group_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('groups', 'id')
+                    ->where(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups')),
             ],
             'date' => ['nullable', 'date_format:Y-m-d'],
             'evaluation_type' => ['nullable', 'integer', 'in:1,2'],
         ]);
 
         $centerId = isset($query['center_id']) ? (int) $query['center_id'] : null;
+        $groupId = isset($query['group_id']) ? (int) $query['group_id'] : null;
         $date = isset($query['date']) ? (string) $query['date'] : null;
         $evaluationType = isset($query['evaluation_type']) ? (int) $query['evaluation_type'] : Evaluation::TYPE_ALHIFZ;
-        $formPayload = $this->service->createFormPayload($centerId, $date);
+        $formPayload = $this->service->createFormPayload($centerId, $groupId, $date);
 
         return Inertia::render('Admin/Evaluations/Create', [
             'centers' => $this->service->centerOptions(),
@@ -105,13 +119,19 @@ class EvaluationController extends Controller implements HasMiddleware
     public function edit(Evaluation $evaluation): Response
     {
         $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+        $evaluation->loadMissing(['group.center', 'center']);
+
+        $centerId = $evaluation->group?->center_id ?? $evaluation->center_id;
+        $centerName = $evaluation->group?->center?->name ?? $evaluation->center?->name;
 
         return Inertia::render('Admin/Evaluations/Edit', [
             'evaluation' => [
                 'id' => $evaluation->id,
-                'center_id' => $evaluation->center_id,
+                'center_id' => $centerId,
+                'group_id' => $evaluation->group_id,
                 'date' => $evaluation->date?->format('Y-m-d'),
-                'center_name' => $evaluation->center?->name,
+                'center_name' => $centerName,
+                'group_name' => $evaluation->group?->name,
                 'evaluation_type' => (int) ($evaluation->evaluation_type ?? Evaluation::TYPE_ALHIFZ),
             ],
             'centers' => $this->service->centerOptions(),

@@ -1,7 +1,9 @@
 <script setup>
 import Button from 'primevue/button';
 import FloatLabel from 'primevue/floatlabel';
+import MultiSelect from 'primevue/multiselect';
 import Select from 'primevue/select';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import FormFieldLabel from '../form/FormFieldLabel.vue';
 import PrimeFloatField from '../form/PrimeFloatField.vue';
@@ -19,6 +21,10 @@ defineProps({
         type: Array,
         default: () => [],
     },
+    whatsappGroups: {
+        type: Array,
+        default: () => [],
+    },
     submitLabel: {
         type: String,
         default: 'Save',
@@ -31,6 +37,16 @@ defineProps({
 
 const emit = defineEmits(['cancel', 'submit']);
 const { t } = useI18n();
+
+const dayOptions = computed(() => [
+    { value: 'sunday', label: t('days.sunday') },
+    { value: 'monday', label: t('days.monday') },
+    { value: 'tuesday', label: t('days.tuesday') },
+    { value: 'wednesday', label: t('days.wednesday') },
+    { value: 'thursday', label: t('days.thursday') },
+    { value: 'friday', label: t('days.friday') },
+    { value: 'saturday', label: t('days.saturday') },
+]);
 </script>
 
 <template>
@@ -63,6 +79,43 @@ const { t } = useI18n();
                     <FormFieldLabel for-id="group-center-id" :text="t('groups.center')" required />
                 </FloatLabel>
                 <small v-if="form.errors.center_id" class="text-sm text-red-600">{{ form.errors.center_id }}</small>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <FloatLabel variant="on">
+                    <Select
+                        input-id="group-serialized"
+                        v-model="form.group_serialized"
+                        :options="whatsappGroups"
+                        option-label="label"
+                        option-value="value"
+                        filter
+                        show-clear
+                        class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                    />
+                    <FormFieldLabel for-id="group-serialized" :text="t('groups.whatsappGroup')" />
+                </FloatLabel>
+                <small v-if="form.errors.group_serialized" class="text-sm text-red-600">{{ form.errors.group_serialized }}</small>
+                <small v-if="whatsappGroups.length === 0" class="text-xs text-(--muted-foreground)">{{ t('groups.noWhatsappGroups') }}</small>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <FloatLabel variant="on">
+                    <MultiSelect
+                        input-id="group-working-days"
+                        v-model="form.working_days"
+                        :options="dayOptions"
+                        option-label="label"
+                        option-value="value"
+                        display="chip"
+                        :max-selected-labels="4"
+                        :selected-items-label="t('common.selectedCount')"
+                        class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                    />
+                    <FormFieldLabel for-id="group-working-days" :text="t('groups.workingDays')" required />
+                </FloatLabel>
+                <small v-if="form.errors.working_days" class="text-sm text-red-600">{{ form.errors.working_days }}</small>
+                <small v-if="form.errors['working_days.0']" class="text-sm text-red-600">{{ form.errors['working_days.0'] }}</small>
             </div>
 
             <div class="mt-2 flex justify-end gap-2">

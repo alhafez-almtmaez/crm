@@ -12,14 +12,18 @@ class MessageDispatchResult
         public readonly array $meta = [],
     ) {}
 
-    public static function notSent(): self
+    public static function notSent(?string $groupSerialized = null): self
     {
-        return new self(false);
+        return new self(false, [
+            'group_serialized' => $groupSerialized,
+        ]);
     }
 
-    public static function sent(): self
+    public static function sent(?string $groupSerialized = null): self
     {
-        return new self(true);
+        return new self(true, [
+            'group_serialized' => $groupSerialized,
+        ]);
     }
 
     /**

@@ -55,7 +55,10 @@ class AbsenceRuleStoreRequest extends FormRequest
                 Rule::requiredIf($dataScope->shouldScope()),
                 'nullable',
                 Rule::exists('centers', 'id')
-                    ->where(fn ($query) => $dataScope->applyCenterAccess($query, 'centers')),
+                    ->where(function ($query) use ($dataScope): void {
+                        $query->whereNull('archived_at');
+                        $dataScope->applyCenterAccess($query, 'centers');
+                    }),
             ],
             'attendance_type' => ['required', Rule::in([
                 AbsenceRule::ATTENDANCE_TYPE_ABSENCE,

@@ -22,9 +22,13 @@ class WhatsAppMessagingService
      */
     public function sendMediaCaption(array $phones, string $content, ?string $groupSerialized = null): void
     {
-        $recipients = $this->recipientsFromPhones($phones, $groupSerialized);
+        $recipients = $this->recipientChatIds($phones, $groupSerialized);
 
-        $this->sendMediaCaptionToChatIds($recipients, $content);
+        // Business actions update their records only after this method succeeds.
+        // Queuing a failed attempt here could later send a message describing an
+        // action that never happened, so pending delivery must always be explicit
+        // and tied to a verifiable source.
+        $this->sendMediaCaptionToChatIds($recipients, $content, queueOnFailure: false);
     }
 
     /**
@@ -34,7 +38,9 @@ class WhatsAppMessagingService
         array $chatIds,
         string $content,
         ?string $mediaUrl = null,
-        bool $queueOnFailure = true,
+        bool $queueOnFailure = false,
+        ?string $sourceType = null,
+        int|string|null $sourceId = null,
     ): void {
         $baseUrl = rtrim((string) config('services.whatsapp_api.url', ''), '/');
         if ($baseUrl === '') {
@@ -54,7 +60,15 @@ class WhatsAppMessagingService
 
         if (! $device) {
             $message = __('students.whatsapp_device_not_connected');
-            $this->queuePendingMessage($recipients, $content, $mediaUrl, $message, $queueOnFailure);
+            $this->queuePendingMessage(
+                $recipients,
+                $content,
+                $mediaUrl,
+                $message,
+                $queueOnFailure,
+                $sourceType,
+                $sourceId,
+            );
 
             throw new WhatsAppMessageSendException($message, $recipients);
         }
@@ -81,7 +95,15 @@ class WhatsAppMessagingService
             if ($response->failed()) {
                 $message = (string) ($response->json('message') ?? $response->json('error') ?? __('whatsapp.send_failed'));
                 $unsentRecipients = array_slice($recipients, $index);
-                $this->queuePendingMessage($unsentRecipients, $content, $mediaUrl, $message, $queueOnFailure);
+                $this->queuePendingMessage(
+                    $unsentRecipients,
+                    $content,
+                    $mediaUrl,
+                    $message,
+                    $queueOnFailure,
+                    $sourceType,
+                    $sourceId,
+                );
 
                 throw new WhatsAppMessageSendException($message, $unsentRecipients);
             }
@@ -150,10 +172,14 @@ class WhatsAppMessagingService
      * @param  array<int, string>  $phones
      * @return array<int, string>
      */
-    private function recipientsFromPhones(array $phones, ?string $groupSerialized = null): array
+    public function recipientChatIds(array $phones, ?string $groupSerialized = null): array
     {
         $recipients = [];
         foreach ($phones as $phone) {
+            if (! is_string($phone)) {
+                continue;
+            }
+
             $normalized = $this->normalizePhone($phone);
             if ($normalized === '') {
                 continue;
@@ -167,6 +193,38 @@ class WhatsAppMessagingService
         }
 
         return $this->normalizeChatIds($recipients);
+    }
+
+    /**
+     * Describe which intended recipients were reached before a batch send failed.
+     *
+     * @param  array<int, string>  $phones
+     * @return array{partial_delivery: bool, delivered_chat_ids: array<int, string>, remaining_chat_ids: array<int, string>, group_serialized: string|null}
+     */
+    public function deliveryFailureMeta(
+        array $phones,
+        ?string $groupSerialized,
+        WhatsAppMessageSendException $exception,
+    ): array {
+        $intendedChatIds = $this->recipientChatIds($phones, $groupSerialized);
+        $unsentLookup = array_fill_keys($this->normalizeChatIds($exception->unsentChatIds()), true);
+        $deliveredChatIds = [];
+        $remainingChatIds = [];
+
+        foreach ($intendedChatIds as $chatId) {
+            if (isset($unsentLookup[$chatId])) {
+                $remainingChatIds[] = $chatId;
+            } else {
+                $deliveredChatIds[] = $chatId;
+            }
+        }
+
+        return [
+            'partial_delivery' => $deliveredChatIds !== [] && $remainingChatIds !== [],
+            'delivered_chat_ids' => $deliveredChatIds,
+            'remaining_chat_ids' => $remainingChatIds,
+            'group_serialized' => $groupSerialized,
+        ];
     }
 
     /**
@@ -190,6 +248,8 @@ class WhatsAppMessagingService
         ?string $mediaUrl,
         string $lastError,
         bool $queueOnFailure,
+        ?string $sourceType,
+        int|string|null $sourceId,
     ): void {
         if (! $queueOnFailure) {
             return;
@@ -200,6 +260,8 @@ class WhatsAppMessagingService
                 $chatIds,
                 $content,
                 $mediaUrl,
+                sourceType: $sourceType,
+                sourceId: $sourceId,
                 lastError: $lastError,
             );
         } catch (Throwable $exception) {

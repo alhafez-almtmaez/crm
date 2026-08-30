@@ -10,6 +10,30 @@ import { useSystemSettings } from '../../composables/useSystemSettings';
 
 const SIDEBAR_STATE_KEY = 'vita_admin_sidebar_collapsed';
 
+const readSidebarCollapsedState = () => {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+
+    try {
+        return window.localStorage.getItem(SIDEBAR_STATE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+};
+
+const writeSidebarCollapsedState = (collapsed) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    try {
+        window.localStorage.setItem(SIDEBAR_STATE_KEY, String(collapsed));
+    } catch {
+        // Keep the sidebar usable when browser storage is unavailable.
+    }
+};
+
 const props = defineProps({
     pageTitle: {
         type: String,
@@ -58,7 +82,11 @@ const isSidebarCollapsed = computed(() => {
 
     return true;
 });
-const isSidebarUserCollapsed = ref(true);
+const isSidebarUserCollapsed = ref(false);
+
+const restoreSidebarState = () => {
+    isSidebarUserCollapsed.value = readSidebarCollapsedState();
+};
 
 const toggleSidebar = () => {
     if (isAutoCollapsedBehavior.value || sidebarBehavior.value === 'default') {
@@ -67,9 +95,7 @@ const toggleSidebar = () => {
 
     isSidebarUserCollapsed.value = !isSidebarUserCollapsed.value;
 
-    if (typeof window !== 'undefined') {
-        window.localStorage.setItem(SIDEBAR_STATE_KEY, String(isSidebarUserCollapsed.value));
-    }
+    writeSidebarCollapsedState(isSidebarUserCollapsed.value);
 };
 
 const toggleMobileSidebar = () => {
@@ -87,10 +113,7 @@ const handleResize = () => {
 };
 
 onMounted(() => {
-    if (typeof window !== 'undefined') {
-        const saved = window.localStorage.getItem(SIDEBAR_STATE_KEY);
-        isSidebarUserCollapsed.value = saved === null ? false : saved === 'true';
-    }
+    restoreSidebarState();
 
     window.addEventListener('resize', handleResize);
     showFlash(page.props.flash);
@@ -99,11 +122,9 @@ onMounted(() => {
 watch(
     sidebarBehavior,
     (behavior) => {
-        if (behavior === 'default') {
-            return;
+        if (behavior === 'condensed') {
+            restoreSidebarState();
         }
-
-        isSidebarUserCollapsed.value = true;
     },
     { immediate: true },
 );

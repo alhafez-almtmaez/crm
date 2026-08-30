@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,7 +31,14 @@ class Center extends Model
     protected $casts = [
         'working_days' => 'array',
         'show_center_manager_signature' => 'bool',
+        'archived_at' => 'datetime',
     ];
+
+    /** @return Builder<Center> */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull('archived_at');
+    }
 
     public function groups(): HasMany
     {

@@ -16,18 +16,25 @@ class Homework extends Model
     protected $fillable = [
         'date',
         'center_id',
+        'group_id',
         'admin_id',
     ];
 
     protected $casts = [
         'date' => 'date',
         'center_id' => 'int',
+        'group_id' => 'int',
         'admin_id' => 'int',
     ];
 
     public function center(): BelongsTo
     {
         return $this->belongsTo(Center::class);
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(Group::class);
     }
 
     public function admin(): BelongsTo

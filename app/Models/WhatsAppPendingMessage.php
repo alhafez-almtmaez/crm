@@ -16,6 +16,12 @@ class WhatsAppPendingMessage extends Model
 
     public const STATUS_SENT = 'sent';
 
+    public const STATUS_STALE = 'stale';
+
+    public const SOURCE_DIRECT = 'direct';
+
+    public const SOURCE_ABSENCE_RULE_EXECUTION_LOG = AbsenceRuleExecutionLog::class;
+
     protected $table = 'whatsapp_pending_messages';
 
     protected $fillable = [

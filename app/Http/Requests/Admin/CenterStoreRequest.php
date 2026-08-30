@@ -31,12 +31,6 @@ class CenterStoreRequest extends FormRequest
                 Center::STUDENT_GENDER_FEMALE,
             ])],
             'phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9]{8,15}$/'],
-            'group_serialized' => ['nullable', 'string', 'max:255'],
-            'working_days' => ['required', 'array', 'min:1'],
-            'working_days.*' => [
-                'string',
-                Rule::in(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']),
-            ],
             'show_center_manager_signature' => ['required', 'boolean'],
         ];
     }

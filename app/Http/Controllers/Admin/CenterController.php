@@ -10,7 +10,6 @@ use App\Models\Center;
 use App\Services\Admin\ActivityLogService;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\CenterService;
-use App\Services\Admin\WhatsAppGroupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
@@ -23,7 +22,6 @@ class CenterController extends Controller implements HasMiddleware
     public function __construct(
         private readonly CenterService $centerService,
         private readonly ActivityLogService $activityLogService,
-        private readonly WhatsAppGroupService $whatsAppGroupService,
         private readonly AdminDataScopeService $dataScope,
     ) {}
 
@@ -45,9 +43,7 @@ class CenterController extends Controller implements HasMiddleware
 
     public function create(): Response
     {
-        return Inertia::render('Admin/Centers/Create', [
-            'whatsappGroups' => $this->whatsAppGroupService->options(),
-        ]);
+        return Inertia::render('Admin/Centers/Create');
     }
 
     public function edit(Center $center): Response
@@ -55,19 +51,14 @@ class CenterController extends Controller implements HasMiddleware
         $this->dataScope->abortUnlessCanAccessCenter($center);
 
         return Inertia::render('Admin/Centers/Edit', [
-            'center' => [
-                ...$center->only([
-                    'id',
-                    'name',
-                    'certificate_name',
-                    'student_gender',
-                    'phone',
-                    'group_serialized',
-                    'show_center_manager_signature',
-                ]),
-                'working_days' => is_array($center->working_days) ? $center->working_days : [],
-            ],
-            'whatsappGroups' => $this->whatsAppGroupService->options(),
+            'center' => $center->only([
+                'id',
+                'name',
+                'certificate_name',
+                'student_gender',
+                'phone',
+                'show_center_manager_signature',
+            ]),
         ]);
     }
 
