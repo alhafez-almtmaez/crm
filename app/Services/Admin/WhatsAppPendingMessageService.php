@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Exceptions\WhatsAppMessageSendException;
+use App\Exceptions\WhatsAppRecipientNotRegisteredException;
 use App\Models\AbsenceRule;
 use App\Models\AbsenceRuleExecutionLog;
 use App\Models\WhatsAppPendingMessage;
@@ -104,6 +105,28 @@ class WhatsAppPendingMessageService
                     queueOnFailure: false,
                 );
 
+            } catch (WhatsAppRecipientNotRegisteredException $exception) {
+                $this->markStale($message, 'recipient_not_registered: '.$exception->getMessage());
+
+                try {
+                    $this->markSourceAsFailed(
+                        $message,
+                        $resolved,
+                        $exception->getMessage(),
+                        'recipient_not_registered',
+                    );
+                } catch (Throwable $syncException) {
+                    Log::error('Rejected WhatsApp recipient could not synchronize its source.', [
+                        'pending_message_id' => $message->id,
+                        'source_type' => $message->source_type,
+                        'source_id' => $message->source_id,
+                        'error' => $syncException->getMessage(),
+                    ]);
+                }
+
+                $summary['stale']++;
+
+                continue;
             } catch (WhatsAppMessageSendException $exception) {
                 $remainingChatIds = $this->normalizeChatIds($exception->unsentChatIds());
 
@@ -382,6 +405,43 @@ class WhatsAppPendingMessageService
                 $remainingChatIds,
             ));
             $meta['pending_remaining_chat_ids'] = $remainingChatIds;
+            $meta['group_serialized'] = $resolved['group_serialized'] ?? null;
+
+            $log->update([
+                'recipient_phones' => $resolved['recipient_phones'] ?? [],
+                'executed_at' => now(),
+                'meta' => $meta,
+            ]);
+        });
+    }
+
+    /**
+     * @param  array{recipient_phones?: array<int, string>, group_serialized?: string|null}  $resolved
+     */
+    private function markSourceAsFailed(
+        WhatsAppPendingMessage $message,
+        array $resolved,
+        string $error,
+        string $failureKind,
+    ): void {
+        if ($message->source_type !== WhatsAppPendingMessage::SOURCE_ABSENCE_RULE_EXECUTION_LOG
+            || $message->source_id === null) {
+            return;
+        }
+
+        DB::transaction(function () use ($message, $resolved, $error, $failureKind): void {
+            $log = AbsenceRuleExecutionLog::query()
+                ->lockForUpdate()
+                ->find($message->source_id);
+
+            if (! $log || $log->was_message_sent) {
+                return;
+            }
+
+            $meta = $log->meta ?? [];
+            $meta['error'] = $error;
+            $meta['pending_message_id'] = (int) $message->id;
+            $meta['pending_failure_kind'] = $failureKind;
             $meta['group_serialized'] = $resolved['group_serialized'] ?? null;
 
             $log->update([

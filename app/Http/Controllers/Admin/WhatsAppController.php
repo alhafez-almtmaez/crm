@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exceptions\WhatsAppMessageSendException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\WhatsappSendRequest;
 use App\Models\Device;
+use App\Services\Admin\WhatsAppMessagingService;
 use App\Services\Admin\WhatsAppPendingMessageService;
 use App\Services\Admin\WhatsAppSessionService;
 use Illuminate\Http\Client\PendingRequest;
@@ -22,6 +24,7 @@ class WhatsAppController extends Controller
     public function __construct(
         private readonly WhatsAppPendingMessageService $pendingMessages,
         private readonly WhatsAppSessionService $sessions,
+        private readonly WhatsAppMessagingService $messaging,
     ) {}
 
     public function index(): Response
@@ -68,15 +71,24 @@ class WhatsAppController extends Controller
             ]);
         }
 
-        $response = $this->apiRequest()->post($this->apiBaseUrl()."/client/sendMessage/{$device->session_id}", [
-            'chatId' => $request->validated('phone').'@s.whatsapp.net',
-            'contentType' => 'string',
-            'content' => $request->validated('message'),
-        ]);
-
-        if ($response->failed()) {
+        try {
+            $this->messaging->sendTextMessage(
+                $request->validated('phone'),
+                $request->validated('message'),
+                $device,
+            );
+        } catch (WhatsAppMessageSendException $exception) {
             return response()->json([
-                'message' => $this->responseErrorMessage($response, __('whatsapp.send_failed')),
+                'message' => $exception->getMessage(),
+            ], 422);
+        } catch (Throwable $exception) {
+            Log::error('Unexpected WhatsApp send failure.', [
+                'device_id' => $device->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => __('whatsapp.send_failed'),
             ], 422);
         }
 
