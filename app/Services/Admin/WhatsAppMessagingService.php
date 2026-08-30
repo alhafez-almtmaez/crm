@@ -61,8 +61,8 @@ class WhatsAppMessagingService
             throw new RuntimeException(__('whatsapp.api_not_configured'));
         }
 
-        $recipients = $this->normalizeChatIds($chatIds);
-        if ($recipients === []) {
+        $intendedRecipients = $this->normalizeChatIds($chatIds);
+        if ($intendedRecipients === []) {
             throw new RuntimeException(__('students.no_recipients_provided'));
         }
 
@@ -71,7 +71,7 @@ class WhatsAppMessagingService
         if (! $device) {
             $message = __('students.whatsapp_device_not_connected');
             $this->queuePendingMessage(
-                $recipients,
+                $intendedRecipients,
                 $content,
                 $mediaUrl,
                 $message,
@@ -80,14 +80,17 @@ class WhatsAppMessagingService
                 $sourceId,
             );
 
-            throw new WhatsAppMessageSendException($message, $recipients);
+            throw new WhatsAppMessageSendException($message, $intendedRecipients);
         }
 
-        $device = $this->assertPersonalRecipientsAreRegistered(
+        $verification = $this->filterRegisteredRecipients(
             $device,
-            $recipients,
+            $intendedRecipients,
             $baseUrl,
         );
+        $device = $verification['device'];
+        $recipients = $verification['recipients'];
+        $skippedRecipients = $verification['skipped_recipients'];
 
         foreach ($recipients as $index => $chatId) {
             $sessionId = (string) $device->session_id;
@@ -110,7 +113,14 @@ class WhatsAppMessagingService
 
             if (! $this->messageWasSent($response)) {
                 $message = $this->responseErrorMessage($response, __('whatsapp.send_failed'));
-                $unsentRecipients = array_slice($recipients, $index);
+                $remainingLookup = array_fill_keys([
+                    ...$skippedRecipients,
+                    ...array_slice($recipients, $index),
+                ], true);
+                $unsentRecipients = array_values(array_filter(
+                    $intendedRecipients,
+                    static fn (string $recipient): bool => isset($remainingLookup[$recipient]),
+                ));
                 $this->queuePendingMessage(
                     $unsentRecipients,
                     $content,
@@ -166,22 +176,27 @@ class WhatsAppMessagingService
     }
 
     /**
-     * Verify every personal recipient before the first message is sent. A failed
-     * or ambiguous verification stops the whole batch, so callers never mistake
-     * an unchecked number for a delivered message.
+     * Verify every personal recipient before the first message is sent. Numbers
+     * known not to be registered are skipped while valid numbers and groups
+     * continue normally. An ambiguous verification still stops the whole batch.
      *
      * @param  array<int, string>  $recipients
+     * @return array{device: Device, recipients: array<int, string>, skipped_recipients: array<int, string>}
      */
-    private function assertPersonalRecipientsAreRegistered(
+    private function filterRegisteredRecipients(
         Device $device,
         array $recipients,
         string $baseUrl,
-    ): Device {
+    ): array {
+        $eligibleRecipients = [];
+        $skippedRecipients = [];
         $unregisteredNumbers = [];
 
         foreach ($recipients as $chatId) {
             $number = $this->personalNumberFromChatId($chatId);
             if ($number === null) {
+                $eligibleRecipients[] = $chatId;
+
                 continue;
             }
 
@@ -239,12 +254,15 @@ class WhatsAppMessagingService
                 }
             }
 
-            if (! $registered) {
+            if ($registered) {
+                $eligibleRecipients[] = $chatId;
+            } else {
+                $skippedRecipients[] = $chatId;
                 $unregisteredNumbers[] = $number;
             }
         }
 
-        if ($unregisteredNumbers !== []) {
+        if ($eligibleRecipients === [] && $unregisteredNumbers !== []) {
             throw new WhatsAppRecipientNotRegisteredException(
                 __('whatsapp.numbers_not_registered', [
                     'numbers' => implode(', ', array_values(array_unique($unregisteredNumbers))),
@@ -253,7 +271,11 @@ class WhatsAppMessagingService
             );
         }
 
-        return $device;
+        return [
+            'device' => $device,
+            'recipients' => $eligibleRecipients,
+            'skipped_recipients' => $skippedRecipients,
+        ];
     }
 
     /**

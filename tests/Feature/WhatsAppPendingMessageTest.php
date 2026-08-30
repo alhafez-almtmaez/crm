@@ -1,7 +1,6 @@
 <?php
 
 use App\Exceptions\WhatsAppMessageSendException;
-use App\Exceptions\WhatsAppRecipientNotRegisteredException;
 use App\Models\AbsenceRule;
 use App\Models\AbsenceRuleExecutionLog;
 use App\Models\Center;
@@ -120,6 +119,44 @@ test('pending messages with an unregistered recipient become stale instead of re
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/'));
 });
 
+test('pending messages skip an unregistered number and still send to the remaining group', function () {
+    config()->set('services.whatsapp_api.url', 'https://wa.test');
+
+    Device::factory()->connected()->create(['session_id' => 'main_session']);
+
+    $pending = WhatsAppPendingMessage::query()->create([
+        'chat_ids' => [
+            '962790000111@s.whatsapp.net',
+            '120363000000000000@g.us',
+        ],
+        'content' => 'Queued group message',
+        'source_type' => WhatsAppPendingMessage::SOURCE_DIRECT,
+        'status' => WhatsAppPendingMessage::STATUS_PENDING,
+        'available_at' => now()->subMinute(),
+    ]);
+
+    Http::fake([
+        'https://wa.test/client/isRegisteredUser/main_session' => Http::response([
+            'success' => true,
+            'result' => false,
+        ]),
+        'https://wa.test/client/sendMessage/main_session' => Http::response(successfulWwebjsSendPayload()),
+    ]);
+
+    expect(app(WhatsAppPendingMessageService::class)->flushPending())->toBe([
+        'checked' => 1,
+        'sent' => 1,
+        'failed' => 0,
+        'stale' => 0,
+    ])
+        ->and($pending->refresh()->status)->toBe(WhatsAppPendingMessage::STATUS_SENT);
+
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/')
+        && ($request['chatId'] ?? null) === '962790000111@s.whatsapp.net');
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/main_session'
+        && $request['chatId'] === '120363000000000000@g.us');
+});
+
 test('pending messages remain retryable when recipient registration cannot be verified', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
 
@@ -187,7 +224,7 @@ test('jordanian local phone numbers are normalized before whatsapp send', functi
         && $request['content'] === 'Direct phone message');
 });
 
-test('unregistered personal recipients stop the whole batch before any message is sent', function () {
+test('an unregistered personal recipient is skipped while the group still receives the message', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
 
     Device::factory()->connected()->create(['session_id' => 'main_session']);
@@ -197,31 +234,24 @@ test('unregistered personal recipients stop the whole batch before any message i
             'success' => true,
             'result' => false,
         ]),
+        'https://wa.test/client/sendMessage/main_session' => Http::response(successfulWwebjsSendPayload()),
     ]);
 
-    $exception = null;
+    app(WhatsAppMessagingService::class)->sendMediaCaption(
+        ['079 000 0111'],
+        'Absence alert',
+        '120363000000000000@g.us',
+    );
 
-    try {
-        app(WhatsAppMessagingService::class)->sendMediaCaption(
-            ['079 000 0111'],
-            'Absence alert',
-            '120363000000000000@g.us',
-        );
-    } catch (WhatsAppRecipientNotRegisteredException $caught) {
-        $exception = $caught;
-    }
-
-    expect($exception)->toBeInstanceOf(WhatsAppRecipientNotRegisteredException::class)
-        ->and($exception?->unsentChatIds())->toBe([
-            '962790000111@s.whatsapp.net',
-            '120363000000000000@g.us',
-        ]);
-
-    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/'));
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/')
+        && ($request['chatId'] ?? null) === '962790000111@s.whatsapp.net');
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/main_session'
+        && $request['chatId'] === '120363000000000000@g.us');
 });
 
-test('a mixed batch is fully checked and sends nothing when one personal number is unregistered', function () {
+test('a mixed batch sends to valid personal numbers and the group while skipping unregistered numbers', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
+    config()->set('services.whatsapp_api.message_delay_seconds', 0);
 
     Device::factory()->connected()->create(['session_id' => 'main_session']);
 
@@ -229,19 +259,78 @@ test('a mixed batch is fully checked and sends nothing when one personal number 
         'https://wa.test/client/isRegisteredUser/main_session' => Http::sequence()
             ->push(['success' => true, 'result' => true])
             ->push(['success' => true, 'result' => false]),
+        'https://wa.test/client/sendMessage/main_session' => Http::response(successfulWwebjsSendPayload()),
     ]);
 
-    expect(fn () => app(WhatsAppMessagingService::class)->sendMediaCaption(
+    app(WhatsAppMessagingService::class)->sendMediaCaption(
         ['0790000111', '0790000222'],
         'Absence alert',
         '120363000000000000@g.us',
-    ))->toThrow(WhatsAppRecipientNotRegisteredException::class, '962790000222');
+    );
 
     expect(Http::recorded()
+        ->filter(fn (array $pair): bool => str_contains($pair[0]->url(), '/client/isRegisteredUser/'))
         ->map(fn (array $pair): mixed => $pair[0]['number'])
+        ->values()
         ->all())->toBe(['962790000111', '962790000222']);
 
-    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/'));
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/main_session'
+        && $request['chatId'] === '962790000111@s.whatsapp.net');
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/')
+        && ($request['chatId'] ?? null) === '962790000222@s.whatsapp.net');
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://wa.test/client/sendMessage/main_session'
+        && $request['chatId'] === '120363000000000000@g.us');
+});
+
+test('skipped unregistered numbers are never mistaken for delivered recipients after a later send failure', function () {
+    config()->set('services.whatsapp_api.url', 'https://wa.test');
+    config()->set('services.whatsapp_api.message_delay_seconds', 0);
+
+    Device::factory()->connected()->create(['session_id' => 'main_session']);
+
+    Http::fake([
+        'https://wa.test/client/isRegisteredUser/main_session' => Http::sequence()
+            ->push(['success' => true, 'result' => true])
+            ->push(['success' => true, 'result' => false])
+            ->push(['success' => true, 'result' => true]),
+        'https://wa.test/client/sendMessage/main_session' => Http::sequence()
+            ->push(successfulWwebjsSendPayload())
+            ->push(['success' => false, 'error' => 'send rejected'], 500),
+    ]);
+
+    $phones = ['0790000111', '0790000222', '0790000333'];
+    $group = '120363000000000000@g.us';
+    $exception = null;
+
+    try {
+        app(WhatsAppMessagingService::class)->sendMediaCaption(
+            $phones,
+            'Absence alert',
+            $group,
+        );
+    } catch (WhatsAppMessageSendException $caught) {
+        $exception = $caught;
+    }
+
+    expect($exception)->toBeInstanceOf(WhatsAppMessageSendException::class)
+        ->and($exception?->unsentChatIds())->toBe([
+            '962790000222@s.whatsapp.net',
+            '962790000333@s.whatsapp.net',
+            '120363000000000000@g.us',
+        ])
+        ->and(app(WhatsAppMessagingService::class)->deliveryFailureMeta(
+            $phones,
+            $group,
+            $exception,
+        ))->toMatchArray([
+            'partial_delivery' => true,
+            'delivered_chat_ids' => ['962790000111@s.whatsapp.net'],
+            'remaining_chat_ids' => [
+                '962790000222@s.whatsapp.net',
+                '962790000333@s.whatsapp.net',
+                '120363000000000000@g.us',
+            ],
+        ]);
 });
 
 test('group only messages do not call the personal registration endpoint', function () {
