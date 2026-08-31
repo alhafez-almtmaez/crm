@@ -21,6 +21,12 @@ return [
     'template_unknown_variable' => 'المتغير :variable غير مسموح في قوالب الشهادات.',
     'template_malformed_variable' => 'متغير بصيغة غير صحيحة',
     'template_required_variable' => 'يجب أن يحتوي القالب على المتغير :variable.',
+    'template_variable_wrong_section' => 'المتغير :variable مسموح فقط في قسم «:section».',
+    'template_sections' => [
+        'intro' => 'مقدمة التهنئة',
+        'student_line' => 'سطر اسم الطالب',
+        'achievement_line' => 'سطر الإنجاز',
+    ],
     'template_variables' => [
         'student_name' => ['label' => 'اسم الطالب', 'description' => 'الاسم الكامل للطالب أو الطالبة كما حُفظ وقت إصدار الشهادة.'],
         'center_name' => ['label' => 'اسم المركز', 'description' => 'الاسم المعتمد للمركز على الشهادات.'],

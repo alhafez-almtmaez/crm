@@ -518,7 +518,7 @@
       "templateActiveHint": "Available to assign",
       "assignmentsCount": "{count} assignments",
       "availableVariables": "Available Variables",
-      "variablesHint": "Place the cursor in a section, then select a variable to insert it at the cursor position.",
+      "variablesHint": "Click a variable to insert it. Center, student, and achievement variables go to their correct sections automatically; other variables use the active field.",
       "safeRenderingHint": "Content is rendered safely without executing HTML or embedded code.",
       "assignmentTitle": "Template Usage Scope",
       "assignmentHint": "Choose where this template is used. A center-and-type assignment has priority over broader defaults.",
@@ -578,37 +578,45 @@
       "sections": {
         "title": {
           "label": "Certificate Title",
-          "hint": "The main heading shown at the top of the certificate."
+          "hint": "The main heading shown at the top of the certificate.",
+          "placement": "Independent position: certificate top"
         },
         "quote_first": {
           "label": "First Half of the Quote",
-          "hint": "Shown on the first side of the center ornament."
+          "hint": "Shown on the first side of the center ornament.",
+          "placement": "Independent position: first quote half"
         },
         "quote_second": {
           "label": "Second Half of the Quote",
-          "hint": "Shown opposite the first half around the ornament."
+          "hint": "Shown opposite the first half around the ornament.",
+          "placement": "Independent position: second quote half"
         },
         "intro": {
           "label": "Congratulations Introduction",
-          "hint": "Insert the center variable so its certificate name is resolved automatically."
+          "hint": "This field is only for the introduction and center name; the student name is not inserted here.",
+          "placement": "Independent paragraph above the student name"
         },
         "student_line": {
           "label": "Student Name Line",
-          "hint": "Insert the student name variable and optionally surround it with ornaments such as ﴿ ﴾."
+          "hint": "Clicking the student-name variable inserts it here automatically; it may be surrounded by ornaments such as ﴿ ﴾.",
+          "placement": "Independent line below the introduction"
         },
         "achievement_line": {
           "label": "Achievement Line",
-          "hint": "Use the achievement type and name variables so one template works across certificate types."
+          "hint": "Use the achievement type and name variables so one template works across certificate types.",
+          "placement": "Independent paragraph below the student name"
         },
         "closing": {
           "label": "Closing Prayer",
-          "hint": "The closing text shown before signatures and dates."
+          "hint": "The closing text shown before signatures and dates.",
+          "placement": "Independent paragraph before signatures"
         }
       },
       "validation": {
         "nameRequired": "Enter a clear template name.",
         "sectionRequired": "This section is required and cannot be empty.",
         "requiredVariable": "This section must include the {variable} variable.",
+        "variableWrongSection": "The {variable} variable belongs only in the “{section}” section.",
         "plainTextOnly": "Use plain text and template variables only; HTML tags and Blade directives are not allowed.",
         "unknownVariables": "Unknown variable found: {variables}",
         "recommendedVariables": "The following variables are required in their sections: {variables}"

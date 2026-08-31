@@ -54,6 +54,14 @@ class CertificateContentTemplateService
     ];
 
     /** @var array<string, string> */
+    private const SECTION_RESTRICTED_VARIABLES = [
+        'student_name' => 'student_line',
+        'center_name' => 'intro',
+        'achievement_label' => 'achievement_line',
+        'achievement_name' => 'achievement_line',
+    ];
+
+    /** @var array<string, string> */
     private const VARIABLES = [
         'student_name' => 'أَحْمَد مُحَمَّد العَبْدُالله',
         'center_name' => 'دار القرآن – مسجد «الصالحين»',
@@ -644,6 +652,24 @@ class CertificateContentTemplateService
 
                 $errors["{$prefix}.{$sectionKey}"][] = __('certificates.template_required_variable', [
                     'variable' => '{{ '.$requiredVariable.' }}',
+                ]);
+            }
+        }
+
+        foreach (self::SECTION_RESTRICTED_VARIABLES as $variable => $expectedSection) {
+            foreach (self::SECTION_KEYS as $sectionKey) {
+                if ($sectionKey === $expectedSection) {
+                    continue;
+                }
+
+                $section = is_string($sections[$sectionKey] ?? null) ? $sections[$sectionKey] : '';
+                if (! $this->containsVariable($section, $variable)) {
+                    continue;
+                }
+
+                $errors["{$prefix}.{$sectionKey}"][] = __('certificates.template_variable_wrong_section', [
+                    'variable' => '{{ '.$variable.' }}',
+                    'section' => __("certificates.template_sections.{$expectedSection}"),
                 ]);
             }
         }

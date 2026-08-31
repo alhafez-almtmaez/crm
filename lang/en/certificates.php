@@ -21,6 +21,12 @@ return [
     'template_unknown_variable' => 'The :variable variable is not allowed in certificate templates.',
     'template_malformed_variable' => 'malformed variable',
     'template_required_variable' => 'The template must contain the :variable variable.',
+    'template_variable_wrong_section' => 'The :variable variable may only be used in the “:section” section.',
+    'template_sections' => [
+        'intro' => 'Congratulations Introduction',
+        'student_line' => 'Student Name Line',
+        'achievement_line' => 'Achievement Line',
+    ],
     'template_variables' => [
         'student_name' => ['label' => 'Student name', 'description' => 'The student’s full name as snapshotted when the certificate is issued.'],
         'center_name' => ['label' => 'Center name', 'description' => 'The center name approved for certificates.'],

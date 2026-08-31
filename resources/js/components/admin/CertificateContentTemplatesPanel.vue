@@ -26,6 +26,12 @@ const REQUIRED_SECTION_VARIABLES = {
     student_line: ['student_name'],
     achievement_line: ['achievement_label', 'achievement_name'],
 };
+const VARIABLE_DEFAULT_SECTIONS = {
+    center_name: 'intro',
+    student_name: 'student_line',
+    achievement_label: 'achievement_line',
+    achievement_name: 'achievement_line',
+};
 const SECTION_MAX_LENGTHS = {
     title: 120,
     quote_first: 180,
@@ -186,6 +192,8 @@ const sectionCatalog = computed(() => SECTION_KEYS.map((key) => ({
     key,
     label: t(`certificateDesign.content.sections.${key}.label`),
     hint: t(`certificateDesign.content.sections.${key}.hint`),
+    placement: t(`certificateDesign.content.sections.${key}.placement`),
+    requiredVariables: REQUIRED_SECTION_VARIABLES[key] ?? [],
     maxLength: SECTION_MAX_LENGTHS[key],
     rows: {
         title: 2,
@@ -343,15 +351,7 @@ const effectiveTemplate = computed(() => normalizedTemplates.value.find(
 ) ?? (currentEffective.value.raw?.template ? normalizeTemplate(currentEffective.value.raw.template) : null));
 const effectiveSourceLabel = computed(() => currentEffective.value.source_label
     || t(`certificateDesign.content.sources.${currentEffective.value.source}`));
-const effectiveSourceClass = computed(() => ({
-    center_type: 'border-cyan-300 bg-cyan-50 text-cyan-900 dark:border-cyan-800 dark:bg-cyan-950/35 dark:text-cyan-100',
-    center_all: 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-950/35 dark:text-sky-100',
-    gender_type: 'border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-800 dark:bg-violet-950/35 dark:text-violet-100',
-    gender_all: 'border-purple-300 bg-purple-50 text-purple-900 dark:border-purple-800 dark:bg-purple-950/35 dark:text-purple-100',
-    global_type: 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-100',
-    global_all: 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/35 dark:text-green-100',
-    legacy: 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
-}[currentEffective.value.source]));
+const accentBadgeClass = 'bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] text-[var(--accent)]';
 
 const editorTokensBySection = computed(() => Object.fromEntries(SECTION_KEYS.map((sectionKey) => {
     const value = editor.value.sections?.[sectionKey] ?? '';
@@ -375,6 +375,21 @@ const missingRequiredVariables = computed(() => Object.entries(REQUIRED_SECTION_
         .filter((variable) => !editorTokensBySection.value[section]?.includes(variable))
         .map((variable) => ({ section, variable })),
 ));
+const misplacedVariables = computed(() => Object.entries(VARIABLE_DEFAULT_SECTIONS).flatMap(
+    ([variable, expectedSection]) => SECTION_KEYS
+        .filter((section) => section !== expectedSection
+            && editorTokensBySection.value[section]?.includes(variable))
+        .map((section) => ({ section, variable, expectedSection })),
+));
+const misplacedVariableMessage = computed(() => {
+    const misplaced = misplacedVariables.value[0];
+    if (!misplaced) return '';
+
+    return t('certificateDesign.content.validation.variableWrongSection', {
+        variable: `{{ ${misplaced.variable} }}`,
+        section: t(`certificateDesign.content.sections.${misplaced.expectedSection}.label`),
+    });
+});
 const requiredTokenWarnings = computed(() => missingRequiredVariables.value.map(
     ({ variable }) => variable,
 ));
@@ -394,11 +409,37 @@ const textareaElement = (key) => {
 const insertVariable = async (variable) => {
     if (!props.canManageTemplates || savingTemplate.value || editorMode.value === 'idle') return;
 
-    const sectionKey = SECTION_KEYS.includes(activeSectionKey.value) ? activeSectionKey.value : 'intro';
+    const previouslyActiveSection = activeSectionKey.value;
+    const preferredSection = VARIABLE_DEFAULT_SECTIONS[variable.key];
+    const sectionKey = SECTION_KEYS.includes(preferredSection)
+        ? preferredSection
+        : (SECTION_KEYS.includes(activeSectionKey.value) ? activeSectionKey.value : 'intro');
+    activeSectionKey.value = sectionKey;
     const element = textareaElement(sectionKey);
     const content = String(editor.value.sections[sectionKey] ?? '');
-    const start = Number.isInteger(element?.selectionStart) ? element.selectionStart : content.length;
-    const end = Number.isInteger(element?.selectionEnd) ? element.selectionEnd : start;
+    const escapedKey = String(variable.key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existingToken = SECTION_KEYS.includes(preferredSection)
+        ? new RegExp(`\\{\\{\\s*${escapedKey}\\s*}}`).exec(content)
+        : null;
+
+    if (existingToken) {
+        await nextTick();
+        const existingElement = textareaElement(sectionKey);
+        const tokenStart = existingToken.index;
+        const tokenEnd = tokenStart + existingToken[0].length;
+        existingElement?.focus();
+        existingElement?.setSelectionRange?.(tokenStart, tokenEnd);
+
+        return;
+    }
+
+    const shouldKeepCaret = previouslyActiveSection === sectionKey;
+    const start = shouldKeepCaret && Number.isInteger(element?.selectionStart)
+        ? element.selectionStart
+        : content.length;
+    const end = shouldKeepCaret && Number.isInteger(element?.selectionEnd)
+        ? element.selectionEnd
+        : start;
     const prefix = start > 0 && !/\s$/.test(content.slice(0, start)) ? ' ' : '';
     const suffix = end < content.length && !/^\s/.test(content.slice(end)) ? ' ' : '';
     const insertion = `${prefix}${variable.token}${suffix}`;
@@ -410,6 +451,13 @@ const insertVariable = async (variable) => {
     const cursor = start + insertion.length;
     updatedElement?.focus();
     updatedElement?.setSelectionRange?.(cursor, cursor);
+};
+
+const updateSectionValue = (sectionKey, value) => {
+    if (!SECTION_KEYS.includes(sectionKey)) return;
+
+    editor.value.sections[sectionKey] = String(value ?? '');
+    activeSectionKey.value = sectionKey;
 };
 
 const editorFromTemplate = (template) => ({
@@ -543,6 +591,15 @@ const validateTemplateLocally = () => {
         if (!errors[path]) {
             errors[path] = t('certificateDesign.content.validation.requiredVariable', {
                 variable: `{{ ${variable} }}`,
+            });
+        }
+    });
+    misplacedVariables.value.forEach(({ section, variable, expectedSection }) => {
+        const path = `sections.${section}`;
+        if (!errors[path]) {
+            errors[path] = t('certificateDesign.content.validation.variableWrongSection', {
+                variable: `{{ ${variable} }}`,
+                section: t(`certificateDesign.content.sections.${expectedSection}.label`),
             });
         }
     });
@@ -896,7 +953,7 @@ watch(
             ? { templateId: currentEffective.value.template_id, templateName: effectiveTemplate.value?.name ?? '', sections: null }
             : value);
     },
-    { deep: true, immediate: true },
+    { deep: true, immediate: true, flush: 'sync' },
 );
 </script>
 
@@ -914,8 +971,8 @@ watch(
                     </div>
                 </div>
                 <span
-                    class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
-                    :class="effectiveSourceClass"
+                    class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
+                    :class="accentBadgeClass"
                 >
                     <i class="pi pi-sitemap text-[0.7rem]" aria-hidden="true"></i>
                     {{ effectiveSourceLabel }}
@@ -929,7 +986,7 @@ watch(
                         <p class="truncate text-lg font-semibold">
                             {{ effectiveTemplate?.name || t('certificateDesign.content.legacyTemplate') }}
                         </p>
-                        <span v-if="effectiveTemplate?.is_system" class="rounded-full bg-amber-100 px-2 py-0.5 text-[0.7rem] font-bold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
+                        <span v-if="effectiveTemplate?.is_system" class="rounded-full px-2.5 py-1 text-xs font-bold" :class="accentBadgeClass">
                             {{ t('certificateDesign.content.systemTemplate') }}
                         </span>
                     </div>
@@ -1024,18 +1081,18 @@ watch(
                     <span class="min-w-0 flex-1">
                         <span class="block truncate text-sm font-semibold">{{ template.name }}</span>
                         <span class="mt-1 flex flex-wrap gap-1.5">
-                            <span v-if="template.is_system" class="rounded-full bg-amber-100 px-2 py-0.5 text-[0.65rem] font-bold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
+                            <span v-if="template.is_system" class="rounded-full px-2.5 py-1 text-xs font-bold" :class="accentBadgeClass">
                                 {{ t('certificateDesign.content.systemTemplate') }}
                             </span>
                             <span
-                                class="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
+                                class="rounded-full px-2.5 py-1 text-xs font-semibold"
                                 :class="template.is_active
                                     ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100'
                                     : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200'"
                             >
                                 {{ template.is_active ? t('messageTemplates.active') : t('messageTemplates.inactive') }}
                             </span>
-                            <span v-if="template.assignments_count" class="rounded-full bg-(--muted) px-2 py-0.5 text-[0.65rem] text-(--muted-foreground)">
+                            <span v-if="template.assignments_count" class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="accentBadgeClass">
                                 {{ t('certificateDesign.content.assignmentsCount', { count: template.assignments_count }) }}
                             </span>
                         </span>
@@ -1060,7 +1117,7 @@ watch(
                         <h3 class="text-lg font-semibold">
                             {{ editorMode === 'create' ? t('certificateDesign.content.createTemplate') : t('certificateDesign.content.editTemplate') }}
                         </h3>
-                        <span v-if="editor.is_system" class="rounded-full bg-amber-100 px-2.5 py-1 text-[0.7rem] font-bold text-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
+                        <span v-if="editor.is_system" class="rounded-full px-2.5 py-1 text-xs font-bold" :class="accentBadgeClass">
                             <i class="pi pi-lock me-1 text-[0.65rem]" aria-hidden="true"></i>
                             {{ t('certificateDesign.content.protectedTemplate') }}
                         </span>
@@ -1175,6 +1232,14 @@ watch(
                 <p>{{ t('certificateDesign.content.validation.unknownVariables', { variables: unknownTokens.join('، ') }) }}</p>
             </div>
             <div
+                v-else-if="misplacedVariables.length"
+                class="mt-4 flex items-start gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/35 dark:text-red-100"
+                role="alert"
+            >
+                <i class="pi pi-exclamation-circle mt-0.5 shrink-0" aria-hidden="true"></i>
+                <p>{{ misplacedVariableMessage }}</p>
+            </div>
+            <div
                 v-else-if="requiredTokenWarnings.length"
                 class="mt-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-100"
             >
@@ -1189,18 +1254,32 @@ watch(
                 <div
                     v-for="section in sectionCatalog"
                     :key="section.key"
+                    :data-certificate-template-section="section.key"
                     class="rounded-xl border bg-(--background) p-4 transition"
                     :class="activeSectionKey === section.key
                         ? 'border-[var(--accent)] ring-2 ring-[color-mix(in_oklab,var(--accent)_14%,transparent)]'
                         : (firstError(templateErrors, `sections.${section.key}`) ? 'border-red-500' : 'border-(--border)')"
                 >
                     <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                            <label :for="`certificate-content-${section.key}`" class="text-sm font-semibold">
-                                {{ section.label }}
-                                <span class="text-red-600">*</span>
-                            </label>
-                            <p class="mt-1 text-xs leading-5 text-(--muted-foreground)">{{ section.hint }}</p>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="flex h-6 min-w-6 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2 text-[0.7rem] font-bold text-[var(--accent)]">
+                                    {{ SECTION_KEYS.indexOf(section.key) + 1 }}
+                                </span>
+                                <label :for="`certificate-content-${section.key}`" class="text-sm font-semibold">
+                                    {{ section.label }}
+                                    <span class="text-red-600">*</span>
+                                </label>
+                                <span
+                                    v-for="variableKey in section.requiredVariables"
+                                    :key="variableKey"
+                                    class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-[0.65rem] font-semibold text-[var(--accent)]"
+                                >
+                                    {{ variableCatalog.find((variable) => variable.key === variableKey)?.label || variableKey }}
+                                </span>
+                            </div>
+                            <p class="mt-1 text-xs font-medium leading-5 text-[var(--accent)]">{{ section.placement }}</p>
+                            <p class="mt-0.5 text-xs leading-5 text-(--muted-foreground)">{{ section.hint }}</p>
                         </div>
                         <span class="rounded-full bg-(--muted) px-2 py-0.5 text-[0.65rem] tabular-nums text-(--muted-foreground)">
                             {{ Array.from(editor.sections[section.key] || '').length }} / {{ section.maxLength }}
@@ -1209,7 +1288,7 @@ watch(
                     <Textarea
                         :id="`certificate-content-${section.key}`"
                         :ref="(instance) => setSectionInput(section.key, instance)"
-                        v-model="editor.sections[section.key]"
+                        :model-value="editor.sections[section.key]"
                         :rows="section.rows"
                         :maxlength="section.maxLength"
                         class="w-full resize-y leading-7"
@@ -1217,6 +1296,7 @@ watch(
                         :readonly="!canManageTemplates"
                         :disabled="savingTemplate"
                         dir="rtl"
+                        @update:model-value="updateSectionValue(section.key, $event)"
                         @focus="activeSectionKey = section.key"
                         @click="activeSectionKey = section.key"
                     />
@@ -1245,7 +1325,7 @@ watch(
                         icon="pi pi-save"
                         :label="editorMode === 'create' ? t('certificateDesign.content.createTemplate') : t('certificateDesign.content.saveTemplate')"
                         :loading="savingTemplate"
-                        :disabled="!isEditorDirty || unsafeSections.length > 0 || unknownTokens.length > 0 || missingRequiredVariables.length > 0"
+                        :disabled="!isEditorDirty || unsafeSections.length > 0 || unknownTokens.length > 0 || misplacedVariables.length > 0 || missingRequiredVariables.length > 0"
                         @click="saveTemplate"
                     />
                 </div>

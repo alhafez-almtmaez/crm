@@ -187,19 +187,19 @@
                     @include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['closing']])
                 </p>
             @else
-                <p class="certificate__intro">
+                <p class="certificate__intro" data-certificate-content-section="intro">
                     <span data-certificate-preview-intro-before-project>{{ $certificate['intro_before_project'] }}</span>
                     <strong data-certificate-preview-center-name>{{ $certificate['center_name'] }}</strong>
                     <span data-certificate-preview-intro-after-center>{{ $certificate['intro_after_center'] }}</span>
                 </p>
 
-                <p class="certificate__student {{ $studentNameClass }}">
+                <p class="certificate__student {{ $studentNameClass }}" data-certificate-content-section="student_line">
                     <span class="ornament">﴿</span>
                     <strong data-certificate-preview-student>{{ $studentName }}</strong>
                     <span class="ornament">﴾</span>
                 </p>
 
-                <p class="certificate__achievement {{ $achievementNameClass }}">
+                <p class="certificate__achievement {{ $achievementNameClass }}" data-certificate-content-section="achievement_line">
                     <span data-certificate-preview-achievement-intro>{{ $certificate['achievement_intro'] }}</span>
                     <span data-certificate-preview-achievement-label>{{ $certificate['achievement_label'] }}</span>
                     <span class="ornament">﴿</span>
@@ -208,7 +208,7 @@
                     <span data-certificate-preview-achievement-suffix>{{ $certificate['achievement_suffix'] }}</span>
                 </p>
 
-                <p class="certificate__closing" data-certificate-preview-closing>{{ $certificate['closing_text'] }}</p>
+                <p class="certificate__closing" data-certificate-content-section="closing" data-certificate-preview-closing>{{ $certificate['closing_text'] }}</p>
             @endif
 
             @if ($showCenterIdentity || $previewMode)

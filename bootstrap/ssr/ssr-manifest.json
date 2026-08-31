@@ -25,12 +25,12 @@
     "/build/assets/Edit-zuJVwgQO.js"
   ],
   "resources/js/Pages/Admin/CertificateDesigns.vue": [
-    "/build/assets/CertificateDesigns-Cjh9a9Es.js",
-    "/build/assets/CertificateDesigns-D_n7G3Ku.css"
+    "/build/assets/CertificateDesigns-CrDknV0U.js",
+    "/build/assets/CertificateDesigns-DPLnP_qF.css"
   ],
-  "resources/js/Pages/Admin/CertificateDesigns.vue?vue&type=style&index=0&scoped=41a8be8c&lang.css": [
-    "/build/assets/CertificateDesigns-Cjh9a9Es.js",
-    "/build/assets/CertificateDesigns-D_n7G3Ku.css"
+  "resources/js/Pages/Admin/CertificateDesigns.vue?vue&type=style&index=0&scoped=989e17d0&lang.css": [
+    "/build/assets/CertificateDesigns-CrDknV0U.js",
+    "/build/assets/CertificateDesigns-DPLnP_qF.css"
   ],
   "resources/js/Pages/Admin/Dashboard.vue": [
     "/build/assets/Dashboard-D9clSD-v.js",
@@ -199,8 +199,8 @@
     "/build/assets/CenterFormCard-o3duDHye.js"
   ],
   "resources/js/components/admin/CertificateContentTemplatesPanel.vue": [
-    "/build/assets/CertificateDesigns-Cjh9a9Es.js",
-    "/build/assets/CertificateDesigns-D_n7G3Ku.css"
+    "/build/assets/CertificateDesigns-CrDknV0U.js",
+    "/build/assets/CertificateDesigns-DPLnP_qF.css"
   ],
   "resources/js/components/admin/DailyWeightLimitFields.vue": [
     "/build/assets/StudentFormCard-CoMnB9oC.js"

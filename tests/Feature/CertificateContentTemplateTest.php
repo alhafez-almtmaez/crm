@@ -416,6 +416,59 @@ test('template requests reject html blade malformed unknown and misplaced requir
         ->and($service->snapshot([...$snapshot, 'schema_version' => 4]))->toBeNull();
 });
 
+test('identity and achievement variables are restricted to their semantic sections', function () {
+    $admin = certificateContentTestUser(['certificate_designs.update']);
+    $misplaced = certificateContentTestSections('مواضع خاطئة');
+    $misplaced['title'] .= ' {{ student_name }}';
+    $misplaced['quote_first'] .= ' {{ center_name }}';
+    $misplaced['quote_second'] .= ' {{ achievement_label }}';
+    $misplaced['closing'] .= ' {{ achievement_name }}';
+
+    $response = $this->actingAs($admin, 'web')
+        ->postJson(route('admin.certificate-content-templates.store'), [
+            'name' => 'قالب بمتغيرات في أقسام خاطئة',
+            'sections' => $misplaced,
+            'is_active' => true,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([
+            'sections.title',
+            'sections.quote_first',
+            'sections.quote_second',
+            'sections.closing',
+        ]);
+
+    $errors = $response->json('errors');
+
+    expect($errors['sections.title'][0])
+        ->toContain('{{ student_name }}')
+        ->toContain('سطر اسم الطالب')
+        ->and($errors['sections.quote_first'][0])
+        ->toContain('{{ center_name }}')
+        ->toContain('مقدمة التهنئة')
+        ->and($errors['sections.quote_second'][0])
+        ->toContain('{{ achievement_label }}')
+        ->toContain('سطر الإنجاز')
+        ->and($errors['sections.closing'][0])
+        ->toContain('{{ achievement_name }}')
+        ->toContain('سطر الإنجاز');
+
+    $flexible = certificateContentTestSections('متغيرات مرنة');
+    $flexible['title'] .= ' {{ certificate_number }}';
+    $flexible['quote_first'] .= ' {{ plan_name }}';
+    $flexible['quote_second'] .= ' {{ plan_point_name }}';
+    $flexible['closing'] .= ' {{ hijri_date }} {{ gregorian_date }}';
+
+    $this->actingAs($admin, 'web')
+        ->postJson(route('admin.certificate-content-templates.store'), [
+            'name' => 'قالب بمتغيرات مرنة',
+            'sections' => $flexible,
+            'is_active' => true,
+        ])
+        ->assertCreated()
+        ->assertJsonPath('template.sections', $flexible);
+});
+
 test('scoped supervisors may only assign an existing active template to an accessible center', function () {
     $supervisor = certificateContentTestUser([
         'certificate_designs.view',

@@ -449,7 +449,7 @@ const prewarmFrame = (url) => {
     warmedFrames.set(source, image);
 };
 
-watch(previewMessage, sendPreviewUpdate, { deep: true, flush: 'post' });
+watch(previewMessage, sendPreviewUpdate, { deep: true, flush: 'sync' });
 watch(
     () => selectedTheme.value.frame_url,
     (url) => prewarmFrame(url),
