@@ -15,4 +15,5 @@ return [
     'deleted_successfully' => 'Monthly plan deleted successfully.',
     'date_must_match_selected_month' => 'The :attribute must be within the selected month and year.',
     'date_must_be_within_plan_period' => 'The :attribute must be within the plan period.',
+    'required_for_follow_up_date' => 'No monthly plan covers this date for the selected group. Create the group plan for this date first.',
 ];

@@ -20,6 +20,14 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    default_center_id: {
+        type: Number,
+        default: null,
+    },
+    default_group_id: {
+        type: Number,
+        default: null,
+    },
     default_month: {
         type: Number,
         default: new Date().getMonth() + 1,
@@ -41,8 +49,8 @@ const props = defineProps({
 const { t } = useI18n();
 
 const form = useForm({
-    center_id: null,
-    group_id: null,
+    center_id: props.default_center_id,
+    group_id: props.default_group_id,
     month: props.default_month,
     year: props.default_year,
     start_date: props.default_start_date,
@@ -232,9 +240,8 @@ const goBack = () => {
                                 :options="groupOptions"
                                 option-label="name"
                                 option-value="id"
-                                show-clear
                                 filter
-                                :placeholder="t('monthlyPlans.groupOptional')"
+                                :placeholder="t('monthlyPlans.group')"
                                 class="h-11 w-full"
                                 :disabled="!form.center_id"
                                 :invalid="Boolean(form.errors.group_id)"

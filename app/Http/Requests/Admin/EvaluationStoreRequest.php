@@ -4,9 +4,13 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
+use App\Models\Group;
 use App\Services\Admin\AdminDataScopeService;
+use App\Support\GroupMonthlyPlanCoverage;
+use App\Support\GroupWorkingDays;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class EvaluationStoreRequest extends FormRequest
 {
@@ -88,7 +92,16 @@ class EvaluationStoreRequest extends FormRequest
                 'required',
                 'integer',
                 Rule::exists('groups', 'id')
-                    ->where(fn ($query) => $dataScope->applyGroupAccess($query, 'groups')),
+                    ->where(function ($query) use ($dataScope): void {
+                        $query->whereExists(function ($centers): void {
+                            $centers
+                                ->selectRaw('1')
+                                ->from('centers')
+                                ->whereColumn('centers.id', 'groups.center_id')
+                                ->whereNull('centers.archived_at');
+                        });
+                        $dataScope->applyGroupAccess($query, 'groups');
+                    }),
             ],
             'evaluation_type' => ['required', 'integer', Rule::in([Evaluation::TYPE_ALHIFZ, Evaluation::TYPE_TAJWID])],
             'date' => [
@@ -111,5 +124,37 @@ class EvaluationStoreRequest extends FormRequest
             'items.*.tajwid' => ['nullable', 'integer', 'min:0', 'max:10'],
             'items.*.note' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->has('group_id') || $validator->errors()->has('date')) {
+                return;
+            }
+
+            $group = Group::query()
+                ->tap(fn ($query) => app(AdminDataScopeService::class)->applyGroupAccess($query, 'groups'))
+                ->find((int) $this->input('group_id'), ['id', 'working_days']);
+            if ($group === null) {
+                return;
+            }
+
+            if (! GroupWorkingDays::isConfigured($group->working_days)) {
+                $validator->errors()->add('date', __('groups.working_days_not_configured'));
+
+                return;
+            }
+
+            if (! GroupWorkingDays::includes($group->working_days, (string) $this->input('date'))) {
+                $validator->errors()->add('date', __('evaluations.date_not_in_group_working_days'));
+
+                return;
+            }
+
+            if (! GroupMonthlyPlanCoverage::exists((int) $group->id, (string) $this->input('date'))) {
+                $validator->errors()->add('date', __('monthly_plans.required_for_follow_up_date'));
+            }
+        });
     }
 }

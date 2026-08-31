@@ -6,4 +6,5 @@ return [
     'deleted_successfully' => 'Group deleted successfully.',
     'cannot_move_with_data' => 'A group with students, evaluations, or saved plans cannot be moved to another center.',
     'cannot_delete_with_data' => 'A group with students, evaluations, or saved plans cannot be deleted because its history must be preserved.',
+    'working_days_not_configured' => 'Configure the group working days before adding any follow-up records.',
 ];

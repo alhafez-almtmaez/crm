@@ -61,11 +61,16 @@ const rowActions = computed(() => [
 ]);
 
 const openCreate = () => {
-    router.get('/admin/homeworks/create');
+    router.get('/admin/daily-follow-up', { section: 'homework' });
 };
 
 const openEdit = (row) => {
-    router.get(`/admin/homeworks/${row.id}/edit`);
+    router.get('/admin/daily-follow-up', {
+        center_id: row.center_id,
+        group_id: row.group_id,
+        date: String(row.date ?? '').slice(0, 10),
+        section: 'homework',
+    });
 };
 
 const openPdf = (row) => {

@@ -11,6 +11,8 @@ use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentPointTransaction;
 use App\Services\System\DateTimeFormatterService;
+use App\Support\GroupMonthlyPlanCoverage;
+use App\Support\GroupWorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -116,7 +118,7 @@ class HomeworkService
     }
 
     /**
-     * @return array<int, array{id: int, name: string, groups: array<int, array{id: int, name: string, center_id: int, working_days: array<int, string>}>}>
+     * @return array<int, array{id: int, name: string, working_days: array<int, string>, groups: array<int, array{id: int, name: string, center_id: int, working_days: array<int, string>}>}>
      */
     public function centerOptions(): array
     {
@@ -129,10 +131,11 @@ class HomeworkService
                     ->orderBy('name');
             }])
             ->orderBy('name')
-            ->get(['id', 'name'])
+            ->get(['id', 'name', 'working_days'])
             ->map(static fn (Center $center): array => [
                 'id' => (int) $center->id,
                 'name' => (string) $center->name,
+                'working_days' => is_array($center->working_days) ? $center->working_days : [],
                 'groups' => $center->groups
                     ->map(static fn (Group $group): array => [
                         'id' => (int) $group->id,
@@ -430,9 +433,21 @@ class HomeworkService
         abort_unless($group instanceof Group, 404);
         $centerId = (int) $group->center_id;
 
+        if (! GroupWorkingDays::isConfigured($group->working_days)) {
+            throw ValidationException::withMessages([
+                'date' => __('groups.working_days_not_configured'),
+            ]);
+        }
+
         if (! $this->isWorkingDate($group, $date)) {
             throw ValidationException::withMessages([
                 'date' => __('homeworks.date_not_in_group_working_days'),
+            ]);
+        }
+
+        if (! GroupMonthlyPlanCoverage::exists((int) $group->id, $date)) {
+            throw ValidationException::withMessages([
+                'date' => __('monthly_plans.required_for_follow_up_date'),
             ]);
         }
 
@@ -1056,12 +1071,7 @@ class HomeworkService
 
     private function isWorkingDate(Group $group, string $date): bool
     {
-        $workingDays = $this->workingDayLookup($group);
-        if ($workingDays === []) {
-            return true;
-        }
-
-        return isset($workingDays[$this->dayName(Carbon::parse($date))]);
+        return GroupWorkingDays::includes($group->working_days, $date);
     }
 
     /**
@@ -1069,16 +1079,7 @@ class HomeworkService
      */
     private function workingDayLookup(Group $group): array
     {
-        $workingDays = is_array($group->working_days) ? $group->working_days : [];
-        if ($workingDays === []) {
-            $group->loadMissing('center:id,working_days');
-            $workingDays = is_array($group->center?->working_days) ? $group->center->working_days : [];
-        }
-
-        return array_fill_keys(array_map(
-            static fn (string $day): string => strtolower($day),
-            array_filter($workingDays, static fn ($day): bool => is_string($day) && trim($day) !== ''),
-        ), true);
+        return GroupWorkingDays::lookup($group->working_days);
     }
 
     private function dayName(Carbon $date): string

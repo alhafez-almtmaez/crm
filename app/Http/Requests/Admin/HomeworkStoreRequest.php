@@ -5,8 +5,9 @@ namespace App\Http\Requests\Admin;
 use App\Models\Group;
 use App\Models\Homework;
 use App\Services\Admin\AdminDataScopeService;
+use App\Support\GroupMonthlyPlanCoverage;
+use App\Support\GroupWorkingDays;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -78,7 +79,16 @@ class HomeworkStoreRequest extends FormRequest
                 'required',
                 'integer',
                 Rule::exists('groups', 'id')
-                    ->where(fn ($query) => $dataScope->applyGroupAccess($query, 'groups')),
+                    ->where(function ($query) use ($dataScope): void {
+                        $query->whereExists(function ($centers): void {
+                            $centers
+                                ->selectRaw('1')
+                                ->from('centers')
+                                ->whereColumn('centers.id', 'groups.center_id')
+                                ->whereNull('centers.archived_at');
+                        });
+                        $dataScope->applyGroupAccess($query, 'groups');
+                    }),
             ],
             'date' => [
                 'required',
@@ -106,11 +116,25 @@ class HomeworkStoreRequest extends FormRequest
             $group = Group::query()
                 ->tap(fn ($query) => app(AdminDataScopeService::class)->applyGroupAccess($query, 'groups'))
                 ->find($this->rowGroupId());
-            if ($group === null || $this->dateMatchesGroupWorkingDays($group, (string) $this->input('date'))) {
+            if ($group === null) {
                 return;
             }
 
-            $validator->errors()->add('date', __('homeworks.date_not_in_group_working_days'));
+            if (! GroupWorkingDays::isConfigured($group->working_days)) {
+                $validator->errors()->add('date', __('groups.working_days_not_configured'));
+
+                return;
+            }
+
+            if (! GroupWorkingDays::includes($group->working_days, (string) $this->input('date'))) {
+                $validator->errors()->add('date', __('homeworks.date_not_in_group_working_days'));
+
+                return;
+            }
+
+            if (! GroupMonthlyPlanCoverage::exists((int) $group->id, (string) $this->input('date'))) {
+                $validator->errors()->add('date', __('monthly_plans.required_for_follow_up_date'));
+            }
         });
     }
 
@@ -151,27 +175,5 @@ class HomeworkStoreRequest extends FormRequest
         $groupId = (int) $this->input('group_id');
 
         return $groupId > 0 ? $groupId : null;
-    }
-
-    private function dateMatchesGroupWorkingDays(Group $group, string $date): bool
-    {
-        $workingDays = is_array($group->working_days) ? $group->working_days : [];
-        if ($workingDays === []) {
-            return true;
-        }
-
-        $lookup = array_fill_keys(array_map(
-            static fn (string $day): string => strtolower($day),
-            array_filter($workingDays, static fn ($day): bool => is_string($day) && trim($day) !== ''),
-        ), true);
-
-        if ($lookup === []) {
-            return true;
-        }
-
-        $dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        $dayName = $dayNames[Carbon::parse($date)->dayOfWeek] ?? '';
-
-        return isset($lookup[$dayName]);
     }
 }

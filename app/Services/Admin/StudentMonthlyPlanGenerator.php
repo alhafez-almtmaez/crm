@@ -62,6 +62,27 @@ class StudentMonthlyPlanGenerator
         ?CarbonImmutable $endDate = null,
         array $holidayDates = [],
     ): array {
+        [$periodStart, $periodEnd] = $this->periodForMonth($month, $year, $startDate, $endDate);
+        $holidayDates = $this->normalizeHolidayDates($holidayDates, $periodStart, $periodEnd);
+        $monthlyPlan = $this->monthlyPlanHeader(
+            centerId: (int) $group->center_id,
+            groupId: (int) $group->id,
+            month: $month,
+            year: $year,
+            startDate: $periodStart,
+            endDate: $periodEnd,
+            holidayDates: $holidayDates,
+        );
+
+        // Once a header has student data, its stored period is authoritative.
+        // This keeps newly joined students aligned with the original group plan.
+        [$periodStart, $periodEnd] = $this->periodForMonthlyPlan($monthlyPlan);
+        $holidayDates = $this->normalizeHolidayDates(
+            (array) $monthlyPlan->holiday_dates,
+            $periodStart,
+            $periodEnd,
+        );
+
         $students = Student::query()
             ->with(['center:id,working_days', 'groups:id,center_id,working_days', 'plan:id,name'])
             ->whereHas('groups', static fn ($query) => $query->where('groups.id', $group->id))
@@ -71,7 +92,23 @@ class StudentMonthlyPlanGenerator
             ->orderBy('full_name')
             ->get();
 
-        return $this->generateForStudents($students, $month, $year, $startDate, $endDate, $holidayDates, (int) $group->id);
+        $result = $this->generateForStudents(
+            $students,
+            $month,
+            $year,
+            $periodStart,
+            $periodEnd,
+            $holidayDates,
+            (int) $group->id,
+        );
+        $result['monthly_plan_ids'] = array_values(array_unique([
+            (int) $monthlyPlan->id,
+            ...$result['monthly_plan_ids'],
+        ]));
+
+        $this->refreshMonthlyPlanTotals($monthlyPlan);
+
+        return $result;
     }
 
     /**
@@ -141,6 +178,11 @@ class StudentMonthlyPlanGenerator
             $existingPlan = StudentMonthlyPlan::query()
                 ->withCount('items')
                 ->where('student_id', $student->id)
+                ->when(
+                    $resolvedGroupId === null,
+                    static fn ($query) => $query->whereNull('group_id'),
+                    static fn ($query) => $query->where('group_id', $resolvedGroupId),
+                )
                 ->where('year', $year)
                 ->where('month', $month)
                 ->first();
@@ -210,6 +252,26 @@ class StudentMonthlyPlanGenerator
     {
         $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
         $fromDate = $fromDate->startOfDay();
+
+        [$currentPeriodStart, $currentPeriodEnd] = $this->periodForMonthlyPlan($monthlyPlan);
+        if ($fromDate->lt($currentPeriodStart) || $fromDate->gt($currentPeriodEnd)) {
+            throw new InvalidArgumentException('Refresh date must be within the monthly plan period.');
+        }
+
+        if ($monthlyPlan->group_id !== null) {
+            $group = Group::query()->find($monthlyPlan->group_id);
+
+            if ($group !== null) {
+                $this->generateForGroup(
+                    group: $group,
+                    month: (int) $monthlyPlan->month,
+                    year: (int) $monthlyPlan->year,
+                    startDate: $currentPeriodStart,
+                    endDate: $currentPeriodEnd,
+                    holidayDates: $holidayDates ?? (array) $monthlyPlan->holiday_dates,
+                );
+            }
+        }
 
         return DB::transaction(function () use ($monthlyPlan, $fromDate, $holidayDates): array {
             /** @var MonthlyPlan $lockedMonthlyPlan */
@@ -287,6 +349,26 @@ class StudentMonthlyPlanGenerator
         array $holidayDates,
         ?int $groupId,
     ): MonthlyPlan {
+        return $this->monthlyPlanHeader(
+            centerId: (int) $student->center_id,
+            groupId: $groupId,
+            month: $month,
+            year: $year,
+            startDate: $startDate,
+            endDate: $endDate,
+            holidayDates: $holidayDates,
+        );
+    }
+
+    private function monthlyPlanHeader(
+        int $centerId,
+        ?int $groupId,
+        int $month,
+        int $year,
+        CarbonImmutable $startDate,
+        CarbonImmutable $endDate,
+        array $holidayDates,
+    ): MonthlyPlan {
         $attributes = [
             'group_id' => $groupId,
             'month' => $month,
@@ -294,14 +376,14 @@ class StudentMonthlyPlanGenerator
         ];
 
         if ($groupId === null) {
-            $attributes['center_id'] = $student->center_id;
+            $attributes['center_id'] = $centerId;
         }
 
         $monthlyPlan = MonthlyPlan::query()->firstOrCreate($attributes, [
             'start_date' => $startDate->toDateString(),
             'end_date' => $endDate->toDateString(),
             'holiday_dates' => $holidayDates,
-            'center_id' => $student->center_id,
+            'center_id' => $centerId,
             'admin_id' => Auth::id(),
             'generated_at' => now(),
         ]);

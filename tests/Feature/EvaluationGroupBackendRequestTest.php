@@ -4,6 +4,7 @@ use App\Models\Center;
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
 use App\Models\Group;
+use App\Models\MonthlyPlan;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\Admin\AbsenceRules\AbsenceAlertExecutionLock;
@@ -25,8 +26,15 @@ beforeEach(function (): void {
 test('evaluation store derives the center from the selected group and rejects non members', function () {
     $actualCenter = Center::factory()->create();
     $submittedCenter = Center::factory()->create();
-    $group = Group::factory()->create(['center_id' => $actualCenter->id]);
-    $otherGroup = Group::factory()->create(['center_id' => $actualCenter->id]);
+    $group = Group::factory()->create([
+        'center_id' => $actualCenter->id,
+        'working_days' => evaluationRequestAllWorkingDays(),
+    ]);
+    $otherGroup = Group::factory()->create([
+        'center_id' => $actualCenter->id,
+        'working_days' => evaluationRequestAllWorkingDays(),
+    ]);
+    createEvaluationRequestMonthlyPlan($group);
     $member = Student::factory()->active()->create([
         'center_id' => $actualCenter->id,
         'group_id' => $group->id,
@@ -68,8 +76,14 @@ test('evaluation store derives the center from the selected group and rejects no
 
 test('evaluation update accepts historical rows after group membership is removed', function () {
     $center = Center::factory()->create();
-    $group = Group::factory()->create(['center_id' => $center->id]);
-    $otherGroup = Group::factory()->create(['center_id' => $center->id]);
+    $group = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => evaluationRequestAllWorkingDays(),
+    ]);
+    $otherGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => evaluationRequestAllWorkingDays(),
+    ]);
     $historicalStudent = Student::factory()->active()->create([
         'center_id' => $center->id,
         'group_id' => $group->id,
@@ -167,4 +181,22 @@ function evaluationGroupRequestItem(Student $student, int $score = 10): array
         'tajwid' => null,
         'note' => null,
     ];
+}
+
+/** @return array<int, string> */
+function evaluationRequestAllWorkingDays(): array
+{
+    return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+}
+
+function createEvaluationRequestMonthlyPlan(Group $group): MonthlyPlan
+{
+    return MonthlyPlan::query()->create([
+        'month' => 8,
+        'year' => 2026,
+        'start_date' => '2026-08-01',
+        'end_date' => '2026-08-31',
+        'center_id' => $group->center_id,
+        'group_id' => $group->id,
+    ]);
 }

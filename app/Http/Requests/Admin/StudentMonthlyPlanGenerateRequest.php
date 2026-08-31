@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Group;
 use App\Services\Admin\AdminDataScopeService;
+use App\Support\GroupWorkingDays;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -55,7 +57,8 @@ class StudentMonthlyPlanGenerateRequest extends FormRequest
         return [
             'center_id' => ['required', $centerRule],
             'group_id' => [
-                'nullable',
+                'required',
+                'integer',
                 $groupRule,
             ],
             'month' => ['required', 'integer', 'min:1', 'max:12'],
@@ -70,6 +73,16 @@ class StudentMonthlyPlanGenerateRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            if (! $validator->errors()->has('group_id')) {
+                $group = Group::query()
+                    ->tap(fn ($query) => app(AdminDataScopeService::class)->applyGroupAccess($query, 'groups'))
+                    ->find((int) $this->input('group_id'), ['id', 'working_days']);
+
+                if ($group instanceof Group && ! GroupWorkingDays::isConfigured($group->working_days)) {
+                    $validator->errors()->add('group_id', __('groups.working_days_not_configured'));
+                }
+            }
+
             if (
                 $validator->errors()->has('month')
                 || $validator->errors()->has('year')

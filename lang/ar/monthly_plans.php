@@ -15,4 +15,5 @@ return [
     'deleted_successfully' => 'تم حذف الخطة الشهرية بنجاح.',
     'date_must_match_selected_month' => 'يجب أن يكون :attribute ضمن الشهر والسنة المحددين.',
     'date_must_be_within_plan_period' => 'يجب أن يكون :attribute ضمن فترة الخطة.',
+    'required_for_follow_up_date' => 'لا توجد خطة شهرية لهذه المجموعة تغطي التاريخ المحدد. أنشئ خطة المجموعة لهذا التاريخ أولًا.',
 ];

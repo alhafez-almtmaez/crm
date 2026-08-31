@@ -228,11 +228,16 @@ const rowActions = computed(() => [
 ]);
 
 const openCreate = () => {
-    router.get('/admin/evaluations/create');
+    router.get('/admin/daily-follow-up', { section: 'evaluation' });
 };
 
 const openEdit = (row) => {
-    router.get(`/admin/evaluations/${row.id}/edit`);
+    router.get('/admin/daily-follow-up', {
+        center_id: row.center_id,
+        group_id: row.group_id,
+        date: String(row.date ?? '').slice(0, 10),
+        section: 'evaluation',
+    });
 };
 
 const openReport = (row) => {

@@ -12,6 +12,7 @@ use App\Models\StudentMonthlyPlanItem;
 use App\Models\User;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
+use App\Services\Auth\PermissionSyncService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -396,6 +397,161 @@ test('monthly plans for two students do not mix their data', function () {
     expect($firstPlan->monthly_plan_id)->toBe($secondPlan->monthly_plan_id)
         ->and($firstPlan->items()->where('student_id', $secondStudent->id)->exists())->toBeFalse()
         ->and($secondPlan->items()->where('student_id', $firstStudent->id)->exists())->toBeFalse();
+});
+
+test('group generation persists and returns a monthly plan header when the group has no eligible students', function () {
+    $center = Center::factory()->create([
+        'working_days' => ['monday'],
+    ]);
+    $group = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => ['monday'],
+    ]);
+
+    $result = app(StudentMonthlyPlanGenerator::class)->generateForGroup(
+        group: $group,
+        month: 6,
+        year: 2026,
+        startDate: CarbonImmutable::create(2026, 6, 1),
+        endDate: CarbonImmutable::create(2026, 6, 30),
+    );
+
+    $monthlyPlan = MonthlyPlan::query()->sole();
+
+    expect($result['generated'])->toBe(0)
+        ->and($result['skipped_students'])->toBe(0)
+        ->and($result['plan_ids'])->toBe([])
+        ->and($result['monthly_plan_ids'])->toBe([$monthlyPlan->id])
+        ->and($monthlyPlan->group_id)->toBe($group->id)
+        ->and($monthlyPlan->students_count)->toBe(0)
+        ->and(StudentMonthlyPlan::query()->count())->toBe(0);
+});
+
+test('posting an existing group plan syncs new active students before reporting that it already exists', function () {
+    [$center, $group, $plan] = monthlyPlanFixture(maxDailyWeight: 1);
+    $group->update(['working_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']]);
+    createPlanPoint($plan, 'تسميع صفحة 1', 1);
+    createPlanPoint($plan, 'تسميع صفحة 2', 2);
+
+    $initialResult = app(StudentMonthlyPlanGenerator::class)->generateForGroup($group, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($initialResult['monthly_plan_ids'][0]);
+
+    $newStudent = Student::factory()->active()->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'plan_type_id' => $plan->id,
+        'max_daily_weight' => 1,
+    ]);
+
+    app(PermissionSyncService::class)->sync();
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $this->actingAs($admin, 'web');
+
+    $payload = [
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'month' => 6,
+        'year' => 2026,
+        'start_date' => '2026-06-01',
+        'end_date' => '2026-06-30',
+        'holiday_dates' => [],
+    ];
+
+    $this->post('/admin/monthly-plans', $payload)
+        ->assertRedirect(route('admin.monthly-plans.edit', $monthlyPlan, false))
+        ->assertSessionHas('success', __('monthly_plans.generated_successfully', ['count' => 1]));
+
+    expect(StudentMonthlyPlan::query()->where('monthly_plan_id', $monthlyPlan->id)->count())->toBe(2)
+        ->and(StudentMonthlyPlan::query()
+            ->where('monthly_plan_id', $monthlyPlan->id)
+            ->where('student_id', $newStudent->id)
+            ->exists())->toBeTrue();
+
+    $this->post('/admin/monthly-plans', $payload)
+        ->assertRedirect(route('admin.monthly-plans.edit', $monthlyPlan, false))
+        ->assertSessionHas('success', __('monthly_plans.already_exists'));
+
+    expect(StudentMonthlyPlan::query()->where('monthly_plan_id', $monthlyPlan->id)->count())->toBe(2);
+});
+
+test('refreshing future plan days first syncs new active group students', function () {
+    [$center, $group, $plan] = monthlyPlanFixture(maxDailyWeight: 1);
+    $group->update(['working_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']]);
+    createPlanPoint($plan, 'تسميع صفحة 1', 1);
+    createPlanPoint($plan, 'تسميع صفحة 2', 2);
+    createPlanPoint($plan, 'تسميع صفحة 3', 3);
+
+    $initialResult = app(StudentMonthlyPlanGenerator::class)->generateForGroup($group, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($initialResult['monthly_plan_ids'][0]);
+    $newStudent = Student::factory()->active()->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'plan_type_id' => $plan->id,
+        'max_daily_weight' => 1,
+    ]);
+
+    expect(StudentMonthlyPlan::query()->where('student_id', $newStudent->id)->exists())->toBeFalse();
+
+    $result = app(StudentMonthlyPlanGenerator::class)->regenerateFutureForMonthlyPlan(
+        $monthlyPlan,
+        CarbonImmutable::create(2026, 6, 2),
+    );
+
+    $newStudentPlan = StudentMonthlyPlan::query()
+        ->where('monthly_plan_id', $monthlyPlan->id)
+        ->where('student_id', $newStudent->id)
+        ->firstOrFail();
+
+    expect($result['student_plans'])->toBe(2)
+        ->and($newStudentPlan->group_id)->toBe($group->id)
+        ->and($newStudentPlan->items()->count())->toBe(3)
+        ->and($monthlyPlan->refresh()->students_count)->toBe(2);
+});
+
+test('one student can have independent monthly plans in multiple groups', function () {
+    [$center, $firstGroup, $plan, $student] = monthlyPlanFixture(maxDailyWeight: 2);
+    $secondGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+    ]);
+    $student->groups()->syncWithoutDetaching([$secondGroup->id]);
+
+    createPlanPoint($plan, 'تسميع صفحة 1', 1);
+    createPlanPoint($plan, 'تسميع صفحة 2', 2);
+
+    $firstResult = app(StudentMonthlyPlanGenerator::class)->generateForGroup($firstGroup, 6, 2026);
+    $secondResult = app(StudentMonthlyPlanGenerator::class)->generateForGroup($secondGroup, 6, 2026);
+
+    expect($firstResult['generated'])->toBe(1)
+        ->and($secondResult['generated'])->toBe(1)
+        ->and(MonthlyPlan::query()->where('year', 2026)->where('month', 6)->count())->toBe(2)
+        ->and(StudentMonthlyPlan::query()->where('student_id', $student->id)->where('year', 2026)->where('month', 6)->count())->toBe(2);
+
+    $firstStudentPlan = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $firstGroup->id)
+        ->where('year', 2026)
+        ->where('month', 6)
+        ->firstOrFail();
+    $secondStudentPlan = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $secondGroup->id)
+        ->where('year', 2026)
+        ->where('month', 6)
+        ->firstOrFail();
+
+    expect($firstStudentPlan->monthly_plan_id)->not->toBe($secondStudentPlan->monthly_plan_id)
+        ->and($firstStudentPlan->items()->count())->toBe(2)
+        ->and($secondStudentPlan->items()->count())->toBe(2)
+        ->and($firstStudentPlan->monthlyPlan->group_id)->toBe($firstGroup->id)
+        ->and($secondStudentPlan->monthlyPlan->group_id)->toBe($secondGroup->id);
+
+    app(StudentMonthlyPlanGenerator::class)->generateForGroup($firstGroup, 6, 2026);
+    app(StudentMonthlyPlanGenerator::class)->generateForGroup($secondGroup, 6, 2026);
+
+    expect(StudentMonthlyPlan::query()->where('student_id', $student->id)->where('year', 2026)->where('month', 6)->count())->toBe(2)
+        ->and(StudentMonthlyPlanItem::query()->where('student_id', $student->id)->count())->toBe(4);
 });
 
 test('saved monthly plan records include the public monthly plan report link', function () {

@@ -13,6 +13,8 @@ use App\Models\StudentFreeze;
 use App\Services\Admin\AbsenceRules\AbsenceAlertExecutionLock;
 use App\Services\Admin\AbsenceRules\AbsenceRuleEngine;
 use App\Services\System\DateTimeFormatterService;
+use App\Support\GroupMonthlyPlanCoverage;
+use App\Support\GroupWorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -254,10 +256,28 @@ class EvaluationService
 
         $group = Group::query()
             ->tap(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups'))
-            ->find($groupId, ['id', 'center_id']);
+            ->find($groupId, ['id', 'center_id', 'working_days']);
 
         abort_unless($group instanceof Group, 404);
         $centerId = (int) $group->center_id;
+
+        if (! GroupWorkingDays::isConfigured($group->working_days)) {
+            throw ValidationException::withMessages([
+                'date' => __('groups.working_days_not_configured'),
+            ]);
+        }
+
+        if (! GroupWorkingDays::includes($group->working_days, $date)) {
+            throw ValidationException::withMessages([
+                'date' => __('evaluations.date_not_in_group_working_days'),
+            ]);
+        }
+
+        if (! GroupMonthlyPlanCoverage::exists((int) $group->id, $date)) {
+            throw ValidationException::withMessages([
+                'date' => __('monthly_plans.required_for_follow_up_date'),
+            ]);
+        }
 
         $exists = Evaluation::query()
             ->where('group_id', $groupId)

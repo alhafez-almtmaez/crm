@@ -28,6 +28,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    showContextFields: {
+        type: Boolean,
+        default: true,
+    },
+    showCancel: {
+        type: Boolean,
+        default: true,
+    },
     submitLabel: {
         type: String,
         default: 'Save',
@@ -66,13 +74,17 @@ const normalizeId = (value) => {
     return Number.isNaN(id) ? null : id;
 };
 
-const groupOptions = computed(() => {
+const selectedCenter = computed(() => {
     const centerId = normalizeId(props.form.center_id);
     if (centerId === null) {
-        return [];
+        return null;
     }
 
-    const center = props.centers.find((item) => normalizeId(item?.id) === centerId);
+    return props.centers.find((item) => normalizeId(item?.id) === centerId) ?? null;
+});
+
+const groupOptions = computed(() => {
+    const center = selectedCenter.value;
 
     return Array.isArray(center?.groups) ? center.groups : [];
 });
@@ -121,7 +133,12 @@ const selectedGroup = computed(() => {
 });
 
 const selectedGroupWorkingDays = computed(() => {
-    const workingDays = selectedGroup.value?.working_days;
+    const groupWorkingDays = selectedGroup.value?.working_days;
+    if (Array.isArray(groupWorkingDays) && groupWorkingDays.length > 0) {
+        return groupWorkingDays;
+    }
+
+    const workingDays = selectedCenter.value?.working_days;
 
     return Array.isArray(workingDays) ? workingDays : [];
 });
@@ -369,7 +386,7 @@ const pointCardClass = (point) => {
         <p v-if="description" class="mt-3 text-lg text-(--muted-foreground)">{{ description }}</p>
 
         <form class="mt-6 grid gap-4" @submit.prevent="emit('submit')">
-            <div class="grid gap-4 md:grid-cols-3">
+            <div v-if="showContextFields" class="grid gap-4 md:grid-cols-3">
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
                         <Select
@@ -622,7 +639,14 @@ const pointCardClass = (point) => {
             </div>
 
             <div class="mt-2 flex justify-end gap-2">
-                <Button type="button" :label="t('common.cancel')" severity="secondary" text @click="emit('cancel')" />
+                <Button
+                    v-if="showCancel"
+                    type="button"
+                    :label="t('common.cancel')"
+                    severity="secondary"
+                    text
+                    @click="emit('cancel')"
+                />
                 <Button
                     type="submit"
                     :label="submitLabel"

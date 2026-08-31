@@ -15,7 +15,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -81,38 +80,11 @@ class EvaluationController extends Controller implements HasMiddleware
         ]);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request): RedirectResponse
     {
-        $query = $request->validate([
-            'center_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('centers', 'id')
-                    ->where(function ($query): void {
-                        $query->whereNull('archived_at');
-                        $this->dataScope->applyCenterAccess($query, 'centers');
-                    }),
-            ],
-            'group_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('groups', 'id')
-                    ->where(fn ($query) => $this->dataScope->applyGroupAccess($query, 'groups')),
-            ],
-            'date' => ['nullable', 'date_format:Y-m-d'],
-            'evaluation_type' => ['nullable', 'integer', 'in:1,2'],
-        ]);
-
-        $centerId = isset($query['center_id']) ? (int) $query['center_id'] : null;
-        $groupId = isset($query['group_id']) ? (int) $query['group_id'] : null;
-        $date = isset($query['date']) ? (string) $query['date'] : null;
-        $evaluationType = isset($query['evaluation_type']) ? (int) $query['evaluation_type'] : Evaluation::TYPE_ALHIFZ;
-        $formPayload = $this->service->createFormPayload($centerId, $groupId, $date);
-
-        return Inertia::render('Admin/Evaluations/Create', [
-            'centers' => $this->service->centerOptions(),
-            'selected_evaluation_type' => $evaluationType,
-            ...$formPayload,
+        return redirect()->route('admin.daily-follow-up.index', [
+            ...$request->only(['center_id', 'group_id', 'date', 'evaluation_type']),
+            'section' => 'evaluation',
         ]);
     }
 

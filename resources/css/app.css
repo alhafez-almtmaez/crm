@@ -20,6 +20,16 @@
     --border: #e8e8e8;
     --accent: #059669;
     --accent-contrast: #ffffff;
+    --status-success: #047857;
+    --status-success-contrast: #ffffff;
+    --status-info: #0369a1;
+    --status-info-contrast: #ffffff;
+    --status-warning: #f59e0b;
+    --status-warning-contrast: #1f2937;
+    --status-danger: #dc2626;
+    --status-danger-contrast: #ffffff;
+    --status-neutral: #475569;
+    --status-neutral-contrast: #ffffff;
 
     /* Spacing scale */
     --space-1: 0.25rem;
@@ -62,6 +72,11 @@
     --card-foreground: #e2e8f0;
     --muted-foreground: #a3a3a3;
     --border: #242424;
+    --status-success: #059669;
+    --status-info: #0284c7;
+    --status-warning: #f59e0b;
+    --status-danger: #dc2626;
+    --status-neutral: #64748b;
     color-scheme: dark;
 }
 

@@ -6,6 +6,7 @@ return [
     'deleted_successfully' => 'تم حذف التقييم بنجاح.',
     'already_exists_for_group_date' => 'يوجد تقييم مسجل لهذه المجموعة في نفس التاريخ.',
     'already_exists_for_center_date' => 'يوجد تقييم مسجل لهذه المجموعة في نفس التاريخ.',
+    'date_not_in_group_working_days' => 'تاريخ التقييم يجب أن يكون ضمن أيام دوام المجموعة.',
     'absence_alerts_sent_successfully' => 'تمت معالجة تنبيهات الغياب بنجاح.',
     'absence_alerts_completed_with_errors' => 'تمت معالجة تنبيهات الغياب مع وجود أخطاء.',
     'absence_alerts_preview_created' => 'تم إنشاء رسائل الغياب محلياً بدون إرسالها إلى واتساب.',

@@ -5,6 +5,7 @@ use App\Models\Group;
 use App\Models\Homework;
 use App\Models\HomeworkStudent;
 use App\Models\HomeworkStudentPoint;
+use App\Models\MonthlyPlan;
 use App\Models\Plan;
 use App\Models\PlanPoint;
 use App\Models\Student;
@@ -38,6 +39,8 @@ test('homework creation derives center and scopes students and uniqueness to gro
         'name' => 'Beta Group',
         'working_days' => allHomeworkWorkingDays(),
     ]);
+    createHomeworkMonthlyPlan($firstGroup);
+    createHomeworkMonthlyPlan($secondGroup);
     $firstStudent = Student::factory()->active()->create([
         'center_id' => $actualCenter->id,
         'group_id' => $firstGroup->id,
@@ -90,6 +93,7 @@ test('homework update accepts historical students but rejects unrelated students
         'center_id' => $center->id,
         'working_days' => allHomeworkWorkingDays(),
     ]);
+    createHomeworkMonthlyPlan($group);
     $historicalStudent = Student::factory()->active()->create([
         'center_id' => $center->id,
         'group_id' => $group->id,
@@ -121,6 +125,7 @@ test('homework service rejects duplicate group dates', function () {
         'center_id' => $center->id,
         'working_days' => allHomeworkWorkingDays(),
     ]);
+    createHomeworkMonthlyPlan($group);
     $student = Student::factory()->active()->create([
         'center_id' => $center->id,
         'group_id' => $group->id,
@@ -237,4 +242,16 @@ function homeworkGroupItem(Student $student, int $adjustment = 0): array
 function allHomeworkWorkingDays(): array
 {
     return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+}
+
+function createHomeworkMonthlyPlan(Group $group): MonthlyPlan
+{
+    return MonthlyPlan::query()->create([
+        'month' => 8,
+        'year' => 2026,
+        'start_date' => '2026-08-01',
+        'end_date' => '2026-08-31',
+        'center_id' => $group->center_id,
+        'group_id' => $group->id,
+    ]);
 }

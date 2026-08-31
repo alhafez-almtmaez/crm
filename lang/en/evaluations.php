@@ -6,6 +6,7 @@ return [
     'deleted_successfully' => 'Evaluation deleted successfully.',
     'already_exists_for_group_date' => 'An evaluation already exists for this group and date.',
     'already_exists_for_center_date' => 'An evaluation already exists for this group and date.',
+    'date_not_in_group_working_days' => 'The evaluation date must be one of the group working days.',
     'absence_alerts_sent_successfully' => 'Absence alerts processed successfully.',
     'absence_alerts_completed_with_errors' => 'Absence alerts processing completed with errors.',
     'absence_alerts_preview_created' => 'Absence alert messages were created locally without sending them to WhatsApp.',

@@ -36,6 +36,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    showContextFields: {
+        type: Boolean,
+        default: true,
+    },
+    showCancel: {
+        type: Boolean,
+        default: true,
+    },
     submitLabel: {
         type: String,
         default: 'Save',
@@ -262,7 +270,7 @@ const rowMarkerClass = (item) => {
         <p v-if="description" class="mt-3 text-lg text-(--muted-foreground)">{{ description }}</p>
 
         <form class="mt-6 grid gap-4" @submit.prevent="emit('submit')">
-            <div class="grid gap-4 md:grid-cols-3">
+            <div v-if="showContextFields" class="grid gap-4 md:grid-cols-3">
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">
                         <Select
@@ -469,7 +477,14 @@ const rowMarkerClass = (item) => {
             </div>
 
             <div class="mt-2 flex justify-end gap-2">
-                <Button type="button" :label="t('common.cancel')" severity="secondary" text @click="emit('cancel')" />
+                <Button
+                    v-if="showCancel"
+                    type="button"
+                    :label="t('common.cancel')"
+                    severity="secondary"
+                    text
+                    @click="emit('cancel')"
+                />
                 <Button
                     type="submit"
                     :label="submitLabel"

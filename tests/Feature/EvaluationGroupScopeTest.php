@@ -4,6 +4,7 @@ use App\Models\Center;
 use App\Models\Evaluation;
 use App\Models\EvaluationStudent;
 use App\Models\Group;
+use App\Models\MonthlyPlan;
 use App\Models\Student;
 use App\Services\Admin\EvaluationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,8 +14,16 @@ uses(RefreshDatabase::class);
 
 test('evaluation students and uniqueness are scoped to the selected group', function () {
     $center = Center::factory()->create();
-    $firstGroup = Group::factory()->create(['center_id' => $center->id]);
-    $secondGroup = Group::factory()->create(['center_id' => $center->id]);
+    $firstGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => evaluationScopeAllWorkingDays(),
+    ]);
+    $secondGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => evaluationScopeAllWorkingDays(),
+    ]);
+    createEvaluationScopeMonthlyPlan($firstGroup);
+    createEvaluationScopeMonthlyPlan($secondGroup);
     $firstStudent = Student::factory()->active()->create([
         'center_id' => $center->id,
         'group_id' => $firstGroup->id,
@@ -52,7 +61,9 @@ test('public evaluation report identifies both center and group', function () {
     $group = Group::factory()->create([
         'center_id' => $center->id,
         'name' => 'المجموعة الأولى',
+        'working_days' => evaluationScopeAllWorkingDays(),
     ]);
+    createEvaluationScopeMonthlyPlan($group);
     $student = Student::factory()->active()->create([
         'center_id' => $center->id,
         'group_id' => $group->id,
@@ -86,4 +97,22 @@ function evaluationPayload(Group $group, Student $student): array
             'note' => null,
         ]],
     ];
+}
+
+/** @return array<int, string> */
+function evaluationScopeAllWorkingDays(): array
+{
+    return ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+}
+
+function createEvaluationScopeMonthlyPlan(Group $group): MonthlyPlan
+{
+    return MonthlyPlan::query()->create([
+        'month' => 8,
+        'year' => 2026,
+        'start_date' => '2026-08-01',
+        'end_date' => '2026-08-31',
+        'center_id' => $group->center_id,
+        'group_id' => $group->id,
+    ]);
 }

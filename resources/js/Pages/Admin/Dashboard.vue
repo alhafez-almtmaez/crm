@@ -55,7 +55,7 @@ const metricCards = computed(() => [
             present: formatNumber(summary.value.attendance_present_last_30),
             total: formatNumber(summary.value.attendance_total_last_30),
         }),
-        icon: 'pi pi-calendar-check',
+        icon: 'pi pi-list-check',
         tone: 'sky',
     },
     {
@@ -184,20 +184,12 @@ const quickActions = computed(() => [
         tone: 'success',
     },
     {
-        key: 'evaluation',
-        title: t('dashboard.actions.createEvaluation'),
-        meta: t('dashboard.actions.createEvaluationMeta'),
-        href: '/admin/evaluations/create',
-        icon: 'pi pi-clipboard',
+        key: 'daily-follow-up',
+        title: t('dashboard.actions.dailyFollowUp'),
+        meta: t('dashboard.actions.dailyFollowUpMeta'),
+        href: '/admin/daily-follow-up',
+        icon: 'pi pi-list-check',
         tone: 'info',
-    },
-    {
-        key: 'homework',
-        title: t('dashboard.actions.createHomework'),
-        meta: t('dashboard.actions.createHomeworkMeta'),
-        href: '/admin/homeworks/create',
-        icon: 'pi pi-check-square',
-        tone: 'warning',
     },
 ]);
 </script>

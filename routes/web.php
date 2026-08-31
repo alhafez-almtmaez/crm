@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\CenterController;
 use App\Http\Controllers\Admin\CertificateContentTemplateAssignmentController;
 use App\Http\Controllers\Admin\CertificateContentTemplateController;
 use App\Http\Controllers\Admin\CertificateDesignController;
+use App\Http\Controllers\Admin\DailyFollowUpController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EvaluationController;
 use App\Http\Controllers\Admin\GroupController;
@@ -111,6 +112,19 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('students/{student}/certificates/{certificate}', [StudentCertificateController::class, 'show'])->name('students.certificates.show');
         Route::get('students/{student}/certificates/{certificate}/pdf', [StudentCertificateController::class, 'pdf'])->name('students.certificates.pdf');
         Route::resource('students', StudentController::class)->except(['show']);
+
+        Route::prefix('daily-follow-up')
+            ->name('daily-follow-up.')
+            ->controller(DailyFollowUpController::class)
+            ->group(function (): void {
+                Route::get('/', 'index')->name('index');
+                Route::get('students/{student}/report', 'studentReport')->name('student-report');
+                Route::post('evaluations', 'storeEvaluation')->name('evaluations.store');
+                Route::put('evaluations/{evaluation}', 'updateEvaluation')->name('evaluations.update');
+                Route::post('homeworks', 'storeHomework')->name('homeworks.store');
+                Route::put('homeworks/{homework}', 'updateHomework')->name('homeworks.update');
+                Route::post('save', 'save')->name('save');
+            });
 
         Route::get('evaluations/records', [EvaluationController::class, 'records'])->name('evaluations.records');
         Route::get('evaluations/{evaluation}/absence-alert-previews', [EvaluationController::class, 'absenceAlertPreviews'])->name('evaluations.absence-alert-previews');
