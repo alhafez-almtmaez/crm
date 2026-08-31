@@ -31,6 +31,22 @@ export const adminNavItems = [
     {
         groupId: 'student-tools',
         groupKey: 'nav.studentTools',
+        labelKey: 'nav.evaluations',
+        href: '/admin/evaluations',
+        icon: 'pi pi-clipboard',
+        permissions: ['evaluations.view'],
+    },
+    {
+        groupId: 'student-tools',
+        groupKey: 'nav.studentTools',
+        labelKey: 'nav.homeworks',
+        href: '/admin/homeworks',
+        icon: 'pi pi-check-square',
+        permissions: ['homeworks.view'],
+    },
+    {
+        groupId: 'student-tools',
+        groupKey: 'nav.studentTools',
         labelKey: 'nav.messageTemplates',
         href: '/admin/message-templates',
         icon: 'pi pi-file-edit',

@@ -24,6 +24,7 @@ class StudentService
     public function __construct(
         private readonly DateTimeFormatterService $dateTimeFormatter,
         private readonly AdminDataScopeService $dataScope,
+        private readonly StudentMonthlyPlanGenerator $monthlyPlanGenerator,
     ) {}
 
     /**
@@ -130,8 +131,10 @@ class StudentService
     public function create(array $data): Student
     {
         return DB::transaction(function () use ($data): Student {
+            $groupIds = $this->groupIdsFromData($data);
             $student = Student::query()->create($this->buildPayload($data));
-            $student->groups()->sync($this->groupIdsFromData($data));
+            $student->groups()->sync($groupIds);
+            $this->monthlyPlanGenerator->syncStudentToExistingGroupPlans($student, $groupIds);
 
             return $student->refresh()->load('groups:id,name');
         });
@@ -145,8 +148,10 @@ class StudentService
         $this->dataScope->abortUnlessCanAccessStudent($student);
 
         return DB::transaction(function () use ($student, $data): Student {
+            $groupIds = $this->groupIdsFromData($data);
             $student->update($this->buildPayload($data));
-            $student->groups()->sync($this->groupIdsFromData($data));
+            $student->groups()->sync($groupIds);
+            $this->monthlyPlanGenerator->syncStudentToExistingGroupPlans($student, $groupIds);
 
             return $student->refresh()->load('groups:id,name');
         });
@@ -300,6 +305,7 @@ class StudentService
             currentUserId: Auth::id(),
             canAssignAdmin: (bool) Auth::user()?->hasRole('admin'),
             dataScope: $this->dataScope,
+            monthlyPlanGenerator: $this->monthlyPlanGenerator,
         );
 
         Excel::import($import, $file);

@@ -1,9 +1,13 @@
 <?php
 
+use App\Models\MonthlyPlan;
+use App\Models\Student;
+use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\WhatsAppPendingMessageService;
 use App\Services\Auth\PermissionSyncService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Symfony\Component\Console\Command\Command;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -32,3 +36,44 @@ Artisan::command('whatsapp:send-pending {--limit=50 : Maximum pending messages t
     $this->line("Failed: {$summary['failed']}");
     $this->line("Stale: {$summary['stale']}");
 })->purpose('Send stored pending WhatsApp messages when a device is connected');
+
+Artisan::command('monthly-plans:sync-memberships {--group= : Limit synchronization to one group ID}', function () {
+    $groupId = filled($this->option('group')) ? (int) $this->option('group') : null;
+    if ($groupId !== null && $groupId <= 0) {
+        $this->error('The group option must be a positive integer.');
+
+        return Command::FAILURE;
+    }
+
+    /** @var StudentMonthlyPlanGenerator $generator */
+    $generator = app(StudentMonthlyPlanGenerator::class);
+    $plans = MonthlyPlan::query()
+        ->whereNotNull('group_id')
+        ->when($groupId !== null, static fn ($query) => $query->where('group_id', $groupId))
+        ->get(['id', 'group_id']);
+
+    $generated = 0;
+    $membershipsChecked = 0;
+
+    foreach ($plans->pluck('group_id')->unique() as $planGroupId) {
+        $students = Student::query()
+            ->whereHas('groups', static fn ($query) => $query->where('groups.id', $planGroupId))
+            ->where('is_active', Student::STATUS_ACTIVE)
+            ->whereNotNull('plan_type_id')
+            ->orderBy('students.id')
+            ->get();
+
+        foreach ($students as $student) {
+            $membershipsChecked++;
+            $result = $generator->syncStudentToExistingGroupPlans($student, [(int) $planGroupId]);
+            $generated += (int) $result['generated'];
+        }
+    }
+
+    $this->info('Monthly-plan memberships synchronized.');
+    $this->line("Plans checked: {$plans->count()}");
+    $this->line("Memberships checked: {$membershipsChecked}");
+    $this->line("Student plans generated: {$generated}");
+
+    return Command::SUCCESS;
+})->purpose('Repair students added while an existing group monthly plan was active');

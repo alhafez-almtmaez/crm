@@ -631,10 +631,10 @@ const submitFollowUp = () => {
 
             <article
                 v-if="allCompleted && workspaceReady && !hasUnsavedChanges"
-                class="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-base) border border-emerald-300 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100"
+                class="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-base) border border-[color-mix(in_oklab,var(--status-success)_42%,var(--border))] bg-[color-mix(in_oklab,var(--status-success)_10%,var(--card))] p-5 text-(--foreground)"
             >
                 <div class="flex items-center gap-3">
-                    <span class="grid size-11 place-items-center rounded-full bg-emerald-600 text-white">
+                    <span class="grid size-11 place-items-center rounded-full bg-[var(--status-success)] text-[var(--status-success-contrast)] shadow-(--shadow-sm)">
                         <i class="pi pi-check" aria-hidden="true"></i>
                     </span>
                     <div>
@@ -642,7 +642,7 @@ const submitFollowUp = () => {
                         <p class="mt-1 text-sm opacity-80">{{ t('dailyFollowUp.completeDescription') }}</p>
                     </div>
                 </div>
-                <span class="rounded-full border border-emerald-300 bg-(--card) px-3 py-1.5 text-sm font-medium dark:border-emerald-700">
+                <span class="rounded-full border border-[color-mix(in_oklab,var(--status-success)_32%,var(--border))] bg-[color-mix(in_oklab,var(--status-success)_5%,var(--card))] px-3 py-1.5 text-sm font-medium text-(--foreground)">
                     {{ selectedCenterName }} / {{ selectedGroupName }} / {{ selection.date }}
                 </span>
             </article>
@@ -688,10 +688,10 @@ const submitFollowUp = () => {
 
                 <article
                     v-else
-                    class="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-base) border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-(--shadow-sm) dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:p-6"
+                    class="flex flex-wrap items-center justify-between gap-4 rounded-(--radius-base) border border-[color-mix(in_oklab,var(--status-warning)_42%,var(--border))] bg-[color-mix(in_oklab,var(--status-warning)_10%,var(--card))] p-5 text-(--foreground) shadow-(--shadow-sm) sm:p-6"
                 >
                     <div class="flex items-start gap-3">
-                        <span class="grid size-11 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-100">
+                        <span class="grid size-11 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklab,var(--status-warning)_18%,var(--card))] text-[var(--status-warning)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--status-warning)_28%,transparent)]">
                             <i class="pi pi-map" aria-hidden="true"></i>
                         </span>
                         <div>
@@ -703,7 +703,7 @@ const submitFollowUp = () => {
                     <Link
                         v-if="permissions.can_create_monthly_plans && plan_context.create_url"
                         :href="plan_context.create_url"
-                        class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-amber-900 px-4 text-sm font-semibold text-white transition hover:bg-amber-950 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-white"
+                        class="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[var(--status-warning)] px-4 text-sm font-semibold text-[var(--status-warning-contrast)] shadow-(--shadow-sm) transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--status-warning)_42%,transparent)]"
                     >
                         <i class="pi pi-plus" aria-hidden="true"></i>
                         {{ t('dailyFollowUp.createMonthlyPlan') }}

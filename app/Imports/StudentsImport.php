@@ -6,6 +6,7 @@ use App\Models\Center;
 use App\Models\Group;
 use App\Models\Student;
 use App\Services\Admin\AdminDataScopeService;
+use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Support\DailyWeightLimits;
 use App\Support\PhoneNumberHelper;
 use Illuminate\Support\Arr;
@@ -36,6 +37,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
         private readonly ?int $currentUserId,
         private readonly bool $canAssignAdmin,
         private readonly AdminDataScopeService $dataScope,
+        private readonly StudentMonthlyPlanGenerator $monthlyPlanGenerator,
     ) {}
 
     public function onRow(Row $row): void
@@ -222,7 +224,9 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             );
         }
 
-        DB::transaction(static function () use ($student, $payload, $groupIds): void {
+        $monthlyPlanGenerator = $this->monthlyPlanGenerator;
+
+        DB::transaction(static function () use ($student, $payload, $groupIds, $monthlyPlanGenerator): void {
             if ($student) {
                 $student->update($payload);
             } else {
@@ -230,6 +234,7 @@ class StudentsImport implements OnEachRow, SkipsEmptyRows, WithHeadingRow
             }
 
             $student->groups()->sync($groupIds);
+            $monthlyPlanGenerator->syncStudentToExistingGroupPlans($student, $groupIds);
         });
 
         $this->updated++;

@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanDay;
 use App\Models\StudentMonthlyPlanItem;
+use App\Services\System\SystemSettingsService;
 use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
 use DateTimeInterface;
@@ -21,7 +22,78 @@ use InvalidArgumentException;
 
 class StudentMonthlyPlanGenerator
 {
-    public function __construct(private readonly AdminDataScopeService $dataScope) {}
+    public function __construct(
+        private readonly AdminDataScopeService $dataScope,
+        private readonly SystemSettingsService $settings,
+    ) {}
+
+    /**
+     * Generate the existing plan that covered each membership when it began.
+     *
+     * @param  array<int, int|string>  $groupIds
+     * @return array{generated: int, skipped_groups: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
+     */
+    public function syncStudentToExistingGroupPlans(Student $student, array $groupIds): array
+    {
+        $groupIds = collect($groupIds)
+            ->map(static fn ($groupId): int => (int) $groupId)
+            ->filter(static fn (int $groupId): bool => $groupId > 0)
+            ->unique()
+            ->values();
+
+        if (
+            $groupIds->isEmpty()
+            || (int) $student->is_active !== Student::STATUS_ACTIVE
+            || $student->plan_type_id === null
+        ) {
+            return [
+                'generated' => 0,
+                'skipped_groups' => $groupIds->count(),
+                'plan_ids' => [],
+                'monthly_plan_ids' => [],
+            ];
+        }
+
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
+        $memberships = DB::table('group_student')
+            ->where('student_id', $student->id)
+            ->whereIn('group_id', $groupIds->all())
+            ->get(['group_id', 'created_at'])
+            ->keyBy(static fn (object $membership): int => (int) $membership->group_id);
+        $planIds = [];
+        $monthlyPlanIds = [];
+        $generatedGroupIds = [];
+
+        foreach ($groupIds as $groupId) {
+            $membership = $memberships->get($groupId);
+            if ($membership === null) {
+                continue;
+            }
+
+            $effectiveStartDate = $this->membershipEffectiveDate($membership->created_at);
+            $monthlyPlan = $this->monthlyPlanCoveringDate($groupId, $effectiveStartDate);
+            if (! $monthlyPlan instanceof MonthlyPlan) {
+                continue;
+            }
+
+            $studentPlan = $this->generateStudentForMonthlyPlan($student, $monthlyPlan, $effectiveStartDate);
+            if (! $studentPlan instanceof StudentMonthlyPlan) {
+                continue;
+            }
+
+            $planIds[] = (int) $studentPlan->id;
+            $monthlyPlanIds[] = (int) $monthlyPlan->id;
+            $generatedGroupIds[] = $groupId;
+        }
+
+        return [
+            'generated' => count($planIds),
+            'skipped_groups' => $groupIds->diff(array_unique($generatedGroupIds))->count(),
+            'plan_ids' => $planIds,
+            'monthly_plan_ids' => array_values(array_unique($monthlyPlanIds)),
+        ];
+    }
 
     /**
      * @return array{generated: int, skipped_students: int, plan_ids: array<int, int>, monthly_plan_ids: array<int, int>}
@@ -158,6 +230,7 @@ class StudentMonthlyPlanGenerator
         ?CarbonImmutable $endDate = null,
         array $holidayDates = [],
         ?int $groupId = null,
+        ?CarbonImmutable $effectiveStartDate = null,
     ): ?StudentMonthlyPlan {
         if ($student->plan_type_id === null) {
             return null;
@@ -169,12 +242,33 @@ class StudentMonthlyPlanGenerator
 
         $student->loadMissing(['center:id,working_days', 'groups:id,center_id,working_days']);
         $resolvedGroupId = $this->resolvedGroupId($student, $groupId);
-        $dates = $this->workingDatesForMonth($student, $resolvedGroupId, $month, $year, $periodStart, $periodEnd, $holidayDates);
-        if ($dates->isEmpty()) {
+        $storedEffectiveStartDate = StudentMonthlyPlan::query()
+            ->where('student_id', $student->id)
+            ->when(
+                $resolvedGroupId === null,
+                static fn ($query) => $query->whereNull('group_id'),
+                static fn ($query) => $query->where('group_id', $resolvedGroupId),
+            )
+            ->where('year', $year)
+            ->where('month', $month)
+            ->value('effective_start_date');
+        $effectiveStartDate = $this->laterDate(
+            $effectiveStartDate?->startOfDay(),
+            $this->carbonDate($storedEffectiveStartDate),
+        );
+
+        if ($effectiveStartDate?->gt($periodEnd)) {
             return null;
         }
 
-        return DB::transaction(function () use ($student, $month, $year, $periodStart, $periodEnd, $holidayDates, $dates, $resolvedGroupId): ?StudentMonthlyPlan {
+        $scheduleStart = $this->laterDate($periodStart, $effectiveStartDate) ?? $periodStart;
+        $planEffectiveStartDate = $effectiveStartDate !== null ? $scheduleStart : null;
+        $dates = $this->workingDatesForMonth($student, $resolvedGroupId, $month, $year, $scheduleStart, $periodEnd, $holidayDates);
+        if ($dates->isEmpty() && $planEffectiveStartDate === null) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($student, $month, $year, $periodStart, $periodEnd, $holidayDates, $dates, $resolvedGroupId, $planEffectiveStartDate): ?StudentMonthlyPlan {
             $existingPlan = StudentMonthlyPlan::query()
                 ->withCount('items')
                 ->where('student_id', $student->id)
@@ -188,7 +282,10 @@ class StudentMonthlyPlanGenerator
                 ->first();
 
             if ($existingPlan !== null) {
-                if ($existingPlan->items_count > 0) {
+                if (
+                    $existingPlan->items_count > 0
+                    || ($dates->isEmpty() && $existingPlan->effective_start_date !== null)
+                ) {
                     return null;
                 }
 
@@ -220,6 +317,7 @@ class StudentMonthlyPlanGenerator
                 'plan_id' => $lockedStudent->plan_type_id,
                 'month' => $month,
                 'year' => $year,
+                'effective_start_date' => $planEffectiveStartDate?->toDateString(),
                 'max_daily_weight' => $maxDailyWeight,
                 'daily_weight_limits' => $dailyWeightLimits,
                 'starts_after_plan_point_id' => $startPoint?->id,
@@ -234,7 +332,7 @@ class StudentMonthlyPlanGenerator
                 'ends_at_plan_point_id' => $result['last_plan_point_id'],
                 'generated_items_count' => $result['generated_items_count'],
                 'skipped_items_count' => $result['skipped_items_count'],
-                'status' => $result['generated_items_count'] > 0
+                'status' => $dates->isEmpty() || $result['generated_items_count'] > 0
                     ? StudentMonthlyPlan::STATUS_GENERATED
                     : StudentMonthlyPlan::STATUS_EXHAUSTED,
             ]);
@@ -259,18 +357,10 @@ class StudentMonthlyPlanGenerator
         }
 
         if ($monthlyPlan->group_id !== null) {
-            $group = Group::query()->find($monthlyPlan->group_id);
-
-            if ($group !== null) {
-                $this->generateForGroup(
-                    group: $group,
-                    month: (int) $monthlyPlan->month,
-                    year: (int) $monthlyPlan->year,
-                    startDate: $currentPeriodStart,
-                    endDate: $currentPeriodEnd,
-                    holidayDates: $holidayDates ?? (array) $monthlyPlan->holiday_dates,
-                );
-            }
+            $this->syncMissingStudentsForMonthlyPlan(
+                $monthlyPlan,
+                $holidayDates ?? (array) $monthlyPlan->holiday_dates,
+            );
         }
 
         return DB::transaction(function () use ($monthlyPlan, $fromDate, $holidayDates): array {
@@ -338,6 +428,83 @@ class StudentMonthlyPlanGenerator
                 'generated_items' => $generatedItems,
             ];
         });
+    }
+
+    private function syncMissingStudentsForMonthlyPlan(MonthlyPlan $monthlyPlan, array $holidayDates): void
+    {
+        if ($monthlyPlan->group_id === null) {
+            return;
+        }
+
+        [, $periodEnd] = $this->periodForMonthlyPlan($monthlyPlan);
+        $students = Student::query()
+            ->with(['center:id,working_days', 'groups:id,center_id,working_days', 'plan:id,name'])
+            ->whereHas('groups', static fn ($query) => $query->where('groups.id', $monthlyPlan->group_id))
+            ->whereDoesntHave('monthlyPlans', static fn ($query) => $query->where('monthly_plan_id', $monthlyPlan->id))
+            ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'students'))
+            ->where('is_active', Student::STATUS_ACTIVE)
+            ->whereNotNull('plan_type_id')
+            ->orderBy('students.id')
+            ->get();
+
+        if ($students->isEmpty()) {
+            return;
+        }
+
+        $memberships = DB::table('group_student')
+            ->where('group_id', $monthlyPlan->group_id)
+            ->whereIn('student_id', $students->modelKeys())
+            ->get(['student_id', 'created_at'])
+            ->keyBy(static fn (object $membership): int => (int) $membership->student_id);
+
+        foreach ($students as $student) {
+            $membership = $memberships->get((int) $student->id);
+            if ($membership === null) {
+                continue;
+            }
+
+            $effectiveStartDate = $this->membershipEffectiveDate($membership->created_at);
+            if ($effectiveStartDate->gt($periodEnd)) {
+                continue;
+            }
+
+            $this->generateStudentForMonthlyPlan(
+                student: $student,
+                monthlyPlan: $monthlyPlan,
+                effectiveStartDate: $effectiveStartDate,
+                holidayDates: $holidayDates,
+            );
+        }
+    }
+
+    private function generateStudentForMonthlyPlan(
+        Student $student,
+        MonthlyPlan $monthlyPlan,
+        CarbonImmutable $effectiveStartDate,
+        ?array $holidayDates = null,
+    ): ?StudentMonthlyPlan {
+        if (StudentMonthlyPlan::query()
+            ->where('monthly_plan_id', $monthlyPlan->id)
+            ->where('student_id', $student->id)
+            ->exists()) {
+            return null;
+        }
+
+        [$periodStart, $periodEnd] = $this->periodForMonthlyPlan($monthlyPlan);
+        if ($effectiveStartDate->gt($periodEnd)) {
+            return null;
+        }
+
+        return $this->generateForStudent(
+            student: $student,
+            month: (int) $monthlyPlan->month,
+            year: (int) $monthlyPlan->year,
+            startDate: $periodStart,
+            endDate: $periodEnd,
+            holidayDates: $holidayDates ?? (array) $monthlyPlan->holiday_dates,
+            groupId: (int) $monthlyPlan->group_id,
+            effectiveStartDate: $effectiveStartDate,
+        );
     }
 
     private function monthlyPlanForStudent(
@@ -448,6 +615,13 @@ class StudentMonthlyPlanGenerator
         CarbonImmutable $fromDate,
         mixed $workingDays,
     ): int {
+        $fromDate = $this->laterDate(
+            $fromDate,
+            $this->carbonDate($plan->effective_start_date),
+        ) ?? $fromDate;
+        $dates = $dates
+            ->filter(static fn (CarbonImmutable $date): bool => $date->gte($fromDate))
+            ->values();
         $planId = (int) ($plan->plan_id ?? $student->plan_type_id);
         $lastPreservedPlanPointId = $this->lastPlanPointIdBefore($plan, $fromDate)
             ?? $plan->starts_after_plan_point_id;
@@ -488,13 +662,17 @@ class StudentMonthlyPlanGenerator
         $totalItems = $plan->items()->count();
         $lastPlanPointId = $result['last_plan_point_id'] ?? $lastPreservedPlanPointId;
 
+        $emptyStatus = $dates->isEmpty()
+            ? $plan->status
+            : StudentMonthlyPlan::STATUS_EXHAUSTED;
+
         $plan->update([
             'ends_at_plan_point_id' => $lastPlanPointId,
             'generated_items_count' => $totalItems,
             'skipped_items_count' => 0,
             'status' => $totalItems > 0
                 ? StudentMonthlyPlan::STATUS_GENERATED
-                : StudentMonthlyPlan::STATUS_EXHAUSTED,
+                : $emptyStatus,
             'generated_at' => now(),
         ]);
 
@@ -933,6 +1111,66 @@ class StudentMonthlyPlanGenerator
             $this->carbonDate($monthlyPlan->start_date),
             $this->carbonDate($monthlyPlan->end_date),
         );
+    }
+
+    private function monthlyPlanCoveringDate(int $groupId, CarbonImmutable $date): ?MonthlyPlan
+    {
+        $dateString = $date->toDateString();
+
+        return MonthlyPlan::query()
+            ->where('group_id', $groupId)
+            ->where(function ($coverage) use ($date, $dateString): void {
+                $coverage
+                    ->where(function ($bounded) use ($dateString): void {
+                        $bounded
+                            ->whereNotNull('start_date')
+                            ->whereNotNull('end_date')
+                            ->whereDate('start_date', '<=', $dateString)
+                            ->whereDate('end_date', '>=', $dateString);
+                    })
+                    ->orWhere(function ($legacy) use ($date): void {
+                        $legacy
+                            ->where(function ($missingBoundary): void {
+                                $missingBoundary
+                                    ->whereNull('start_date')
+                                    ->orWhereNull('end_date');
+                            })
+                            ->where('year', $date->year)
+                            ->where('month', $date->month);
+                    });
+            })
+            ->first();
+    }
+
+    private function membershipEffectiveDate(mixed $createdAt): CarbonImmutable
+    {
+        $timezone = (string) ($this->settings->get()['timezone'] ?? 'Asia/Amman');
+        if ($createdAt instanceof DateTimeInterface) {
+            return CarbonImmutable::instance($createdAt)
+                ->setTimezone($timezone)
+                ->startOfDay();
+        }
+
+        if (filled($createdAt)) {
+            return CarbonImmutable::parse((string) $createdAt, (string) config('app.timezone', 'UTC'))
+                ->setTimezone($timezone)
+                ->startOfDay();
+        }
+
+        return CarbonImmutable::now($timezone)->startOfDay();
+    }
+
+    private function laterDate(?CarbonImmutable $first, ?CarbonImmutable $second): ?CarbonImmutable
+    {
+        if ($first === null) {
+            return $second;
+        }
+
+        if ($second === null) {
+            return $first;
+        }
+
+        return $first->gte($second) ? $first : $second;
     }
 
     /**

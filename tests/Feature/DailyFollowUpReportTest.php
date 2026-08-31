@@ -190,6 +190,33 @@ test('daily follow-up exposes plan adherence and next scheduled work for each st
             ->where('plan_context.students.0.next.items.0.plan_point_id', $fixture['secondPoint']->id));
 });
 
+test('daily follow-up treats an empty effective plan marker as not due', function () {
+    $fixture = dailyReportFixture();
+    StudentMonthlyPlanItem::query()
+        ->where('student_monthly_plan_id', $fixture['studentPlan']->id)
+        ->delete();
+    StudentMonthlyPlanDay::query()
+        ->where('student_monthly_plan_id', $fixture['studentPlan']->id)
+        ->delete();
+    $fixture['studentPlan']->update([
+        'effective_start_date' => '2026-09-30',
+        'generated_items_count' => 0,
+        'status' => StudentMonthlyPlan::STATUS_GENERATED,
+    ]);
+
+    $this->actingAs($fixture['user'], 'web')
+        ->get('/admin/daily-follow-up?'.http_build_query([
+            'center_id' => $fixture['center']->id,
+            'group_id' => $fixture['group']->id,
+            'date' => '2026-09-03',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('plan_context.summary.not_due_count', 1)
+            ->where('plan_context.summary.missing_count', 0)
+            ->where('plan_context.students.0.status', 'not_due'));
+});
+
 test('student follow-up report returns scoped attendance evaluation homework and progress charts', function () {
     $fixture = dailyReportFixture();
     $tajwidEvaluation = Evaluation::factory()->create([

@@ -15,6 +15,7 @@ use App\Services\Admin\StudentMonthlyPlanService;
 use App\Services\Auth\PermissionSyncService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -490,6 +491,10 @@ test('refreshing future plan days first syncs new active group students', functi
         'plan_type_id' => $plan->id,
         'max_daily_weight' => 1,
     ]);
+    DB::table('group_student')
+        ->where('student_id', $newStudent->id)
+        ->where('group_id', $group->id)
+        ->update(['created_at' => '2026-06-01 00:00:00']);
 
     expect(StudentMonthlyPlan::query()->where('student_id', $newStudent->id)->exists())->toBeFalse();
 
@@ -507,6 +512,249 @@ test('refreshing future plan days first syncs new active group students', functi
         ->and($newStudentPlan->group_id)->toBe($group->id)
         ->and($newStudentPlan->items()->count())->toBe(3)
         ->and($monthlyPlan->refresh()->students_count)->toBe(2);
+});
+
+test('refresh syncs a missing transferred student only from the membership date', function () {
+    [$center, $group, $plan] = monthlyPlanFixture(maxDailyWeight: 1);
+    $group->update([
+        'working_days' => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+    ]);
+    createPlanPoint($plan, 'تسميع 1', 1);
+    createPlanPoint($plan, 'تسميع 2', 2);
+    createPlanPoint($plan, 'تسميع 3', 3);
+
+    $initialResult = app(StudentMonthlyPlanGenerator::class)->generateForGroup(
+        group: $group,
+        month: 8,
+        year: 2026,
+        startDate: CarbonImmutable::create(2026, 8, 20),
+        endDate: CarbonImmutable::create(2026, 8, 31),
+    );
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($initialResult['monthly_plan_ids'][0]);
+    $existingStudentPlanId = StudentMonthlyPlan::query()
+        ->where('monthly_plan_id', $monthlyPlan->id)
+        ->firstOrFail()
+        ->id;
+    $newStudent = Student::factory()->active()->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'plan_type_id' => $plan->id,
+        'max_daily_weight' => 1,
+    ]);
+    DB::table('group_student')
+        ->where('student_id', $newStudent->id)
+        ->where('group_id', $group->id)
+        ->update(['created_at' => '2026-08-25 21:30:00']);
+
+    app(StudentMonthlyPlanGenerator::class)->regenerateFutureForMonthlyPlan(
+        $monthlyPlan,
+        CarbonImmutable::create(2026, 8, 20),
+    );
+
+    $newStudentPlan = StudentMonthlyPlan::query()
+        ->where('monthly_plan_id', $monthlyPlan->id)
+        ->where('student_id', $newStudent->id)
+        ->firstOrFail();
+    $dates = $newStudentPlan->days()
+        ->orderBy('date')
+        ->pluck('date')
+        ->map(static fn ($date): string => CarbonImmutable::parse($date)->toDateString())
+        ->all();
+
+    expect($newStudentPlan->effective_start_date->toDateString())->toBe('2026-08-26')
+        ->and($dates)->toBe(['2026-08-26', '2026-08-27', '2026-08-28'])
+        ->and(StudentMonthlyPlan::query()->whereKey($existingStudentPlanId)->exists())->toBeTrue()
+        ->and(StudentMonthlyPlan::query()->where('monthly_plan_id', $monthlyPlan->id)->count())->toBe(2);
+});
+
+test('syncing a transferred student starts at the membership date in the system timezone', function () {
+    [$center, $oldGroup, $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $destinationGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+    ]);
+    createPlanPoint($plan, 'تسميع 1', 1);
+    createPlanPoint($plan, 'تسميع 2', 2);
+    createPlanPoint($plan, 'تسميع 3', 3);
+
+    $monthlyPlan = MonthlyPlan::query()->create([
+        'center_id' => $center->id,
+        'group_id' => $destinationGroup->id,
+        'month' => 8,
+        'year' => 2026,
+        'start_date' => '2026-08-20',
+        'end_date' => '2026-08-31',
+        'holiday_dates' => [],
+    ]);
+    $student->groups()->syncWithoutDetaching([$destinationGroup->id]);
+    DB::table('group_student')
+        ->where('student_id', $student->id)
+        ->where('group_id', $destinationGroup->id)
+        ->update(['created_at' => '2026-08-25 21:30:00']);
+
+    $result = app(StudentMonthlyPlanGenerator::class)
+        ->syncStudentToExistingGroupPlans($student->refresh(), [$destinationGroup->id]);
+    $studentPlan = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $destinationGroup->id)
+        ->firstOrFail();
+    $dates = $studentPlan->days()
+        ->orderBy('date')
+        ->pluck('date')
+        ->map(static fn ($date): string => CarbonImmutable::parse($date)->toDateString())
+        ->all();
+
+    expect($result['generated'])->toBe(1)
+        ->and($result['monthly_plan_ids'])->toBe([$monthlyPlan->id])
+        ->and($studentPlan->effective_start_date->toDateString())->toBe('2026-08-26')
+        ->and($dates)->toBe(['2026-08-26', '2026-08-27', '2026-08-28'])
+        ->and($monthlyPlan->refresh()->start_date->toDateString())->toBe('2026-08-20')
+        ->and($student->groups()->whereKey($oldGroup->id)->exists())->toBeTrue();
+});
+
+test('refreshing from before a transferred student start never creates earlier plan days', function () {
+    [$center, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $destinationGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+    ]);
+    createPlanPoint($plan, 'تسميع 1', 1);
+    createPlanPoint($plan, 'تسميع 2', 2);
+    createPlanPoint($plan, 'تسميع 3', 3);
+    createPlanPoint($plan, 'تسميع 4', 4);
+
+    $monthlyPlan = MonthlyPlan::query()->create([
+        'center_id' => $center->id,
+        'group_id' => $destinationGroup->id,
+        'month' => 8,
+        'year' => 2026,
+        'start_date' => '2026-08-20',
+        'end_date' => '2026-08-31',
+        'holiday_dates' => [],
+    ]);
+    $student->groups()->syncWithoutDetaching([$destinationGroup->id]);
+    DB::table('group_student')
+        ->where('student_id', $student->id)
+        ->where('group_id', $destinationGroup->id)
+        ->update(['created_at' => '2026-08-26 00:00:00']);
+
+    app(StudentMonthlyPlanGenerator::class)
+        ->syncStudentToExistingGroupPlans($student->refresh(), [$destinationGroup->id]);
+    app(StudentMonthlyPlanGenerator::class)->regenerateFutureForMonthlyPlan(
+        $monthlyPlan,
+        CarbonImmutable::create(2026, 8, 20),
+    );
+
+    $studentPlan = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $destinationGroup->id)
+        ->firstOrFail();
+    $dates = $studentPlan->days()
+        ->orderBy('date')
+        ->pluck('date')
+        ->map(static fn ($date): string => CarbonImmutable::parse($date)->toDateString())
+        ->all();
+
+    expect($studentPlan->effective_start_date->toDateString())->toBe('2026-08-26')
+        ->and($dates)->toBe(['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29'])
+        ->and(collect($dates)->every(static fn (string $date): bool => $date >= '2026-08-26'))->toBeTrue();
+});
+
+test('syncing a transferred student with no remaining working day stores a not due plan marker', function () {
+    [$center, , $plan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $destinationGroup = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => ['saturday'],
+    ]);
+    createPlanPoint($plan, 'تسميع 1', 1);
+
+    $monthlyPlan = MonthlyPlan::query()->create([
+        'center_id' => $center->id,
+        'group_id' => $destinationGroup->id,
+        'month' => 8,
+        'year' => 2026,
+        'start_date' => '2026-08-20',
+        'end_date' => '2026-08-31',
+        'holiday_dates' => [],
+    ]);
+    $student->groups()->syncWithoutDetaching([$destinationGroup->id]);
+    DB::table('group_student')
+        ->where('student_id', $student->id)
+        ->where('group_id', $destinationGroup->id)
+        ->update(['created_at' => '2026-08-30 00:00:00']);
+
+    $generator = app(StudentMonthlyPlanGenerator::class);
+    $firstResult = $generator->syncStudentToExistingGroupPlans($student->refresh(), [$destinationGroup->id]);
+    $studentPlan = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $destinationGroup->id)
+        ->firstOrFail();
+    $secondResult = $generator->syncStudentToExistingGroupPlans($student->refresh(), [$destinationGroup->id]);
+    $generator->regenerateFutureForMonthlyPlan($monthlyPlan, CarbonImmutable::create(2026, 8, 20));
+
+    expect($firstResult['generated'])->toBe(1)
+        ->and($firstResult['plan_ids'])->toBe([$studentPlan->id])
+        ->and($studentPlan->effective_start_date->toDateString())->toBe('2026-08-30')
+        ->and($studentPlan->refresh()->status)->toBe(StudentMonthlyPlan::STATUS_GENERATED)
+        ->and($studentPlan->days()->count())->toBe(0)
+        ->and($studentPlan->items()->count())->toBe(0)
+        ->and($monthlyPlan->refresh()->students_count)->toBe(1)
+        ->and($secondResult['generated'])->toBe(0)
+        ->and($secondResult['skipped_groups'])->toBe(1)
+        ->and(StudentMonthlyPlan::query()
+            ->where('student_id', $student->id)
+            ->where('group_id', $destinationGroup->id)
+            ->count())->toBe(1);
+});
+
+test('membership sync preserves an empty existing covering plan idempotently without generating future plans', function () {
+    [$center, $group, , $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $group->update([
+        'working_days' => ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+    ]);
+    DB::table('group_student')
+        ->where('student_id', $student->id)
+        ->where('group_id', $group->id)
+        ->update(['created_at' => '2026-06-15 00:00:00']);
+
+    $junePlan = MonthlyPlan::query()->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'month' => 6,
+        'year' => 2026,
+        'start_date' => '2026-06-01',
+        'end_date' => '2026-06-30',
+        'holiday_dates' => [],
+    ]);
+    $julyPlan = MonthlyPlan::query()->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'month' => 7,
+        'year' => 2026,
+        'start_date' => '2026-07-01',
+        'end_date' => '2026-07-31',
+        'holiday_dates' => [],
+    ]);
+
+    $generator = app(StudentMonthlyPlanGenerator::class);
+    $firstResult = $generator->syncStudentToExistingGroupPlans($student->refresh(), [$group->id]);
+    $createdPlanIds = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->orderBy('month')
+        ->pluck('id')
+        ->all();
+    $secondResult = $generator->syncStudentToExistingGroupPlans($student->refresh(), [$group->id]);
+
+    expect($firstResult['generated'])->toBe(1)
+        ->and($firstResult['skipped_groups'])->toBe(0)
+        ->and($firstResult['monthly_plan_ids'])->toBe([$junePlan->id])
+        ->and($firstResult['plan_ids'])->toBe($createdPlanIds)
+        ->and(StudentMonthlyPlan::query()->whereIn('id', $createdPlanIds)->whereHas('items')->count())->toBe(0)
+        ->and(StudentMonthlyPlan::query()->where('monthly_plan_id', $julyPlan->id)->exists())->toBeFalse()
+        ->and($secondResult['generated'])->toBe(0)
+        ->and($secondResult['skipped_groups'])->toBe(1)
+        ->and(StudentMonthlyPlan::query()->where('student_id', $student->id)->orderBy('month')->pluck('id')->all())
+        ->toBe($createdPlanIds);
 });
 
 test('one student can have independent monthly plans in multiple groups', function () {
