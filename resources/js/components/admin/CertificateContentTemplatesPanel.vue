@@ -1056,11 +1056,13 @@ watch(
             </div>
 
             <div class="relative mt-4">
-                <i class="pi pi-search pointer-events-none absolute start-3 top-1/2 z-10 -translate-y-1/2 text-sm text-(--muted-foreground)" aria-hidden="true"></i>
+                <span class="pointer-events-none absolute inset-y-0 start-0 z-10 flex w-10 items-center justify-center text-(--muted-foreground)">
+                    <i class="pi pi-search text-sm" aria-hidden="true"></i>
+                </span>
                 <InputText
                     v-model="templateSearch"
                     :placeholder="t('certificateDesign.content.searchTemplates')"
-                    class="h-10 w-full ps-9"
+                    class="h-10 w-full ps-10"
                 />
             </div>
 
