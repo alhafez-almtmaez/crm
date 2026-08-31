@@ -53,7 +53,7 @@ class PlanController extends Controller implements HasMiddleware
     public function edit(Plan $plan): Response
     {
         return Inertia::render('Admin/Plans/Edit', [
-            'plan' => $plan->only(['id', 'name']),
+            'plan' => $plan->only(['id', 'name', 'category']),
         ]);
     }
 

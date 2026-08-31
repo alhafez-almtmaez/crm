@@ -280,7 +280,7 @@ body {
 }
 
 .certificate__intro {
-    top: 40.25%;
+    top: 37.25%;
     left: 5.84%;
     width: 87.97%;
     font-size: 2.15cqw;
@@ -304,7 +304,7 @@ body {
 }
 
 .certificate__student {
-    top: 47.85%;
+    top: 45.85%;
     left: 22.84%;
     width: 53.64%;
     color: var(--certificate-student-name-color);
@@ -346,11 +346,11 @@ body {
 }
 
 .certificate__achievement {
-    top: 56.74%;
+    top: 55%;
     left: 12.28%;
     width: 75.09%;
-    font-size: 2.76cqw;
-    line-height: 1.4;
+    font-size: 2.4cqw;
+    line-height: 1;
     text-align: center;
     text-wrap: balance;
 }
@@ -372,11 +372,11 @@ body {
 }
 
 .certificate__closing {
-    top: 64.34%;
+    top: 61.25%;
     left: 10.13%;
     width: 79.38%;
     font-size: 2.39cqw;
-    line-height: 1.35;
+    line-height: 1.15;
     text-align: center;
     text-wrap: balance;
 }

@@ -1,5 +1,7 @@
 <script setup>
 import Button from 'primevue/button';
+import SelectButton from 'primevue/selectbutton';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import PrimeFloatField from '../form/PrimeFloatField.vue';
 
@@ -24,6 +26,10 @@ defineProps({
 
 const emit = defineEmits(['cancel', 'submit']);
 const { t } = useI18n();
+const categoryOptions = computed(() => [
+    { value: 'quran', label: t('plans.categoryQuran') },
+    { value: 'sunnah', label: t('plans.categorySunnah') },
+]);
 </script>
 
 <template>
@@ -41,6 +47,25 @@ const { t } = useI18n();
                 :invalid="Boolean(form.errors.name)"
                 :error="form.errors.name"
             />
+
+            <div class="flex flex-col gap-2">
+                <label id="plan-category-label" class="text-sm font-medium text-(--foreground)">
+                    {{ t('plans.planCategory') }}
+                    <span class="text-red-600">*</span>
+                </label>
+                <SelectButton
+                    v-model="form.category"
+                    :options="categoryOptions"
+                    option-label="label"
+                    option-value="value"
+                    :allow-empty="false"
+                    :invalid="Boolean(form.errors.category)"
+                    aria-labelledby="plan-category-label"
+                    fluid
+                />
+                <small class="text-xs text-(--muted-foreground)">{{ t('plans.categoryHint') }}</small>
+                <small v-if="form.errors.category" class="text-sm text-red-600">{{ form.errors.category }}</small>
+            </div>
 
             <div class="mt-2 flex justify-end gap-2">
                 <Button type="button" :label="t('common.cancel')" severity="secondary" text @click="emit('cancel')" />

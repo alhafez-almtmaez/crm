@@ -28,6 +28,10 @@ class PlanUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique('plan_types', 'name')->ignore($plan->id),
             ],
+            'category' => [
+                'required',
+                Rule::in(Plan::CATEGORIES),
+            ],
         ];
     }
 }

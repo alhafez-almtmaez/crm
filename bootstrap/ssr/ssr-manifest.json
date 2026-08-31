@@ -25,12 +25,12 @@
     "/build/assets/Edit-zuJVwgQO.js"
   ],
   "resources/js/Pages/Admin/CertificateDesigns.vue": [
-    "/build/assets/CertificateDesigns-CrDknV0U.js",
-    "/build/assets/CertificateDesigns-DPLnP_qF.css"
+    "/build/assets/CertificateDesigns-Cfw973jM.js",
+    "/build/assets/CertificateDesigns-DHPWeQCQ.css"
   ],
-  "resources/js/Pages/Admin/CertificateDesigns.vue?vue&type=style&index=0&scoped=989e17d0&lang.css": [
-    "/build/assets/CertificateDesigns-CrDknV0U.js",
-    "/build/assets/CertificateDesigns-DPLnP_qF.css"
+  "resources/js/Pages/Admin/CertificateDesigns.vue?vue&type=style&index=0&scoped=b1abd86d&lang.css": [
+    "/build/assets/CertificateDesigns-Cfw973jM.js",
+    "/build/assets/CertificateDesigns-DHPWeQCQ.css"
   ],
   "resources/js/Pages/Admin/Dashboard.vue": [
     "/build/assets/Dashboard-D9clSD-v.js",
@@ -86,13 +86,13 @@
     "/build/assets/Edit-DGv6R4P-.js"
   ],
   "resources/js/Pages/Admin/Plans.vue": [
-    "/build/assets/Plans-CRt1qPAm.js"
+    "/build/assets/Plans-CcyEBm9C.js"
   ],
   "resources/js/Pages/Admin/Plans/Create.vue": [
-    "/build/assets/Create-8IPCb_aZ2.js"
+    "/build/assets/Create-Qm3dXzkX2.js"
   ],
   "resources/js/Pages/Admin/Plans/Edit.vue": [
-    "/build/assets/Edit-C4FrPAM-2.js"
+    "/build/assets/Edit-CF-3NFil2.js"
   ],
   "resources/js/Pages/Admin/Profile/Password.vue": [
     "/build/assets/Password-CdweSNCF.js"
@@ -199,8 +199,8 @@
     "/build/assets/CenterFormCard-o3duDHye.js"
   ],
   "resources/js/components/admin/CertificateContentTemplatesPanel.vue": [
-    "/build/assets/CertificateDesigns-CrDknV0U.js",
-    "/build/assets/CertificateDesigns-DPLnP_qF.css"
+    "/build/assets/CertificateDesigns-Cfw973jM.js",
+    "/build/assets/CertificateDesigns-DHPWeQCQ.css"
   ],
   "resources/js/components/admin/DailyWeightLimitFields.vue": [
     "/build/assets/StudentFormCard-CoMnB9oC.js"
@@ -227,7 +227,7 @@
     "/build/assets/Edit-DGv6R4P-.js"
   ],
   "resources/js/components/admin/PlanFormCard.vue": [
-    "/build/assets/PlanFormCard-l-AnRWgb.js"
+    "/build/assets/PlanFormCard-OCrIvGgt.js"
   ],
   "resources/js/components/admin/RoleFormCard.vue": [
     "/build/assets/RoleFormCard-Vz2B9MYk.js"

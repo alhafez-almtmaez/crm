@@ -25,18 +25,19 @@ class PlanService
         $perPage = (int) ($filters['per_page'] ?? 50);
         $sortBy = (string) ($filters['sort_by'] ?? 'id');
         $sortDir = (string) ($filters['sort_dir'] ?? 'asc');
-        $allowedSorts = ['id', 'name', 'created_at'];
+        $allowedSorts = ['id', 'name', 'category', 'created_at'];
 
         $sortBy = in_array($sortBy, $allowedSorts, true) ? $sortBy : 'id';
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'asc';
 
         $query = Plan::query()
-            ->select(['id', 'name', 'created_at'])
+            ->select(['id', 'name', 'category', 'created_at'])
             ->withCount('points')
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where('name', 'like', "%{$search}%");
             })
-            ->orderBy($sortBy, $sortDir);
+            ->orderBy($sortBy, $sortDir)
+            ->when($sortBy !== 'id', fn ($query) => $query->orderBy('id'));
 
         $plans = $query->paginate($perPage)->withQueryString();
         $plans->setCollection(
@@ -57,6 +58,7 @@ class PlanService
     {
         return Plan::query()->create([
             'name' => $data['name'],
+            'category' => $data['category'],
         ]);
     }
 
@@ -67,6 +69,7 @@ class PlanService
     {
         $plan->update([
             'name' => $data['name'],
+            'category' => $data['category'],
         ]);
 
         return $plan->refresh();

@@ -8,6 +8,7 @@ import PlanFormCard from '../../../components/admin/PlanFormCard.vue';
 
 const form = useForm({
     name: '',
+    category: 'quran',
 });
 const { t } = useI18n();
 

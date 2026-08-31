@@ -15,6 +15,7 @@ const props = defineProps({
 
 const form = useForm({
     name: props.plan.name,
+    category: props.plan.category ?? 'quran',
 });
 const { t } = useI18n();
 

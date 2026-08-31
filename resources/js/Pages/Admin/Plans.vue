@@ -21,7 +21,7 @@ const { t } = useI18n();
 const page = usePage();
 const {
     loading,
-    rows: plans,
+    rows: sourcePlans,
     totalRecords,
     currentPage,
     rowsPerPage,
@@ -50,10 +50,25 @@ const canViewCertificateDesigns = computed(() => {
 
     return roles.includes('admin') || permissions.includes('certificate_designs.view');
 });
+const plans = computed(() => (sourcePlans.value ?? []).map((plan) => {
+    const isQuran = plan.category === 'quran';
+    const isSunnah = plan.category === 'sunnah';
+
+    return {
+        ...plan,
+        category_label: isQuran
+            ? t('plans.categoryQuran')
+            : (isSunnah ? t('plans.categorySunnah') : plan.category),
+        category_badge_class: isQuran
+            ? 'bg-emerald-700 text-white min-w-20 justify-center whitespace-nowrap'
+            : 'bg-amber-700 text-white min-w-20 justify-center whitespace-nowrap',
+    };
+}));
 
 const columns = computed(() => [
     { field: 'id', header: t('common.id'), sortable: true },
     { field: 'name', header: t('plans.planName'), sortable: true },
+    { field: 'category_label', header: t('plans.planCategory'), sortable: true, sortField: 'category', badge: true, badgeClassField: 'category_badge_class' },
     { field: 'points_count', header: t('plans.pointsCount') },
     { field: 'created_at_formatted', header: t('plans.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
@@ -61,7 +76,7 @@ const columns = computed(() => [
 const rowActions = computed(() => [
     {
         key: 'points',
-        icon: 'pi pi-file-excel',
+        icon: 'pi pi-list-check',
         severity: 'info',
         title: t('plans.pointsActions'),
     },

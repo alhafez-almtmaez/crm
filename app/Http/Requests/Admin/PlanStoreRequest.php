@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Models\Plan;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,6 +24,10 @@ class PlanStoreRequest extends FormRequest
                 'string',
                 'max:255',
                 Rule::unique('plan_types', 'name'),
+            ],
+            'category' => [
+                'required',
+                Rule::in(Plan::CATEGORIES),
             ],
         ];
     }

@@ -13,10 +13,20 @@ class Plan extends Model
     use HasFactory;
     use LogsActivity;
 
+    public const CATEGORY_QURAN = 'quran';
+
+    public const CATEGORY_SUNNAH = 'sunnah';
+
+    public const CATEGORIES = [
+        self::CATEGORY_QURAN,
+        self::CATEGORY_SUNNAH,
+    ];
+
     protected $table = 'plan_types';
 
     protected $fillable = [
         'name',
+        'category',
     ];
 
     public function students(): HasMany
@@ -33,7 +43,7 @@ class Plan extends Model
     {
         return LogOptions::defaults()
             ->useLogName('plans')
-            ->logOnly(['name'])
+            ->logOnly(['name', 'category'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }
