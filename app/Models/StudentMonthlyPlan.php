@@ -15,6 +15,8 @@ class StudentMonthlyPlan extends Model
 
     public const STATUS_EXHAUSTED = 'exhausted';
 
+    public const STATUS_HISTORICAL_MARKER = 'historical_marker';
+
     protected $fillable = [
         'monthly_plan_id',
         'student_id',

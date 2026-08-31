@@ -65,7 +65,7 @@ Artisan::command('monthly-plans:sync-memberships {--group= : Limit synchronizati
 
         foreach ($students as $student) {
             $membershipsChecked++;
-            $result = $generator->syncStudentToExistingGroupPlans($student, [(int) $planGroupId]);
+            $result = $generator->repairStudentToExistingGroupPlans($student, [(int) $planGroupId]);
             $generated += (int) $result['generated'];
         }
     }

@@ -177,7 +177,9 @@ test('membership sync command repairs students transferred after a plan was crea
         ->firstOrFail();
 
     expect($destinationPlan->effective_start_date?->toDateString())->toBe('2026-08-26')
-        ->and($destinationPlan->days()->whereDate('date', '<', '2026-08-26')->exists())->toBeFalse()
+        ->and($destinationPlan->status)->toBe(StudentMonthlyPlan::STATUS_HISTORICAL_MARKER)
+        ->and($destinationPlan->days()->count())->toBe(0)
+        ->and($destinationPlan->items()->count())->toBe(0)
         ->and(StudentMonthlyPlan::query()->whereKey($fixture['source_student_plan']->id)->exists())->toBeTrue();
 
     $this->artisan('monthly-plans:sync-memberships', [
@@ -185,4 +187,100 @@ test('membership sync command repairs students transferred after a plan was crea
     ])
         ->expectsOutput('Student plans generated: 0')
         ->assertSuccessful();
+
+    $refreshResult = app(StudentMonthlyPlanGenerator::class)->regenerateFutureForMonthlyPlan(
+        $fixture['destination_monthly_plan'],
+        CarbonImmutable::parse('2026-08-26'),
+    );
+
+    $destinationPlan->refresh();
+    expect($refreshResult['student_plans'])->toBe(0)
+        ->and($destinationPlan->status)->toBe(StudentMonthlyPlan::STATUS_HISTORICAL_MARKER)
+        ->and($destinationPlan->days()->count())->toBe(0)
+        ->and($destinationPlan->items()->count())->toBe(0);
+});
+
+test('membership repair checks the transfer month and the current month without future plans', function () {
+    $fixture = studentGroupTransferFixture();
+    $student = $fixture['student'];
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-26 13:00:00', 'Asia/Amman'));
+    $student->forceFill([
+        'group_id' => $fixture['destination_group']->id,
+        'center_id' => $fixture['center']->id,
+    ])->save();
+    $student->groups()->sync([$fixture['destination_group']->id]);
+
+    $septemberPlan = MonthlyPlan::query()->create([
+        'month' => 9,
+        'year' => 2026,
+        'start_date' => '2026-09-01',
+        'end_date' => '2026-09-30',
+        'holiday_dates' => [],
+        'center_id' => $fixture['center']->id,
+        'group_id' => $fixture['destination_group']->id,
+        'admin_id' => $fixture['user']->id,
+        'generated_at' => now(),
+    ]);
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-09-01 09:00:00', 'Asia/Amman'));
+    $this->artisan('monthly-plans:sync-memberships', [
+        '--group' => $fixture['destination_group']->id,
+    ])
+        ->expectsOutput('Student plans generated: 2')
+        ->assertSuccessful();
+
+    $plans = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $fixture['destination_group']->id)
+        ->orderBy('month')
+        ->get();
+    $septemberStudentPlan = StudentMonthlyPlan::query()
+        ->where('monthly_plan_id', $septemberPlan->id)
+        ->where('student_id', $student->id)
+        ->firstOrFail();
+    $firstSeptemberDate = $septemberStudentPlan->days()->orderBy('date')->value('date');
+
+    expect($plans)->toHaveCount(2)
+        ->and($plans->first()->days()->count())->toBe(0)
+        ->and($septemberStudentPlan)->toBeInstanceOf(StudentMonthlyPlan::class)
+        ->and($septemberStudentPlan->effective_start_date?->toDateString())->toBe('2026-09-01')
+        ->and(CarbonImmutable::parse((string) $firstSeptemberDate)->toDateString())->toBe('2026-09-02');
+
+    $this->artisan('monthly-plans:sync-memberships', [
+        '--group' => $fixture['destination_group']->id,
+    ])
+        ->expectsOutput('Student plans generated: 0')
+        ->assertSuccessful();
+});
+
+test('membership repair for an active plan schedules only from the repair date onward', function () {
+    $fixture = studentGroupTransferFixture();
+    $student = $fixture['student'];
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-26 13:00:00', 'Asia/Amman'));
+    $student->forceFill([
+        'group_id' => $fixture['destination_group']->id,
+        'center_id' => $fixture['center']->id,
+    ])->save();
+    $student->groups()->sync([$fixture['destination_group']->id]);
+
+    CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-08-28 09:00:00', 'Asia/Amman'));
+    $this->artisan('monthly-plans:sync-memberships', [
+        '--group' => $fixture['destination_group']->id,
+    ])->assertSuccessful();
+
+    $destinationPlan = StudentMonthlyPlan::query()
+        ->where('student_id', $student->id)
+        ->where('group_id', $fixture['destination_group']->id)
+        ->firstOrFail();
+    $dates = $destinationPlan->days()
+        ->orderBy('date')
+        ->pluck('date')
+        ->map(static fn ($date): string => CarbonImmutable::parse($date)->toDateString())
+        ->all();
+
+    expect($destinationPlan->effective_start_date?->toDateString())->toBe('2026-08-28')
+        ->and($dates)->toBe(['2026-08-29'])
+        ->and(collect($dates)->every(static fn (string $date): bool => $date >= '2026-08-28'))->toBeTrue();
 });
