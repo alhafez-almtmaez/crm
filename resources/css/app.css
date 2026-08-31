@@ -24,8 +24,8 @@
     --status-success-contrast: #ffffff;
     --status-info: #0369a1;
     --status-info-contrast: #ffffff;
-    --status-warning: #f59e0b;
-    --status-warning-contrast: #1f2937;
+    --status-warning: #b45309;
+    --status-warning-contrast: #ffffff;
     --status-danger: #dc2626;
     --status-danger-contrast: #ffffff;
     --status-neutral: #475569;
@@ -72,9 +72,10 @@
     --card-foreground: #e2e8f0;
     --muted-foreground: #a3a3a3;
     --border: #242424;
-    --status-success: #059669;
-    --status-info: #0284c7;
+    --status-success: #047857;
+    --status-info: #0369a1;
     --status-warning: #f59e0b;
+    --status-warning-contrast: #1f2937;
     --status-danger: #dc2626;
     --status-neutral: #64748b;
     color-scheme: dark;
