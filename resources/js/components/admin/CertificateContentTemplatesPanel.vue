@@ -41,7 +41,13 @@ const SECTION_MAX_LENGTHS = {
     achievement_line: 450,
     closing: 450,
 };
-const ACHIEVEMENT_TYPES = ['surah', 'part', 'three_parts'];
+const ACHIEVEMENT_TYPES = [
+    'surah',
+    'part',
+    'three_parts',
+    'sunnah_book',
+    'sunnah_part',
+];
 const SOURCE_VALUES = [
     'center_type',
     'center_all',

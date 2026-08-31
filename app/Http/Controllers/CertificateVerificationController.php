@@ -107,6 +107,8 @@ class CertificateVerificationController extends Controller
             Certificate::ACHIEVEMENT_SURAH => 'سورة',
             Certificate::ACHIEVEMENT_PART => 'جزء',
             Certificate::ACHIEVEMENT_THREE_PARTS => 'ثلاثة أجزاء',
+            Certificate::ACHIEVEMENT_SUNNAH_BOOK => 'كتاب من السُنّة',
+            Certificate::ACHIEVEMENT_SUNNAH_PART => 'جزء من السُنّة',
             default => 'إنجاز',
         };
     }
@@ -117,6 +119,8 @@ class CertificateVerificationController extends Controller
             Certificate::ACHIEVEMENT_SURAH => $certificate->surah_name,
             Certificate::ACHIEVEMENT_PART => $certificate->part_name,
             Certificate::ACHIEVEMENT_THREE_PARTS => $certificate->three_parts,
+            Certificate::ACHIEVEMENT_SUNNAH_BOOK => $certificate->book_name,
+            Certificate::ACHIEVEMENT_SUNNAH_PART => $certificate->part_name,
             default => null,
         };
         $name = trim((string) ($snapshot ?: $certificate->achievement_name));

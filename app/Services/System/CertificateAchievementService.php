@@ -3,16 +3,13 @@
 namespace App\Services\System;
 
 use App\Models\Certificate;
+use App\Models\Plan;
 use App\Models\PlanPoint;
 
 class CertificateAchievementService
 {
     /** @var list<string> */
-    private const TYPES = [
-        Certificate::ACHIEVEMENT_SURAH,
-        Certificate::ACHIEVEMENT_PART,
-        Certificate::ACHIEVEMENT_THREE_PARTS,
-    ];
+    private const TYPES = Certificate::ACHIEVEMENT_TYPES;
 
     /**
      * Resolve a plan point exactly as certificate issuance does. The broadest
@@ -22,6 +19,21 @@ class CertificateAchievementService
      */
     public function resolve(PlanPoint $point): ?array
     {
+        $point->loadMissing('plan:id,category');
+
+        if ($point->plan?->category === Plan::CATEGORY_SUNNAH) {
+            $bookName = $this->nullableTrim($point->book_name);
+            if ($bookName !== null) {
+                return ['type' => Certificate::ACHIEVEMENT_SUNNAH_BOOK, 'name' => $bookName];
+            }
+
+            $partName = $this->nullableTrim($point->part_name);
+
+            return $partName !== null
+                ? ['type' => Certificate::ACHIEVEMENT_SUNNAH_PART, 'name' => $partName]
+                : null;
+        }
+
         $threeParts = $this->nullableTrim($point->three_parts);
         if ($threeParts !== null) {
             return ['type' => Certificate::ACHIEVEMENT_THREE_PARTS, 'name' => $threeParts];
@@ -49,12 +61,13 @@ class CertificateAchievementService
         $points = PlanPoint::query()
             ->select('plan_points.*')
             ->join('plan_types', 'plan_types.id', '=', 'plan_points.plan_id')
-            ->with('plan:id,name')
+            ->with('plan:id,name,category')
             ->where('plan_points.requires_certificate', true)
             ->where(function ($query): void {
                 $query->whereNotNull('plan_points.surah_name')
                     ->orWhereNotNull('plan_points.part_name')
-                    ->orWhereNotNull('plan_points.three_parts');
+                    ->orWhereNotNull('plan_points.three_parts')
+                    ->orWhereNotNull('plan_points.book_name');
             })
             ->orderBy('plan_types.name')
             ->orderBy('plan_types.id')
@@ -78,7 +91,7 @@ class CertificateAchievementService
     public function findPreviewAchievement(int $planPointId): ?array
     {
         $point = PlanPoint::query()
-            ->with('plan:id,name')
+            ->with('plan:id,name,category')
             ->whereKey($planPointId)
             ->where('requires_certificate', true)
             ->first();
@@ -100,7 +113,7 @@ class CertificateAchievementService
             return null;
         }
 
-        $point->loadMissing('plan:id,name');
+        $point->loadMissing('plan:id,name,category');
         if ($point->plan === null) {
             return null;
         }
@@ -133,8 +146,10 @@ class CertificateAchievementService
         }, $words);
         $prefixLength = match ($type) {
             Certificate::ACHIEVEMENT_SURAH => ($plain[0] ?? '') === 'سورة' ? 1 : 0,
-            Certificate::ACHIEVEMENT_PART => in_array($plain[0] ?? '', ['جزء', 'الجزء'], true) ? 1 : 0,
+            Certificate::ACHIEVEMENT_PART,
+            Certificate::ACHIEVEMENT_SUNNAH_PART => in_array($plain[0] ?? '', ['جزء', 'الجزء'], true) ? 1 : 0,
             Certificate::ACHIEVEMENT_THREE_PARTS => $this->threePartsPrefixLength($plain),
+            Certificate::ACHIEVEMENT_SUNNAH_BOOK => in_array($plain[0] ?? '', ['كتاب', 'الكتاب'], true) ? 1 : 0,
             default => 0,
         };
         $displayWords = array_slice($words, $prefixLength);

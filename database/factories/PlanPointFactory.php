@@ -29,6 +29,7 @@ class PlanPointFactory extends Factory
             'surah_name' => null,
             'part_name' => null,
             'three_parts' => null,
+            'book_name' => null,
         ];
     }
 }

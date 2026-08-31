@@ -220,6 +220,7 @@ class StudentCertificateService
                 'surah_name' => $this->nullableTrim($planPoint->surah_name),
                 'part_name' => $this->nullableTrim($planPoint->part_name),
                 'three_parts' => $this->nullableTrim($planPoint->three_parts),
+                'book_name' => $this->nullableTrim($planPoint->book_name),
                 'title' => (string) ($renderedContent['title'] ?? config('certificates.title')),
                 'quote_first' => (string) ($renderedContent['quote_first'] ?? config('certificates.quote_first')),
                 'quote_second' => (string) ($renderedContent['quote_second'] ?? config('certificates.quote_second')),
@@ -657,6 +658,8 @@ class StudentCertificateService
             Certificate::ACHIEVEMENT_SURAH => __('certificates.types.surah'),
             Certificate::ACHIEVEMENT_PART => __('certificates.types.part'),
             Certificate::ACHIEVEMENT_THREE_PARTS => __('certificates.types.three_parts'),
+            Certificate::ACHIEVEMENT_SUNNAH_BOOK => __('certificates.types.sunnah_book'),
+            Certificate::ACHIEVEMENT_SUNNAH_PART => __('certificates.types.sunnah_part'),
             default => __('certificates.types.achievement'),
         };
     }

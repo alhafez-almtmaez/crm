@@ -52,6 +52,7 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
             $surahOffset = $usesWeightColumns ? $nameOffset + 5 : $nameOffset + 3;
             $partOffset = $usesWeightColumns ? $nameOffset + 6 : $nameOffset + 4;
             $threePartsOffset = $usesWeightColumns ? $nameOffset + 7 : $nameOffset + 5;
+            $bookOffset = $usesWeightColumns ? $nameOffset + 8 : $nameOffset + 6;
             $importedWeight = $usesWeightColumns ? $this->floatOrNull($values[$nameOffset + 2] ?? null) : null;
 
             $payload = [
@@ -66,9 +67,18 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
                 'surah_name' => $this->nullIfEmpty($values[$surahOffset] ?? null),
                 'part_name' => $this->nullIfEmpty($values[$partOffset] ?? null),
                 'three_parts' => $this->nullIfEmpty($values[$threePartsOffset] ?? null),
+                'book_name' => $this->nullIfEmpty($values[$bookOffset] ?? null),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
+
+            if ($this->plan->category === Plan::CATEGORY_SUNNAH
+                && $payload['book_name'] === null
+                && $payload['surah_name'] !== null) {
+                // Older Sunnah sheets used the Surah column for book names.
+                $payload['book_name'] = $payload['surah_name'];
+                $payload['surah_name'] = null;
+            }
 
             if ($payload['name'] === null) {
                 $this->markSkipped("Line {$lineNumber}: plan point name is required.");
@@ -88,10 +98,23 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
                 'surah_name' => ['nullable', 'string', 'max:255'],
                 'part_name' => ['nullable', 'string', 'max:255'],
                 'three_parts' => ['nullable', 'string', 'max:255'],
+                'book_name' => ['nullable', 'string', 'max:255'],
             ]);
 
             if ($validator->fails()) {
                 $this->markSkipped("Line {$lineNumber}: ".$validator->errors()->first());
+
+                continue;
+            }
+
+            if ($this->plan->category === Plan::CATEGORY_SUNNAH && $payload['three_parts'] !== null) {
+                $this->markSkipped("Line {$lineNumber}: ".__('plans.sunnah_certificate_fields_only'));
+
+                continue;
+            }
+
+            if ($this->plan->category === Plan::CATEGORY_QURAN && $payload['book_name'] !== null) {
+                $this->markSkipped("Line {$lineNumber}: ".__('plans.quran_certificate_fields_only'));
 
                 continue;
             }
@@ -160,7 +183,7 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
 
     public function endColumn(): string
     {
-        return 'J';
+        return 'K';
     }
 
     public function limit(): int

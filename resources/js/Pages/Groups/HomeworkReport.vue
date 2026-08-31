@@ -79,6 +79,7 @@ const taskDetails = (task) => [
     task.surah_name,
     task.part_name,
     task.three_parts,
+    task.book_name,
 ].filter(Boolean).join(' / ');
 
 const printPage = () => {

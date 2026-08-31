@@ -15,7 +15,13 @@ import CertificateContentTemplatesPanel from '../../components/admin/Certificate
 import { useAppToast } from '../../composables/useAppToast';
 
 const GENDER_VALUES = ['male', 'female'];
-const ACHIEVEMENT_TYPE_VALUES = ['surah', 'part', 'three_parts'];
+const ACHIEVEMENT_TYPE_VALUES = [
+    'surah',
+    'part',
+    'three_parts',
+    'sunnah_book',
+    'sunnah_part',
+];
 const COLOR_FIELDS = [
     { key: 'heading_color', labelKey: 'certificateDesign.colors.heading' },
     { key: 'student_name_color', labelKey: 'certificateDesign.colors.studentName' },
@@ -598,7 +604,7 @@ const submit = () => {
                         role="tab"
                         class="flex min-h-12 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition"
                         :class="activeWorkspace === workspace.value
-                            ? 'bg-[var(--accent)] text-[var(--accent-foreground)] shadow-sm'
+                            ? 'bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] text-[var(--accent)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--accent)_24%,transparent)]'
                             : 'text-(--muted-foreground) hover:bg-(--muted) hover:text-(--foreground)'"
                         :aria-selected="activeWorkspace === workspace.value"
                         :aria-controls="`certificate-workspace-panel-${workspace.value}`"
@@ -929,7 +935,7 @@ const submit = () => {
                                 <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificateDesign.matrixHint') }}</p>
                             </div>
                             <span class="rounded-full bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
-                                {{ t('certificateDesign.configurationsCount', { count: 3 }) }}
+                                {{ t('certificateDesign.configurationsCount', { count: achievementTypes.length }) }}
                             </span>
                         </div>
 
@@ -956,6 +962,7 @@ const submit = () => {
                                 <span class="min-w-0 flex-1">
                                     <span class="block truncate text-xs font-semibold">{{ type.label }}</span>
                                     <span class="mt-0.5 block truncate text-[0.7rem] text-(--muted-foreground)">
+                                        <span v-if="type.category_label">{{ type.category_label }} · </span>
                                         {{ cellTheme(type.value).label || cellTheme(type.value).value }}
                                     </span>
                                 </span>

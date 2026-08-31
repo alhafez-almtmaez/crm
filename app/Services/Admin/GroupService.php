@@ -266,6 +266,7 @@ class GroupService
                     'surah_name' => $point->surah_name,
                     'part_name' => $point->part_name,
                     'three_parts' => $point->three_parts,
+                    'book_name' => $point->book_name,
                 ])
                 ->all(),
         ];

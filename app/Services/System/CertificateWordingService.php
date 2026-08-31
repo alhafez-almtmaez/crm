@@ -22,11 +22,7 @@ class CertificateWordingService
     ];
 
     /** @var list<string> */
-    private const ACHIEVEMENT_TYPES = [
-        Certificate::ACHIEVEMENT_SURAH,
-        Certificate::ACHIEVEMENT_PART,
-        Certificate::ACHIEVEMENT_THREE_PARTS,
-    ];
+    private const ACHIEVEMENT_TYPES = Certificate::ACHIEVEMENT_TYPES;
 
     /** @var list<string> */
     private const TEXT_KEYS = [
@@ -52,6 +48,11 @@ class CertificateWordingService
         $selected = config("certificates.wording.{$gender}", []);
         $male = is_array($male) ? $male : [];
         $selected = is_array($selected) ? $selected : [];
+        $isSunnah = in_array($achievementType, [
+            Certificate::ACHIEVEMENT_SUNNAH_BOOK,
+            Certificate::ACHIEVEMENT_SUNNAH_PART,
+        ], true);
+        $closingKey = $isSunnah ? 'sunnah_closing_text' : 'closing_text';
 
         return [
             'schema_version' => self::SCHEMA_VERSION,
@@ -88,8 +89,11 @@ class CertificateWordingService
             'closing_text' => $this->configuredText(
                 $selected,
                 $male,
-                'closing_text',
-                (string) config('certificates.closing_text', ''),
+                $closingKey,
+                (string) config(
+                    $isSunnah ? 'certificates.sunnah_closing_text' : 'certificates.closing_text',
+                    '',
+                ),
             ),
         ];
     }

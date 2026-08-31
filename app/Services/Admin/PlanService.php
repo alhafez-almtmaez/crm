@@ -96,6 +96,7 @@ class PlanService
                 'surah_name',
                 'part_name',
                 'three_parts',
+                'book_name',
             ]);
     }
 

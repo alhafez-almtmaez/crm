@@ -20,6 +20,18 @@ class Certificate extends Model
 
     public const ACHIEVEMENT_THREE_PARTS = 'three_parts';
 
+    public const ACHIEVEMENT_SUNNAH_BOOK = 'sunnah_book';
+
+    public const ACHIEVEMENT_SUNNAH_PART = 'sunnah_part';
+
+    public const ACHIEVEMENT_TYPES = [
+        self::ACHIEVEMENT_SURAH,
+        self::ACHIEVEMENT_PART,
+        self::ACHIEVEMENT_THREE_PARTS,
+        self::ACHIEVEMENT_SUNNAH_BOOK,
+        self::ACHIEVEMENT_SUNNAH_PART,
+    ];
+
     public const STATUS_VALID = 'valid';
 
     public const STATUS_REVOKED = 'revoked';
@@ -54,6 +66,7 @@ class Certificate extends Model
         'surah_name',
         'part_name',
         'three_parts',
+        'book_name',
         'title',
         'quote_first',
         'quote_second',
@@ -102,6 +115,7 @@ class Certificate extends Model
                 'surah_name',
                 'part_name',
                 'three_parts',
+                'book_name',
                 'issued_at',
             ])
             ->logOnlyDirty()

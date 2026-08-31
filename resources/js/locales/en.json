@@ -152,7 +152,7 @@
     "importPoints": "Import Plan Points",
     "importFile": "XLSX File",
     "importFileRequired": "Please choose an XLSX file.",
-    "importHint": "Importing replaces this plan's points. The export includes sort_order, weight, and standalone columns.",
+    "importHint": "Importing replaces this plan's points. Use Surah, Juz, or Three Juz for Quran plans; use Book or Part for Sunnah plans.",
     "importFailed": "Could not import plan points.",
     "importSuccess": "Plan points imported successfully.",
     "createdAt": "Created At",
@@ -438,7 +438,7 @@
     "readOnly": "You can preview certificate designs, but changing them requires certificate settings update permission.",
     "validationError": "Some settings could not be saved. Review the highlighted fields and try again.",
     "contextTitle": "Certificate Being Edited",
-    "contextHint": "Choose a center and certificate type. Every center keeps three independent designs, while student gender and wording come automatically from the center settings.",
+    "contextHint": "Choose a center and certificate type. Quran has three certificate types and Sunnah has two, each with independent design and content.",
     "studentGender": "Center Student Type",
     "previewCenter": "Center",
     "previewCenterHint": "Choose the center whose certificate designs you want to edit. Changes are saved only for this center.",
@@ -456,8 +456,8 @@
     "noMatchingPreviewAchievement": "No achievement matches your search.",
     "noPreviewAchievements": "No plan checkpoint currently has certificate data for this type. Add achievement data to a plan checkpoint to preview it here.",
     "matrixTitle": "Certificate Type Designs",
-    "matrixHint": "Each center has three designs: Surah, Juz, and Three Juz. An amber dot marks an unsaved change.",
-    "configurationsCount": "{count} designs",
+    "matrixHint": "Quran types are Surah, Juz, and Three Juz. Sunnah types are Book and Part. An amber dot marks an unsaved change.",
+    "configurationsCount": "{count}",
     "unsaved": "Unsaved changes",
     "themeTitle": "Theme and Frame",
     "editingContext": "Editing {center} · {type}",
@@ -632,8 +632,10 @@
     },
     "types": {
       "surah": "Surah",
-      "part": "Juz",
-      "three_parts": "Three Juz"
+      "part": "Quran Juz",
+      "three_parts": "Three Juz",
+      "sunnah_book": "Sunnah Book",
+      "sunnah_part": "Sunnah Part"
     },
     "themes": {
       "blue": "Blue and Gold",

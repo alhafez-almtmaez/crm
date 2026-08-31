@@ -105,9 +105,11 @@ function certificateContentTestPdfPayload(Center $center, PlanPoint $point): arr
     ];
 }
 
-test('content template migration seeds the exact general and female templates and assignments', function () {
+test('content template migrations seed quran and sunnah templates with gender assignments', function () {
     $general = CertificateContentTemplate::query()->where('key', 'general')->sole();
     $female = CertificateContentTemplate::query()->where('key', 'female')->sole();
+    $sunnahGeneral = CertificateContentTemplate::query()->where('key', 'sunnah-general')->sole();
+    $sunnahFemale = CertificateContentTemplate::query()->where('key', 'sunnah-female')->sole();
 
     expect($general->is_system)->toBeTrue()
         ->and($general->is_active)->toBeTrue()
@@ -127,9 +129,15 @@ test('content template migration seeds the exact general and female templates an
         ->and($female->sections['achievement_line'])
         ->toBe('وَذَلِكَ لِإِنْجَازِهَا {{ achievement_label }} ﴿ {{ achievement_name }} ﴾ بِإِتْقَانٍ عَالٍ بِفَضْلِ اللهِ تَعَالَى')
         ->and($female->sections['closing'])
-        ->toBe('نَسْأَلُ اللهَ لَهَا التَّوْفِيقَ وَالثَّبَاتَ، وَأَنْ يَمُنَّ عَلَيْهَا بِإِتْمَامِ حِفْظِ كِتَابِهِ الكَرِيمِ وَالعَمَلِ بِهِ.');
+        ->toBe('نَسْأَلُ اللهَ لَهَا التَّوْفِيقَ وَالثَّبَاتَ، وَأَنْ يَمُنَّ عَلَيْهَا بِإِتْمَامِ حِفْظِ كِتَابِهِ الكَرِيمِ وَالعَمَلِ بِهِ.')
+        ->and($sunnahGeneral->is_system)->toBeTrue()
+        ->and($sunnahGeneral->sections['closing'])->toContain('العَمَلَ بِسُنَّةِ نَبِيِّهِ ﷺ')
+        ->and($sunnahGeneral->sections['closing'])->not->toContain('إِتْمَامِ حِفْظِ كِتَابِهِ الكَرِيمِ')
+        ->and($sunnahFemale->is_system)->toBeTrue()
+        ->and($sunnahFemale->sections['intro'])->toContain('لِطَالِبَةِ العِلْمِ المُتَمَيِّزَةِ')
+        ->and($sunnahFemale->sections['closing'])->toContain('العَمَلَ بِسُنَّةِ نَبِيِّهِ ﷺ');
 
-    expect(CertificateContentTemplateAssignment::query()->count())->toBe(2)
+    expect(CertificateContentTemplateAssignment::query()->count())->toBe(6)
         ->and(CertificateContentTemplateAssignment::query()
             ->where('scope_key', 'global:*|type:*')
             ->where('template_id', $general->id)
@@ -137,6 +145,14 @@ test('content template migration seeds the exact general and female templates an
         ->and(CertificateContentTemplateAssignment::query()
             ->where('scope_key', 'gender:female|type:*')
             ->where('template_id', $female->id)
+            ->exists())->toBeTrue()
+        ->and(CertificateContentTemplateAssignment::query()
+            ->where('scope_key', 'gender:male|type:sunnah_book')
+            ->where('template_id', $sunnahGeneral->id)
+            ->exists())->toBeTrue()
+        ->and(CertificateContentTemplateAssignment::query()
+            ->where('scope_key', 'gender:female|type:sunnah_part')
+            ->where('template_id', $sunnahFemale->id)
             ->exists())->toBeTrue();
 });
 
@@ -257,9 +273,9 @@ test('admin receives the template props and can create update assign unassign an
         ->assertInertia(fn (Assert $page) => $page
             ->where('canManageContentTemplates', true)
             ->where('canManageGlobalContentAssignments', true)
-            ->has('contentTemplates', 2)
+            ->has('contentTemplates', 4)
             ->has('contentTemplates.0.sections', 7)
-            ->has('contentTemplateAssignments', 2)
+            ->has('contentTemplateAssignments', 6)
             ->has('templateVariables', 9)
             ->where('templateVariables', function ($variables): bool {
                 $keys = collect($variables)->pluck('key');
@@ -270,7 +286,9 @@ test('admin receives the template props and can create update assign unassign an
             })
             ->has("effectiveContentTemplates.{$center->id}.surah")
             ->has("effectiveContentTemplates.{$center->id}.part")
-            ->has("effectiveContentTemplates.{$center->id}.three_parts"));
+            ->has("effectiveContentTemplates.{$center->id}.three_parts")
+            ->has("effectiveContentTemplates.{$center->id}.sunnah_book")
+            ->has("effectiveContentTemplates.{$center->id}.sunnah_part"));
 
     $this->actingAs($admin, 'web')
         ->postJson(route('admin.certificate-content-templates.store'), [

@@ -22,6 +22,7 @@ class PlanPoint extends Model
         'surah_name',
         'part_name',
         'three_parts',
+        'book_name',
     ];
 
     protected $casts = [

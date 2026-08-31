@@ -27,11 +27,7 @@ class CertificateDesignSettingsService
     ];
 
     /** @var list<string> */
-    private const ACHIEVEMENT_TYPES = [
-        Certificate::ACHIEVEMENT_SURAH,
-        Certificate::ACHIEVEMENT_PART,
-        Certificate::ACHIEVEMENT_THREE_PARTS,
-    ];
+    private const ACHIEVEMENT_TYPES = Certificate::ACHIEVEMENT_TYPES;
 
     /** @var list<string> */
     private const COLOR_KEYS = [
@@ -197,9 +193,36 @@ class CertificateDesignSettingsService
                 ['value' => Center::STUDENT_GENDER_FEMALE, 'label' => __('certificates.genders.female')],
             ],
             'achievementTypes' => [
-                ['value' => Certificate::ACHIEVEMENT_SURAH, 'label' => __('certificates.types.surah')],
-                ['value' => Certificate::ACHIEVEMENT_PART, 'label' => __('certificates.types.part')],
-                ['value' => Certificate::ACHIEVEMENT_THREE_PARTS, 'label' => __('certificates.types.three_parts')],
+                [
+                    'value' => Certificate::ACHIEVEMENT_SURAH,
+                    'label' => __('certificates.types.surah'),
+                    'category' => 'quran',
+                    'category_label' => __('certificates.categories.quran'),
+                ],
+                [
+                    'value' => Certificate::ACHIEVEMENT_PART,
+                    'label' => __('certificates.types.part'),
+                    'category' => 'quran',
+                    'category_label' => __('certificates.categories.quran'),
+                ],
+                [
+                    'value' => Certificate::ACHIEVEMENT_THREE_PARTS,
+                    'label' => __('certificates.types.three_parts'),
+                    'category' => 'quran',
+                    'category_label' => __('certificates.categories.quran'),
+                ],
+                [
+                    'value' => Certificate::ACHIEVEMENT_SUNNAH_BOOK,
+                    'label' => __('certificates.types.sunnah_book'),
+                    'category' => 'sunnah',
+                    'category_label' => __('certificates.categories.sunnah'),
+                ],
+                [
+                    'value' => Certificate::ACHIEVEMENT_SUNNAH_PART,
+                    'label' => __('certificates.types.sunnah_part'),
+                    'category' => 'sunnah',
+                    'category_label' => __('certificates.categories.sunnah'),
+                ],
             ],
             'themes' => $themes,
             'fonts' => $fonts,

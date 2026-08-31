@@ -393,11 +393,7 @@ class CertificateDesignController extends Controller implements HasMiddleware
      */
     private function firstPreviewAchievement(array $previewAchievements): ?array
     {
-        foreach ([
-            Certificate::ACHIEVEMENT_SURAH,
-            Certificate::ACHIEVEMENT_PART,
-            Certificate::ACHIEVEMENT_THREE_PARTS,
-        ] as $achievementType) {
+        foreach (Certificate::ACHIEVEMENT_TYPES as $achievementType) {
             $achievement = $previewAchievements[$achievementType][0] ?? null;
             if (is_array($achievement)) {
                 return $achievement;

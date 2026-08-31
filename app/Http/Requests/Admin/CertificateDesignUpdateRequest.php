@@ -22,11 +22,7 @@ class CertificateDesignUpdateRequest extends FormRequest
     {
         $themeKeys = array_keys((array) config('certificates.themes', []));
         $fontKeys = array_keys((array) config('certificates.fonts', []));
-        $achievementTypes = [
-            Certificate::ACHIEVEMENT_SURAH,
-            Certificate::ACHIEVEMENT_PART,
-            Certificate::ACHIEVEMENT_THREE_PARTS,
-        ];
+        $achievementTypes = Certificate::ACHIEVEMENT_TYPES;
         $rules = [
             'center_id' => [
                 'required',

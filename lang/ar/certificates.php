@@ -8,7 +8,7 @@ return [
     'already_issued' => 'سبق إصدار شهادة لهذه النقطة من الخطة.',
     'not_certificate_checkpoint' => 'النقطة المحددة ليست نقطة إصدار شهادة.',
     'checkpoint_not_reached' => 'لم يصل الطالب إلى هذه النقطة من الخطة بعد.',
-    'missing_achievement_data' => 'بيانات الشهادة ناقصة في نقطة الخطة؛ أدخل اسم السورة أو الجزء أو الثلاثة أجزاء.',
+    'missing_achievement_data' => 'بيانات الشهادة ناقصة في نقطة الخطة؛ أدخل إنجازًا مناسبًا لصنف الخطة.',
     'design_settings_updated' => 'تم حفظ تصاميم الشهادات بنجاح.',
     'content_template_created' => 'تم إنشاء قالب محتوى الشهادة بنجاح.',
     'content_template_updated' => 'تم تحديث قالب محتوى الشهادة بنجاح.',
@@ -30,8 +30,8 @@ return [
     'template_variables' => [
         'student_name' => ['label' => 'اسم الطالب', 'description' => 'الاسم الكامل للطالب أو الطالبة كما حُفظ وقت إصدار الشهادة.'],
         'center_name' => ['label' => 'اسم المركز', 'description' => 'الاسم المعتمد للمركز على الشهادات.'],
-        'achievement_label' => ['label' => 'نوع الإنجاز', 'description' => 'سورة أو جزء أو ثلاثة أجزاء بحسب نوع الشهادة.'],
-        'achievement_name' => ['label' => 'اسم الإنجاز', 'description' => 'اسم السورة أو الجزء المحفوظ في نقطة الخطة.'],
+        'achievement_label' => ['label' => 'نوع الإنجاز', 'description' => 'سورة أو جزء أو ثلاثة أجزاء للقرآن، وكتاب أو جزء للسُنّة.'],
+        'achievement_name' => ['label' => 'اسم الإنجاز', 'description' => 'اسم السورة أو الجزء أو الكتاب المحفوظ في نقطة الخطة.'],
         'certificate_number' => ['label' => 'رقم الشهادة', 'description' => 'الرقم الفريد للشهادة الصادرة.'],
         'plan_name' => ['label' => 'اسم الخطة', 'description' => 'اسم الخطة المرتبطة بالطالب عند الإصدار.'],
         'plan_point_name' => ['label' => 'نقطة الخطة', 'description' => 'اسم نقطة الإنجاز في الخطة.'],
@@ -45,9 +45,15 @@ return [
     ],
     'types' => [
         'surah' => 'سورة',
-        'part' => 'جزء',
+        'part' => 'جزء من القرآن',
         'three_parts' => 'ثلاثة أجزاء',
+        'sunnah_book' => 'كتاب من السُنّة',
+        'sunnah_part' => 'جزء من السُنّة',
         'achievement' => 'إنجاز',
+    ],
+    'categories' => [
+        'quran' => 'القرآن',
+        'sunnah' => 'السُنّة',
     ],
     'statuses' => [
         'valid' => 'سارية',

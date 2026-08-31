@@ -8,7 +8,7 @@ return [
     'already_issued' => 'A certificate has already been issued for this plan checkpoint.',
     'not_certificate_checkpoint' => 'The selected point is not a certificate checkpoint.',
     'checkpoint_not_reached' => 'The student has not reached this plan checkpoint yet.',
-    'missing_achievement_data' => 'Certificate data is missing from the plan point. Add a surah, part, or three-parts value.',
+    'missing_achievement_data' => 'Certificate data is missing from the plan point. Add an achievement that matches the plan category.',
     'design_settings_updated' => 'Certificate designs saved successfully.',
     'content_template_created' => 'The certificate content template was created successfully.',
     'content_template_updated' => 'The certificate content template was updated successfully.',
@@ -30,8 +30,8 @@ return [
     'template_variables' => [
         'student_name' => ['label' => 'Student name', 'description' => 'The student’s full name as snapshotted when the certificate is issued.'],
         'center_name' => ['label' => 'Center name', 'description' => 'The center name approved for certificates.'],
-        'achievement_label' => ['label' => 'Achievement type', 'description' => 'Surah, Juz, or three Juz according to the certificate type.'],
-        'achievement_name' => ['label' => 'Achievement name', 'description' => 'The surah or Juz name stored on the plan checkpoint.'],
+        'achievement_label' => ['label' => 'Achievement type', 'description' => 'Surah, Juz, or three Juz for Quran plans; book or part for Sunnah plans.'],
+        'achievement_name' => ['label' => 'Achievement name', 'description' => 'The Surah, Juz, book, or part stored on the plan checkpoint.'],
         'certificate_number' => ['label' => 'Certificate number', 'description' => 'The issued certificate’s unique number.'],
         'plan_name' => ['label' => 'Plan name', 'description' => 'The student’s plan when the certificate is issued.'],
         'plan_point_name' => ['label' => 'Plan checkpoint', 'description' => 'The achievement checkpoint name in the plan.'],
@@ -45,9 +45,15 @@ return [
     ],
     'types' => [
         'surah' => 'Surah',
-        'part' => 'Juz',
+        'part' => 'Quran Juz',
         'three_parts' => 'Three Juz',
+        'sunnah_book' => 'Sunnah Book',
+        'sunnah_part' => 'Sunnah Part',
         'achievement' => 'Achievement',
+    ],
+    'categories' => [
+        'quran' => 'Quran',
+        'sunnah' => 'Sunnah',
     ],
     'statuses' => [
         'valid' => 'Valid',

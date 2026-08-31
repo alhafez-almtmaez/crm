@@ -27,6 +27,7 @@ class PlanPointsExport implements FromCollection, ShouldAutoSize, WithEvents, Wi
             $row->surah_name,
             $row->part_name,
             $row->three_parts,
+            $row->book_name,
         ]);
     }
 
@@ -46,6 +47,7 @@ class PlanPointsExport implements FromCollection, ShouldAutoSize, WithEvents, Wi
             'اسم السورة',
             'اسم الجزء',
             'رقم الثلاث أجزاء',
+            'اسم الكتاب (السُنّة)',
         ];
     }
 

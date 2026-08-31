@@ -19,7 +19,8 @@ class PlanFactory extends Factory
     {
         return [
             'name' => fake()->unique()->bothify('Plan-###-??'),
-            'category' => fake()->randomElement(Plan::CATEGORIES),
+            // Quran is the backwards-compatible default for existing factories.
+            'category' => Plan::CATEGORY_QURAN,
         ];
     }
 

@@ -30,11 +30,7 @@ class CertificateContentTemplateService
     ];
 
     /** @var list<string> */
-    public const ACHIEVEMENT_TYPES = [
-        Certificate::ACHIEVEMENT_SURAH,
-        Certificate::ACHIEVEMENT_PART,
-        Certificate::ACHIEVEMENT_THREE_PARTS,
-    ];
+    public const ACHIEVEMENT_TYPES = Certificate::ACHIEVEMENT_TYPES;
 
     /** @var list<string> */
     public const GENDERS = [
