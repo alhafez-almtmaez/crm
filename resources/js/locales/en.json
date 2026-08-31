@@ -261,7 +261,7 @@
     "certificateName": "Center Name on Certificate",
     "certificateNameHint": "Leave blank to use the primary center name.",
     "showCenterManagerSignature": "Show Center Manager Signature",
-    "centerManagerSignatureHint": "When hidden, the center logo, manager title, stamp, and signature are removed, and the project identity moves into the center position.",
+    "centerManagerSignatureHint": "When hidden, the center logo, manager title, stamp, and signature are removed, and the project logo appears on both sides.",
     "phone": "Phone",
     "phonePlaceholder": "+9627XXXXXXXX",
     "phoneRequired": "Phone number is required.",

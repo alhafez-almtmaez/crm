@@ -153,7 +153,7 @@ test('certificate issuance snapshots the reached plan achievement and prevents d
     expect(Certificate::query()->count())->toBe(1);
 });
 
-test('certificate issuance snapshots hidden center identity and moves the complete project identity into its place', function () {
+test('certificate issuance snapshots hidden center identity and repeats the project logo on the left', function () {
     [$user, $student, , $partPoint] = certificateFixture();
     $center = Center::query()->findOrFail($student->center_id);
     $center->update([
@@ -211,10 +211,11 @@ test('certificate issuance snapshots hidden center identity and moves the comple
         ->assertSee('project-signature.png', false)
         ->assertSee('certificate--project-only', false)
         ->assertSee('class="certificate__logo certificate__logo--right"', false)
+        ->assertSee('class="certificate__logo certificate__logo--right certificate__logo--project-left"', false)
         ->assertDontSee('certificate__logo--project-solo', false)
         ->assertSee('certificate__signing--project-solo', false);
 
-    expect(substr_count($response->getContent(), 'right-logo.png'))->toBe(1);
+    expect(substr_count($response->getContent(), 'right-logo.png'))->toBe(2);
 
     Pdf::fake();
 
@@ -225,6 +226,7 @@ test('certificate issuance snapshots hidden center identity and moves the comple
     Pdf::assertRespondedWithPdf(function (PdfBuilder $pdf): bool {
         $payload = $pdf->viewData['certificate'] ?? [];
         $images = $payload['images'] ?? [];
+        $html = view($pdf->viewName, $pdf->viewData)->render();
 
         return ($payload['show_center_manager_signature'] ?? true) === false
             && ($payload['center_manager_title'] ?? null) === ''
@@ -233,7 +235,8 @@ test('certificate issuance snapshots hidden center identity and moves the comple
             && ($images['center_signature'] ?? null) === ''
             && str_starts_with((string) ($images['right_logo'] ?? ''), 'data:image/png;base64,')
             && str_starts_with((string) ($images['project_stamp'] ?? ''), 'data:image/png;base64,')
-            && str_starts_with((string) ($images['project_signature'] ?? ''), 'data:image/png;base64,');
+            && str_starts_with((string) ($images['project_signature'] ?? ''), 'data:image/png;base64,')
+            && substr_count($html, 'certificate__logo--project-left') === 1;
     });
 });
 
@@ -256,9 +259,10 @@ test('certificate issuance falls back to the center name and shows its manager s
     expect($certificate->center_name)->toBe($center->name)
         ->and($certificate->show_center_manager_signature)->toBeTrue();
 
-    $this->actingAs($user, 'web')
-        ->get(route('admin.students.certificates.show', [$student, $certificate]))
-        ->assertOk()
+    $response = $this->actingAs($user, 'web')
+        ->get(route('admin.students.certificates.show', [$student, $certificate]));
+
+    $response->assertOk()
         ->assertSee($center->name)
         ->assertSee('left-logo.png', false)
         ->assertSee('right-logo.png', false)
@@ -270,7 +274,10 @@ test('certificate issuance falls back to the center name and shows its manager s
         ->assertSee('project-signature.png', false)
         ->assertDontSee('certificate--project-only', false)
         ->assertDontSee('certificate__logo--project-solo', false)
+        ->assertDontSee('certificate__logo--project-left', false)
         ->assertDontSee('certificate__signing--project-solo', false);
+
+    expect(substr_count($response->getContent(), 'right-logo.png'))->toBe(1);
 });
 
 test('certificate issuance snapshots the design selected by center and achievement type', function () {
@@ -910,6 +917,7 @@ test('certificate redesign snapshots the current center identity visibility with
         ->assertOk()
         ->assertSee('certificate--project-only', false)
         ->assertSee('class="certificate__logo certificate__logo--right"', false)
+        ->assertSee('class="certificate__logo certificate__logo--right certificate__logo--project-left"', false)
         ->assertDontSee('certificate__logo--project-solo', false)
         ->assertSee('certificate__signing--project-solo', false)
         ->assertDontSee('left-logo.png', false)

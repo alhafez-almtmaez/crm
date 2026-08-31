@@ -188,6 +188,11 @@ body {
     height: 18.8%;
 }
 
+.certificate__logo--project-left {
+    right: auto;
+    left: 8.9%;
+}
+
 .certificate__title,
 .certificate__quote,
 .certificate__intro,

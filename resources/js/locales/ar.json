@@ -261,7 +261,7 @@
     "certificateName": "اسم المركز على الشهادة",
     "certificateNameHint": "اتركه فارغًا لاستخدام اسم المركز الأساسي.",
     "showCenterManagerSignature": "إظهار توقيع مدير المركز",
-    "centerManagerSignatureHint": "عند الإخفاء يُزال شعار المركز وعنوان المدير وختمه وتوقيعه، وتنتقل هوية المشروع إلى موضع المركز.",
+    "centerManagerSignatureHint": "عند الإخفاء يُزال شعار المركز وعنوان المدير وختمه وتوقيعه، ويظهر شعار المشروع في الجهتين.",
     "phone": "الهاتف",
     "phonePlaceholder": "+9627XXXXXXXX",
     "phoneRequired": "رقم الهاتف مطلوب.",

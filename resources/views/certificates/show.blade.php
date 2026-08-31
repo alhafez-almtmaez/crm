@@ -162,6 +162,15 @@
                      alt="{{ $certificate['labels']['right_logo'] }}">
             @endif
 
+            @if (($previewMode || ! $showCenterIdentity) && $certificate['images']['right_logo'] !== '')
+                <img class="certificate__logo certificate__logo--right certificate__logo--project-left"
+                     data-certificate-preview-project-left
+                     @if ($previewMode && $showCenterIdentity) hidden @endif
+                     src="{{ $certificate['images']['right_logo'] }}"
+                     alt=""
+                     aria-hidden="true">
+            @endif
+
             <h1 @class(['certificate__title', $titleClass => $titleClass !== '']) data-certificate-content-section="title" style="white-space: pre-line">@if ($usesContentTemplate)@include('certificates.partials.template-segments', ['segments' => $contentTemplateSegments['title']])@else{{ $certificate['title'] }}@endif</h1>
 
             <div @class(['certificate__quote', $quoteClass => $quoteClass !== '']) aria-label="{{ $certificate['labels']['poem'] }}">
@@ -352,6 +361,7 @@
                 const frame = document.querySelector('[data-certificate-preview-frame]');
                 const centerName = document.querySelector('[data-certificate-preview-center-name]');
                 const centerIdentityElements = document.querySelectorAll('[data-certificate-preview-center-identity]');
+                const projectLeftLogo = document.querySelector('[data-certificate-preview-project-left]');
                 const projectSigning = document.querySelector('[data-certificate-preview-project-signing]');
                 const student = document.querySelector('[data-certificate-preview-student]');
                 const achievementLabel = document.querySelector('[data-certificate-preview-achievement-label]');
@@ -529,6 +539,9 @@
                     centerIdentityElements.forEach((element) => {
                         element.hidden = !showCenterIdentity;
                     });
+                    if (projectLeftLogo) {
+                        projectLeftLogo.hidden = showCenterIdentity;
+                    }
 
                     const achievementType = typeof data.achievement_type === 'string'
                         ? data.achievement_type

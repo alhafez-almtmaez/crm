@@ -191,6 +191,14 @@ test('every certificate font family has readable regular and bold assets', funct
     }
 });
 
+test('project logo remains right and its hidden identity copy is positioned on the left', function () {
+    $stylesheet = file_get_contents(public_path('css/certificate.css'));
+
+    expect($stylesheet)->toBeString()
+        ->toMatch('/\.certificate__logo--right\s*\{[^}]*right:\s*8\.9%;[^}]*\}/s')
+        ->toMatch('/\.certificate__logo--project-left\s*\{[^}]*right:\s*auto;[^}]*left:\s*8\.9%;[^}]*\}/s');
+});
+
 test('certificate design page groups real certificate plan points by resolved achievement type', function () {
     $user = certificateDesignSettingsUser(['certificate_designs.view']);
     $laterPlan = Plan::factory()->create(['name' => 'خطة باء']);
@@ -363,6 +371,8 @@ test('certificate design web preview starts from a real hidden female center but
         ->get(route('admin.certificate-designs.preview'))
         ->assertOk()
         ->assertSee('class="certificate__logo certificate__logo--right"', false)
+        ->assertSee('class="certificate__logo certificate__logo--right certificate__logo--project-left"', false)
+        ->assertSee('projectLeftLogo.hidden = showCenterIdentity', false)
         ->assertDontSee('certificate__logo--project-solo', false)
         ->assertViewHas('certificate', function (array $certificate) use ($center): bool {
             $images = $certificate['images'] ?? [];
