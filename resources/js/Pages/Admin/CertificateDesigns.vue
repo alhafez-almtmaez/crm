@@ -426,7 +426,15 @@ const updateContentPreview = (value) => {
 const sendPreviewUpdate = () => {
     if (typeof window === 'undefined' || !previewFrame.value?.contentWindow) return;
 
-    previewFrame.value.contentWindow.postMessage(previewMessage.value, window.location.origin);
+    // Vue turns nested refs (notably the certificate content sections) into
+    // reactive Proxies. postMessage uses the structured-clone algorithm, which
+    // cannot clone a Proxy and throws DataCloneError. Serialize the small,
+    // plain-data preview contract first so content and appearance updates keep
+    // flowing through the same channel.
+    previewFrame.value.contentWindow.postMessage(
+        deepClone(previewMessage.value),
+        window.location.origin,
+    );
 };
 const handlePreviewMessage = (event) => {
     if (typeof window === 'undefined'
