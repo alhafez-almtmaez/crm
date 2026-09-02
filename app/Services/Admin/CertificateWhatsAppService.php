@@ -5,6 +5,7 @@ namespace App\Services\Admin;
 use App\Exceptions\WhatsAppMessageSendException;
 use App\Models\Certificate;
 use App\Models\Student;
+use App\Services\System\CertificateAchievementService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ class CertificateWhatsAppService
     public function __construct(
         private readonly CertificatePdfRenderer $pdfRenderer,
         private readonly WhatsAppMessagingService $messagingService,
+        private readonly CertificateAchievementService $certificateAchievements,
     ) {}
 
     /**
@@ -139,11 +141,11 @@ class CertificateWhatsAppService
             }
 
             $caption = __('certificates.whatsapp_caption', [
+                'center' => trim((string) $freshCertificate->center_name) !== ''
+                    ? (string) $freshCertificate->center_name
+                    : (string) __('certificates.default_center_name'),
                 'student' => (string) $freshCertificate->student_name,
-                'type' => $this->achievementTypeLabel((string) $freshCertificate->achievement_type),
-                'achievement' => (string) $freshCertificate->achievement_name,
-                'number' => (string) $freshCertificate->certificate_number,
-                'url' => $this->verificationUrl($freshCertificate),
+                'achievement_phrase' => $this->whatsappAchievementPhrase($freshCertificate),
             ]);
 
             try {
@@ -367,11 +369,8 @@ class CertificateWhatsAppService
 
     private function pdfFilename(Certificate $certificate): string
     {
-        $number = preg_replace('/[^A-Za-z0-9-]+/', '-', (string) $certificate->certificate_number);
-        $number = trim((string) $number, '-');
-
         $achievement = $this->achievementTypeLabel((string) $certificate->achievement_type)
-            .'-'.(string) $certificate->achievement_name;
+            .'-'.$this->achievementDisplayName($certificate);
         $achievement = preg_replace('/[^\p{L}\p{M}\p{N}_-]+/u', '-', $achievement) ?? '';
         $achievement = trim(preg_replace('/-+/u', '-', $achievement) ?? '', '-');
         $achievement = mb_strcut($achievement, 0, 120, 'UTF-8');
@@ -380,7 +379,28 @@ class CertificateWhatsAppService
             $achievement = Str::slug(__('certificates.types.achievement')) ?: 'achievement';
         }
 
-        return 'شهادة-'.$achievement.'-'.($number !== '' ? $number : (string) $certificate->ulid).'.pdf';
+        return 'شهادة-'.$achievement.'.pdf';
+    }
+
+    private function whatsappAchievementPhrase(Certificate $certificate): string
+    {
+        $type = in_array($certificate->achievement_type, Certificate::ACHIEVEMENT_TYPES, true)
+            ? (string) $certificate->achievement_type
+            : 'achievement';
+
+        return __('certificates.whatsapp_achievement_phrases.'.$type, [
+            'achievement' => $type === Certificate::ACHIEVEMENT_THREE_PARTS
+                ? (string) $certificate->achievement_name
+                : $this->achievementDisplayName($certificate),
+        ]);
+    }
+
+    private function achievementDisplayName(Certificate $certificate): string
+    {
+        return $this->certificateAchievements->displayName(
+            (string) $certificate->achievement_type,
+            (string) $certificate->achievement_name,
+        );
     }
 
     private function achievementTypeLabel(string $type): string
@@ -393,13 +413,6 @@ class CertificateWhatsAppService
             Certificate::ACHIEVEMENT_SUNNAH_PART => __('certificates.types.sunnah_part'),
             default => __('certificates.types.achievement'),
         };
-    }
-
-    private function verificationUrl(Certificate $certificate): string
-    {
-        $path = route('certificates.verify', ['public_id' => $certificate->public_id], absolute: false);
-
-        return rtrim((string) config('app.url'), '/').'/'.ltrim($path, '/');
     }
 
     private function lockKey(Certificate $certificate): string

@@ -76,6 +76,7 @@ class WhatsAppMessagingService
                 ],
             ],
             requestTimeoutSeconds: 60,
+            acceptSuccessfulEnvelopeWithoutMessage: true,
         );
     }
 
@@ -155,6 +156,7 @@ class WhatsAppMessagingService
         int|string|null $sourceId = null,
         ?Device $preferredDevice = null,
         int $requestTimeoutSeconds = 20,
+        bool $acceptSuccessfulEnvelopeWithoutMessage = false,
     ): void {
         $baseUrl = rtrim((string) config('services.whatsapp_api.url', ''), '/');
         if ($baseUrl === '') {
@@ -211,7 +213,7 @@ class WhatsAppMessagingService
                 }
             }
 
-            if (! $this->messageWasSent($response)) {
+            if (! $this->messageWasSent($response, $acceptSuccessfulEnvelopeWithoutMessage)) {
                 $message = $this->responseErrorMessage($response, __('whatsapp.send_failed'));
                 $remainingLookup = array_fill_keys([
                     ...$skippedRecipients,
@@ -420,14 +422,21 @@ class WhatsAppMessagingService
         return ! $response->successful() || $response->json('success') !== true;
     }
 
-    private function messageWasSent(Response $response): bool
-    {
+    private function messageWasSent(
+        Response $response,
+        bool $acceptSuccessfulEnvelopeWithoutMessage = false,
+    ): bool {
+        if (! $response->successful() || $response->json('success') !== true) {
+            return false;
+        }
+
+        if ($acceptSuccessfulEnvelopeWithoutMessage) {
+            return true;
+        }
+
         $message = $response->json('message');
 
-        return $response->successful()
-            && $response->json('success') === true
-            && is_array($message)
-            && $message !== [];
+        return is_array($message) && $message !== [];
     }
 
     private function responseErrorMessage(Response $response, string $fallback): string

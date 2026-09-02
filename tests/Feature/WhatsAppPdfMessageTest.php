@@ -35,7 +35,7 @@ test('whatsapp PDF document keeps registration verification and sends message me
     ]);
 
     $pdf = "%PDF-1.7\ncertificate-document";
-    $filename = 'شهادة-سورة-مريم-HMT-2026-ABCDEFGH.pdf';
+    $filename = 'شهادة-سورة-مريم.pdf';
 
     $messaging = app(WhatsAppMessagingService::class);
     $messaging->assertHasEligibleRecipients(['079 000 0111']);
@@ -93,7 +93,7 @@ test('whatsapp PDF document rejects invalid bytes before contacting the api', fu
         ['079 000 0111'],
         'شهادة الإنجاز',
         'not-a-pdf',
-        'شهادة-سورة-مريم-HMT-2026-ABCDEFGH.pdf',
+        'شهادة-سورة-مريم.pdf',
     ))->toThrow(InvalidArgumentException::class, 'not a valid PDF');
 
     Http::assertNothingSent();

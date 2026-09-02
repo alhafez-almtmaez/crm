@@ -79,7 +79,7 @@ test('an issued certificate is sent as a named PDF containing the achievement af
     ]);
     $fixture = certificateWhatsAppFixture();
     $pdf = "%PDF-1.7\ncertificate-document";
-    $expectedFilename = 'شهادة-سورة-مريم-'.$fixture['certificate']->certificate_number.'.pdf';
+    $expectedFilename = 'شهادة-سورة-مريم.pdf';
 
     $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($fixture, $pdf): void {
         $mock->shouldReceive('render')
@@ -94,7 +94,9 @@ test('an issued certificate is sent as a named PDF containing the achievement af
         }
 
         if (str_contains($request->url(), '/client/sendMessage/')) {
-            return Http::response(['success' => true, 'message' => ['id' => 'wa-message-1']]);
+            // wwebjs-api can accept and deliver a PDF while omitting the
+            // serialized message object from its successful response.
+            return Http::response(['success' => true]);
         }
 
         return Http::response([], 404);
@@ -130,7 +132,11 @@ test('an issued certificate is sent as a named PDF containing the achievement af
         ->and(data_get($sentRequest?->data(), 'options.sendMediaAsDocument'))->toBeTrue()
         ->and(data_get($sentRequest?->data(), 'options.caption'))->toContain('أحمد محمد عبدالله')
         ->and(data_get($sentRequest?->data(), 'options.caption'))
-        ->toContain('https://official.example/verify/'.$fixture['certificate']->public_id);
+        ->toContain('إتمام حفظ سورة *مريم*')
+        ->and(data_get($sentRequest?->data(), 'options.caption'))
+        ->not->toContain($fixture['certificate']->certificate_number)
+        ->and(data_get($sentRequest?->data(), 'options.caption'))
+        ->not->toContain('/verify/');
 
     $fixture['certificate']->refresh();
     expect($fixture['certificate']->whatsapp_sent_at)->not->toBeNull()
@@ -163,6 +169,90 @@ test('an issued certificate is sent as a named PDF containing the achievement af
         ->and($fixture['certificate']->whatsapp_sent_by)->toBeNull()
         ->and($fixture['certificate']->whatsapp_image_filename)->toBeNull();
 });
+
+test('certificate WhatsApp copy and filename use the clean achievement name', function (
+    string $achievementType,
+    string $achievementName,
+    string $expectedFilename,
+    string $expectedPhrase,
+) {
+    config([
+        'services.whatsapp_api.url' => 'https://whatsapp.test',
+        'services.whatsapp_api.key' => 'test-key',
+    ]);
+    $fixture = certificateWhatsAppFixture();
+    $fixture['certificate']->forceFill([
+        'achievement_type' => $achievementType,
+        'achievement_name' => $achievementName,
+        'center_name' => 'دار القرآن مسجد الصالحين',
+    ])->save();
+    $pdf = "%PDF-1.7\npart-certificate";
+
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
+    });
+
+    Http::fake(function (Request $request) {
+        if (str_contains($request->url(), '/client/isRegisteredUser/')) {
+            return Http::response(['success' => true, 'result' => true]);
+        }
+
+        if (str_contains($request->url(), '/client/sendMessage/')) {
+            return Http::response(['success' => true]);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->actingAs($fixture['user'], 'web')->postJson(route(
+        'admin.students.certificates.whatsapp',
+        [$fixture['student'], $fixture['certificate']],
+    ))->assertOk();
+
+    $sentRequest = collect(Http::recorded())
+        ->map(static fn (array $record): Request => $record[0])
+        ->first(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/'));
+    $caption = (string) data_get($sentRequest?->data(), 'options.caption');
+
+    expect(data_get($sentRequest?->data(), 'content.filename'))
+        ->toBe($expectedFilename)
+        ->and($caption)->toContain('تتقدّم إدارة *دار القرآن مسجد الصالحين* بأحرّ التهاني')
+        ->and($caption)->toContain('بمناسبة '.$expectedPhrase)
+        ->and($caption)->toContain('📎 الشهادة مرفقة بصيغة PDF.')
+        ->and($caption)->not->toContain($fixture['certificate']->certificate_number)
+        ->and($caption)->not->toContain('/verify/');
+})->with([
+    'Quran surah' => [
+        Certificate::ACHIEVEMENT_SURAH,
+        'سورة مريم',
+        'شهادة-سورة-مريم.pdf',
+        'إتمام حفظ سورة *مريم*',
+    ],
+    'Quran part' => [
+        Certificate::ACHIEVEMENT_PART,
+        'الجزء عمَّ',
+        'شهادة-جزء-من-القرآن-عمَّ.pdf',
+        'إتمام حفظ جزء *عمَّ* من القرآن الكريم',
+    ],
+    'three Quran parts' => [
+        Certificate::ACHIEVEMENT_THREE_PARTS,
+        'الأجزاء الثلاثة الأولى',
+        'شهادة-ثلاثة-أجزاء-الأولى.pdf',
+        'إتمام حفظ *الأجزاء الثلاثة الأولى* من القرآن الكريم',
+    ],
+    'Sunnah book' => [
+        Certificate::ACHIEVEMENT_SUNNAH_BOOK,
+        'كتاب الأربعين النووية',
+        'شهادة-كتاب-من-السُنّة-الأربعين-النووية.pdf',
+        'إتمام حفظ كتاب *الأربعين النووية* من السُّنَّة النبوية',
+    ],
+    'Sunnah part' => [
+        Certificate::ACHIEVEMENT_SUNNAH_PART,
+        'الجزء الأول',
+        'شهادة-جزء-من-السُنّة-الأول.pdf',
+        'إتمام حفظ جزء *الأول* من السُّنَّة النبوية',
+    ],
+]);
 
 test('an unregistered WhatsApp number is rejected before rendering or sending the certificate', function () {
     config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
@@ -233,6 +323,51 @@ test('an unregistered number is skipped while the certificate is sent to another
         && $request['chatId'] === '962787654321@s.whatsapp.net');
     Http::assertNotSent(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/')
         && $request['chatId'] === '962791234567@s.whatsapp.net');
+});
+
+test('a successful PDF envelope without a message object continues to every registered recipient', function () {
+    config([
+        'services.whatsapp_api.url' => 'https://whatsapp.test',
+        'services.whatsapp_api.message_delay_seconds' => 0,
+    ]);
+    $fixture = certificateWhatsAppFixture();
+    $fixture['student']->update(['phone_number' => '0787654321']);
+
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('render')->once()->andReturn("%PDF-1.7\ntwo-recipients");
+    });
+
+    Http::fake(function (Request $request) {
+        if (str_contains($request->url(), '/client/isRegisteredUser/')) {
+            return Http::response(['success' => true, 'result' => true]);
+        }
+
+        if (str_contains($request->url(), '/client/sendMessage/')) {
+            return Http::response(['success' => true]);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->actingAs($fixture['user'], 'web')
+        ->postJson(route('admin.students.certificates.whatsapp', [
+            $fixture['student'],
+            $fixture['certificate'],
+        ]))
+        ->assertOk()
+        ->assertJsonPath('certificate.whatsapp_delivery_status', Certificate::WHATSAPP_DELIVERY_SENT);
+
+    $sendRequests = collect(Http::recorded())
+        ->map(static fn (array $record): Request => $record[0])
+        ->filter(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/'));
+
+    expect($sendRequests)->toHaveCount(2)
+        ->and($sendRequests->map(
+            static fn (Request $request): mixed => $request['chatId'],
+        )->values()->all())->toBe([
+            '962791234567@s.whatsapp.net',
+            '962787654321@s.whatsapp.net',
+        ]);
 });
 
 test('a confirmed partial delivery is marked as sent to prevent duplicate certificates', function () {
@@ -535,7 +670,7 @@ test('a stale processing claim is shown for review and can be cleared by explici
         ->where('id', $fixture['certificate']->id)
         ->update([
             'whatsapp_delivery_status' => Certificate::WHATSAPP_DELIVERY_PROCESSING,
-            'whatsapp_image_filename' => 'شهادة-سورة-مريم-'.$fixture['certificate']->certificate_number.'.pdf',
+            'whatsapp_image_filename' => 'شهادة-سورة-مريم.pdf',
             'updated_at' => now()->subMinutes(Certificate::WHATSAPP_PROCESSING_STALE_AFTER_MINUTES + 1),
         ]);
 
