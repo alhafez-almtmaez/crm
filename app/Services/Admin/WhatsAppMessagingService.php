@@ -17,10 +17,10 @@ class WhatsAppMessagingService
 {
     private const DEFAULT_MEDIA_URL = 'https://dash.alhafez-almtmaez.com/media/logos/logo.png';
 
-    private const PNG_SIGNATURE = "\x89PNG\r\n\x1a\n";
+    private const PDF_SIGNATURE = '%PDF-';
 
     /** Keeps the base64 JSON request below wwebjs-api's default body limit. */
-    private const MAX_PNG_BYTES = 8_000_000;
+    private const MAX_PDF_BYTES = 8_000_000;
 
     /** @var array<string, bool> */
     private array $registrationResults = [];
@@ -42,21 +42,21 @@ class WhatsAppMessagingService
     }
 
     /**
-     * Send one PNG image with a caption to personal WhatsApp numbers.
+     * Send one PDF document with a caption to personal WhatsApp numbers.
      *
      * @param  array<int, string>  $phones
      */
-    public function sendPngCaption(
+    public function sendPdfDocument(
         array $phones,
         string $caption,
-        string $pngBytes,
+        string $pdfBytes,
         string $filename,
     ): void {
-        $filename = $this->validatedPngFilename($filename);
-        $this->assertValidPng($pngBytes);
+        $filename = $this->validatedPdfFilename($filename);
+        $this->assertValidPdf($pdfBytes);
 
-        $encodedPng = base64_encode($pngBytes);
-        $filesize = strlen($pngBytes);
+        $encodedPdf = base64_encode($pdfBytes);
+        $filesize = strlen($pdfBytes);
 
         $this->sendPreparedMessageToChatIds(
             $this->recipientChatIds($phones),
@@ -65,12 +65,15 @@ class WhatsAppMessagingService
                 'chatId' => $chatId,
                 'contentType' => 'MessageMedia',
                 'content' => [
-                    'mimetype' => 'image/png',
-                    'data' => $encodedPng,
+                    'mimetype' => 'application/pdf',
+                    'data' => $encodedPdf,
                     'filename' => $filename,
                     'filesize' => $filesize,
                 ],
-                'options' => ['caption' => $caption],
+                'options' => [
+                    'caption' => $caption,
+                    'sendMediaAsDocument' => true,
+                ],
             ],
             requestTimeoutSeconds: 60,
         );
@@ -477,26 +480,26 @@ class WhatsAppMessagingService
         ];
     }
 
-    private function assertValidPng(string $pngBytes): void
+    private function assertValidPdf(string $pdfBytes): void
     {
-        if (! str_starts_with($pngBytes, self::PNG_SIGNATURE)) {
-            throw new InvalidArgumentException('The supplied media is not a valid PNG image.');
+        if (! str_starts_with($pdfBytes, self::PDF_SIGNATURE)) {
+            throw new InvalidArgumentException('The supplied media is not a valid PDF document.');
         }
 
-        if (strlen($pngBytes) > self::MAX_PNG_BYTES) {
-            throw new InvalidArgumentException('The PNG image is too large to send through WhatsApp.');
+        if (strlen($pdfBytes) > self::MAX_PDF_BYTES) {
+            throw new InvalidArgumentException('The PDF document is too large to send through WhatsApp.');
         }
     }
 
-    private function validatedPngFilename(string $filename): string
+    private function validatedPdfFilename(string $filename): string
     {
         $filename = trim($filename);
 
         if ($filename === ''
             || strlen($filename) > 255
-            || ! str_ends_with(strtolower($filename), '.png')
+            || ! str_ends_with(strtolower($filename), '.pdf')
             || preg_match('~[\x00-\x1F\x7F/\\\\]~', $filename) === 1) {
-            throw new InvalidArgumentException('The PNG filename is invalid.');
+            throw new InvalidArgumentException('The PDF filename is invalid.');
         }
 
         return $filename;

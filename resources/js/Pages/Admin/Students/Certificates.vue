@@ -56,7 +56,24 @@ const revokeReason = ref('');
 const revoking = ref(false);
 const issuedCertificates = ref([...props.certificates]);
 const sendingCertificateIds = ref(new Set());
+const activeCertificateTab = ref('available');
 const validAvailableCount = computed(() => props.availableCertificates.filter((item) => item.can_issue).length);
+const certificateTabOptions = computed(() => [
+    {
+        value: 'available',
+        label: t('certificates.availableTitle'),
+        icon: 'pi-id-card',
+        count: validAvailableCount.value,
+        badgeClass: 'bg-cyan-100 text-cyan-900 dark:bg-cyan-900/40 dark:text-cyan-200',
+    },
+    {
+        value: 'issued',
+        label: t('certificates.issuedTitle'),
+        icon: 'pi-file-check',
+        count: issuedCertificates.value.length,
+        badgeClass: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200',
+    },
+]);
 const breadcrumbItems = computed(() => [
     { labelKey: 'breadcrumbs.dashboard', href: '/admin/dashboard' },
     { labelKey: 'breadcrumbs.students', href: '/admin/students' },
@@ -65,6 +82,22 @@ const breadcrumbItems = computed(() => [
 
 const goBack = () => {
     router.get('/admin/students');
+};
+
+const focusCertificateTab = (index) => {
+    const normalizedIndex = (index + certificateTabOptions.value.length) % certificateTabOptions.value.length;
+    const tabValue = certificateTabOptions.value[normalizedIndex].value;
+
+    activeCertificateTab.value = tabValue;
+    requestAnimationFrame(() => {
+        document.getElementById(`student-certificates-tab-${tabValue}`)?.focus();
+    });
+};
+
+const focusAdjacentCertificateTab = (index, offset) => {
+    const directionAwareOffset = document.documentElement.dir === 'rtl' ? -offset : offset;
+
+    focusCertificateTab(index + directionAwareOffset);
 };
 
 watch(
@@ -389,16 +422,49 @@ const openUrl = (url) => {
                 </div>
             </article>
 
-            <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
-                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <h3 class="text-xl font-semibold">{{ t('certificates.availableTitle') }}</h3>
-                        <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificates.availableHint') }}</p>
-                    </div>
-                    <span class="rounded-full bg-cyan-100 px-3 py-1 text-sm font-bold text-cyan-900">
-                        {{ validAvailableCount }}
-                    </span>
+            <nav
+                class="rounded-(--radius-base) border border-(--border) bg-(--card) p-1.5 shadow-(--shadow-sm)"
+                role="tablist"
+                :aria-label="t('certificates.studentCertificates')"
+            >
+                <div class="grid grid-cols-2 gap-1">
+                    <button
+                        v-for="(tab, index) in certificateTabOptions"
+                        :id="`student-certificates-tab-${tab.value}`"
+                        :key="tab.value"
+                        type="button"
+                        role="tab"
+                        class="flex min-h-14 min-w-0 flex-wrap items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition sm:text-base"
+                        :class="activeCertificateTab === tab.value
+                            ? 'bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] text-[var(--accent)] ring-1 ring-inset ring-[color-mix(in_oklab,var(--accent)_24%,transparent)]'
+                            : 'text-(--muted-foreground) hover:bg-[color-mix(in_oklab,var(--accent)_6%,transparent)] hover:text-(--foreground)'"
+                        :aria-selected="activeCertificateTab === tab.value"
+                        :aria-controls="`student-certificates-panel-${tab.value}`"
+                        :tabindex="activeCertificateTab === tab.value ? 0 : -1"
+                        @click="activeCertificateTab = tab.value"
+                        @keydown.left.prevent="focusAdjacentCertificateTab(index, -1)"
+                        @keydown.right.prevent="focusAdjacentCertificateTab(index, 1)"
+                        @keydown.home.prevent="focusCertificateTab(0)"
+                        @keydown.end.prevent="focusCertificateTab(certificateTabOptions.length - 1)"
+                    >
+                        <i class="pi" :class="tab.icon" aria-hidden="true"></i>
+                        <span class="leading-5">{{ tab.label }}</span>
+                        <span class="rounded-full px-2.5 py-0.5 text-xs font-bold" :class="tab.badgeClass">
+                            {{ tab.count }}
+                        </span>
+                    </button>
                 </div>
+            </nav>
+
+            <article
+                v-show="activeCertificateTab === 'available'"
+                id="student-certificates-panel-available"
+                class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)"
+                role="tabpanel"
+                aria-labelledby="student-certificates-tab-available"
+                tabindex="0"
+            >
+                <p class="mb-4 text-sm text-(--muted-foreground)">{{ t('certificates.availableHint') }}</p>
 
                 <div v-if="availableCertificates.length" class="overflow-x-auto rounded-md border border-(--border)">
                     <table class="min-w-full border-separate border-spacing-0 text-sm">
@@ -440,16 +506,15 @@ const openUrl = (url) => {
                 <p v-if="!canIssue" class="mt-3 text-sm text-amber-700">{{ t('certificates.viewOnlyNotice') }}</p>
             </article>
 
-            <article class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)">
-                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <h3 class="text-xl font-semibold">{{ t('certificates.issuedTitle') }}</h3>
-                        <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificates.issuedHint') }}</p>
-                    </div>
-                    <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-900">
-                        {{ issuedCertificates.length }}
-                    </span>
-                </div>
+            <article
+                v-show="activeCertificateTab === 'issued'"
+                id="student-certificates-panel-issued"
+                class="rounded-(--radius-base) border border-(--border) bg-(--card) p-5 text-(--card-foreground) shadow-(--shadow-sm)"
+                role="tabpanel"
+                aria-labelledby="student-certificates-tab-issued"
+                tabindex="0"
+            >
+                <p class="mb-4 text-sm text-(--muted-foreground)">{{ t('certificates.issuedHint') }}</p>
 
                 <div v-if="issuedCertificates.length" class="overflow-x-auto rounded-md border border-(--border)">
                     <table class="min-w-full border-separate border-spacing-0 text-sm">

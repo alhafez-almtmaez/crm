@@ -9,17 +9,17 @@ use Illuminate\Support\Facades\Http;
 uses(RefreshDatabase::class);
 
 /** @return array<string, mixed> */
-function successfulPngWwebjsPayload(): array
+function successfulPdfWwebjsPayload(): array
 {
     return [
         'success' => true,
         'message' => [
-            'id' => ['_serialized' => 'png-message-1'],
+            'id' => ['_serialized' => 'pdf-message-1'],
         ],
     ];
 }
 
-test('whatsapp png message keeps registration verification and sends message media as base64', function () {
+test('whatsapp PDF document keeps registration verification and sends message media as base64', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
     config()->set('services.whatsapp_api.key', 'whatsapp-key');
     config()->set('services.whatsapp_api.message_delay_seconds', 0);
@@ -31,18 +31,18 @@ test('whatsapp png message keeps registration verification and sends message med
             'success' => true,
             'result' => true,
         ]),
-        'https://wa.test/client/sendMessage/main_session' => Http::response(successfulPngWwebjsPayload()),
+        'https://wa.test/client/sendMessage/main_session' => Http::response(successfulPdfWwebjsPayload()),
     ]);
 
-    $png = "\x89PNG\r\n\x1a\ncertificate-image";
-    $filename = 'certificate-HMT-2026-ABCDEFGH.png';
+    $pdf = "%PDF-1.7\ncertificate-document";
+    $filename = 'شهادة-سورة-مريم-HMT-2026-ABCDEFGH.pdf';
 
     $messaging = app(WhatsAppMessagingService::class);
     $messaging->assertHasEligibleRecipients(['079 000 0111']);
-    $messaging->sendPngCaption(
+    $messaging->sendPdfDocument(
         ['079 000 0111'],
         'شهادة الإنجاز',
-        $png,
+        $pdf,
         $filename,
     );
 
@@ -58,14 +58,15 @@ test('whatsapp png message keeps registration verification and sends message med
         && $request->hasHeader('x-api-key', 'whatsapp-key')
         && $request['chatId'] === '962790000111@s.whatsapp.net'
         && $request['contentType'] === 'MessageMedia'
-        && $request['content']['mimetype'] === 'image/png'
-        && $request['content']['data'] === base64_encode($png)
+        && $request['content']['mimetype'] === 'application/pdf'
+        && $request['content']['data'] === base64_encode($pdf)
         && $request['content']['filename'] === $filename
-        && $request['content']['filesize'] === strlen($png)
-        && $request['options']['caption'] === 'شهادة الإنجاز');
+        && $request['content']['filesize'] === strlen($pdf)
+        && $request['options']['caption'] === 'شهادة الإنجاز'
+        && $request['options']['sendMediaAsDocument'] === true);
 });
 
-test('whatsapp png message does not send media when the personal number is not registered', function () {
+test('whatsapp PDF document does not send media when the personal number is not registered', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
 
     Device::factory()->connected()->create(['session_id' => 'main_session']);
@@ -77,8 +78,6 @@ test('whatsapp png message does not send media when the personal number is not r
         ]),
     ]);
 
-    $png = "\x89PNG\r\n\x1a\ncertificate-image";
-
     expect(fn () => app(WhatsAppMessagingService::class)->assertHasEligibleRecipients(
         ['079 000 0111'],
     ))->toThrow(WhatsAppRecipientNotRegisteredException::class);
@@ -86,16 +85,16 @@ test('whatsapp png message does not send media when the personal number is not r
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/client/sendMessage/'));
 });
 
-test('whatsapp png message rejects invalid bytes before contacting the api', function () {
+test('whatsapp PDF document rejects invalid bytes before contacting the api', function () {
     config()->set('services.whatsapp_api.url', 'https://wa.test');
     Http::fake();
 
-    expect(fn () => app(WhatsAppMessagingService::class)->sendPngCaption(
+    expect(fn () => app(WhatsAppMessagingService::class)->sendPdfDocument(
         ['079 000 0111'],
         'شهادة الإنجاز',
-        'not-a-png',
-        'certificate-HMT-2026-ABCDEFGH.png',
-    ))->toThrow(InvalidArgumentException::class, 'not a valid PNG');
+        'not-a-pdf',
+        'شهادة-سورة-مريم-HMT-2026-ABCDEFGH.pdf',
+    ))->toThrow(InvalidArgumentException::class, 'not a valid PDF');
 
     Http::assertNothingSent();
 });

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Throwable;
@@ -18,7 +19,7 @@ class CertificateWhatsAppService
     private const LOCK_SECONDS = 300;
 
     public function __construct(
-        private readonly CertificateImageRenderer $imageRenderer,
+        private readonly CertificatePdfRenderer $pdfRenderer,
         private readonly WhatsAppMessagingService $messagingService,
     ) {}
 
@@ -68,7 +69,7 @@ class CertificateWhatsAppService
                         $student,
                         $freshCertificate,
                         $freshCertificate->whatsapp_image_filename
-                            ?: $this->imageFilename($freshCertificate),
+                            ?: $this->pdfFilename($freshCertificate),
                     );
 
                     return [
@@ -98,7 +99,7 @@ class CertificateWhatsAppService
                 ]);
             }
 
-            $filename = $this->imageFilename($freshCertificate);
+            $filename = $this->pdfFilename($freshCertificate);
             $freshCertificate = $this->claimDelivery($student, $freshCertificate, $filename);
 
             try {
@@ -123,17 +124,17 @@ class CertificateWhatsAppService
             }
 
             try {
-                $pngBytes = $this->imageRenderer->render($student, $freshCertificate);
+                $pdfBytes = $this->pdfRenderer->render($student, $freshCertificate);
             } catch (Throwable $exception) {
                 $this->releaseDeliveryClaim($student, $freshCertificate);
 
-                Log::error('Certificate image rendering failed before WhatsApp delivery.', [
+                Log::error('Certificate PDF rendering failed before WhatsApp delivery.', [
                     'certificate_id' => (int) $freshCertificate->id,
                     'exception' => $exception,
                 ]);
 
                 throw ValidationException::withMessages([
-                    'certificate' => __('certificates.whatsapp_image_failed'),
+                    'certificate' => __('certificates.whatsapp_pdf_failed'),
                 ]);
             }
 
@@ -146,7 +147,7 @@ class CertificateWhatsAppService
             ]);
 
             try {
-                $this->messagingService->sendPngCaption($phones, $caption, $pngBytes, $filename);
+                $this->messagingService->sendPdfDocument($phones, $caption, $pdfBytes, $filename);
             } catch (WhatsAppMessageSendException $exception) {
                 $delivery = $this->messagingService->deliveryFailureMeta($phones, null, $exception);
 
@@ -202,13 +203,13 @@ class CertificateWhatsAppService
             } catch (InvalidArgumentException $exception) {
                 $this->releaseDeliveryClaim($student, $freshCertificate);
 
-                Log::error('Certificate PNG was rejected before WhatsApp delivery.', [
+                Log::error('Certificate PDF was rejected before WhatsApp delivery.', [
                     'certificate_id' => (int) $freshCertificate->id,
                     'exception' => $exception,
                 ]);
 
                 throw ValidationException::withMessages([
-                    'certificate' => __('certificates.whatsapp_image_failed'),
+                    'certificate' => __('certificates.whatsapp_pdf_failed'),
                 ]);
             } catch (Throwable $exception) {
                 $uncertainCertificate = $this->markDeliveryAsUncertain(
@@ -364,12 +365,22 @@ class CertificateWhatsAppService
         });
     }
 
-    private function imageFilename(Certificate $certificate): string
+    private function pdfFilename(Certificate $certificate): string
     {
         $number = preg_replace('/[^A-Za-z0-9-]+/', '-', (string) $certificate->certificate_number);
         $number = trim((string) $number, '-');
 
-        return 'certificate-'.($number !== '' ? $number : (string) $certificate->ulid).'.png';
+        $achievement = $this->achievementTypeLabel((string) $certificate->achievement_type)
+            .'-'.(string) $certificate->achievement_name;
+        $achievement = preg_replace('/[^\p{L}\p{M}\p{N}_-]+/u', '-', $achievement) ?? '';
+        $achievement = trim(preg_replace('/-+/u', '-', $achievement) ?? '', '-');
+        $achievement = mb_strcut($achievement, 0, 120, 'UTF-8');
+
+        if ($achievement === '') {
+            $achievement = Str::slug(__('certificates.types.achievement')) ?: 'achievement';
+        }
+
+        return 'شهادة-'.$achievement.'-'.($number !== '' ? $number : (string) $certificate->ulid).'.pdf';
     }
 
     private function achievementTypeLabel(string $type): string

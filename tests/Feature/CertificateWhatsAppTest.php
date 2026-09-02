@@ -8,7 +8,7 @@ use App\Models\Plan;
 use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\User;
-use App\Services\Admin\CertificateImageRenderer;
+use App\Services\Admin\CertificatePdfRenderer;
 use App\Services\Admin\StudentCertificateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -71,20 +71,21 @@ function certificateWhatsAppFixture(): array
     return compact('user', 'student', 'certificate');
 }
 
-test('an issued certificate is sent as a named PNG after WhatsApp registration verification', function () {
+test('an issued certificate is sent as a named PDF containing the achievement after WhatsApp registration verification', function () {
     config([
         'app.url' => 'https://official.example',
         'services.whatsapp_api.url' => 'https://whatsapp.test',
         'services.whatsapp_api.key' => 'test-key',
     ]);
     $fixture = certificateWhatsAppFixture();
-    $png = "\x89PNG\r\n\x1a\ncertificate-image";
+    $pdf = "%PDF-1.7\ncertificate-document";
+    $expectedFilename = 'شهادة-سورة-مريم-'.$fixture['certificate']->certificate_number.'.pdf';
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($fixture, $png): void {
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($fixture, $pdf): void {
         $mock->shouldReceive('render')
             ->once()
             ->withArgs(fn (Student $student, Certificate $certificate): bool => $student->is($fixture['student']) && $certificate->is($fixture['certificate']))
-            ->andReturn($png);
+            ->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) {
@@ -113,7 +114,7 @@ test('an issued certificate is sent as a named PNG after WhatsApp registration v
         ->assertJsonPath('certificate.can_send_whatsapp', false)
         ->assertJsonPath(
             'certificate.whatsapp_image_filename',
-            'certificate-'.$fixture['certificate']->certificate_number.'.png',
+            $expectedFilename,
         );
 
     $sentRequest = collect(Http::recorded())
@@ -122,10 +123,11 @@ test('an issued certificate is sent as a named PNG after WhatsApp registration v
 
     expect($sentRequest)->toBeInstanceOf(Request::class)
         ->and(data_get($sentRequest?->data(), 'contentType'))->toBe('MessageMedia')
-        ->and(data_get($sentRequest?->data(), 'content.mimetype'))->toBe('image/png')
-        ->and(data_get($sentRequest?->data(), 'content.data'))->toBe(base64_encode($png))
+        ->and(data_get($sentRequest?->data(), 'content.mimetype'))->toBe('application/pdf')
+        ->and(data_get($sentRequest?->data(), 'content.data'))->toBe(base64_encode($pdf))
         ->and(data_get($sentRequest?->data(), 'content.filename'))
-        ->toBe('certificate-'.$fixture['certificate']->certificate_number.'.png')
+        ->toBe($expectedFilename)
+        ->and(data_get($sentRequest?->data(), 'options.sendMediaAsDocument'))->toBeTrue()
         ->and(data_get($sentRequest?->data(), 'options.caption'))->toContain('أحمد محمد عبدالله')
         ->and(data_get($sentRequest?->data(), 'options.caption'))
         ->toContain('https://official.example/verify/'.$fixture['certificate']->public_id);
@@ -135,7 +137,7 @@ test('an issued certificate is sent as a named PNG after WhatsApp registration v
         ->and($fixture['certificate']->whatsapp_sent_by)->toBe($fixture['user']->id)
         ->and($fixture['certificate']->whatsapp_delivery_status)->toBe(Certificate::WHATSAPP_DELIVERY_SENT)
         ->and($fixture['certificate']->whatsapp_image_filename)
-        ->toBe('certificate-'.$fixture['certificate']->certificate_number.'.png');
+        ->toBe($expectedFilename);
 
     $requestsBeforeRetry = count(Http::recorded());
 
@@ -166,7 +168,7 @@ test('an unregistered WhatsApp number is rejected before rendering or sending th
     config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
     $fixture = certificateWhatsAppFixture();
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock): void {
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
         $mock->shouldNotReceive('render');
     });
 
@@ -196,10 +198,10 @@ test('an unregistered number is skipped while the certificate is sent to another
     ]);
     $fixture = certificateWhatsAppFixture();
     $fixture['student']->update(['phone_number' => '0787654321']);
-    $png = "\x89PNG\r\n\x1a\nmixed-recipients";
+    $pdf = "%PDF-1.7\nmixed-recipients";
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($png): void {
-        $mock->shouldReceive('render')->once()->andReturn($png);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) {
@@ -240,11 +242,11 @@ test('a confirmed partial delivery is marked as sent to prevent duplicate certif
     ]);
     $fixture = certificateWhatsAppFixture();
     $fixture['student']->update(['phone_number' => '0787654321']);
-    $png = "\x89PNG\r\n\x1a\npartial-delivery";
+    $pdf = "%PDF-1.7\npartial-delivery";
     $sendAttempts = 0;
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($png): void {
-        $mock->shouldReceive('render')->once()->andReturn($png);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) use (&$sendAttempts) {
@@ -281,10 +283,10 @@ test('a confirmed partial delivery is marked as sent to prevent duplicate certif
 test('an ambiguous transport failure is blocked from automatic resend until the certificate is reviewed', function () {
     config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
     $fixture = certificateWhatsAppFixture();
-    $png = "\x89PNG\r\n\x1a\nunknown-delivery";
+    $pdf = "%PDF-1.7\nunknown-delivery";
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($png): void {
-        $mock->shouldReceive('render')->once()->andReturn($png);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) {
@@ -342,11 +344,11 @@ test('a transport failure after one recipient received the certificate cannot re
     ]);
     $fixture = certificateWhatsAppFixture();
     $fixture['student']->update(['phone_number' => '0787654321']);
-    $png = "\x89PNG\r\n\x1a\nunknown-after-first-recipient";
+    $pdf = "%PDF-1.7\nunknown-after-first-recipient";
     $sendAttempts = 0;
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($png): void {
-        $mock->shouldReceive('render')->once()->andReturn($png);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) use (&$sendAttempts) {
@@ -395,10 +397,10 @@ test('a transport failure after one recipient received the certificate cannot re
 test('an HTTP failure after starting the WhatsApp send is treated as uncertain and is not retried', function () {
     config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
     $fixture = certificateWhatsAppFixture();
-    $png = "\x89PNG\r\n\x1a\nunknown-http-delivery";
+    $pdf = "%PDF-1.7\nunknown-http-delivery";
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($png): void {
-        $mock->shouldReceive('render')->once()->andReturn($png);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) {
@@ -439,10 +441,10 @@ test('an HTTP failure after starting the WhatsApp send is treated as uncertain a
 test('a known device failure before the first send releases the certificate for a later retry', function () {
     config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
     $fixture = certificateWhatsAppFixture();
-    $png = "\x89PNG\r\n\x1a\nknown-zero-delivery";
+    $pdf = "%PDF-1.7\nknown-zero-delivery";
 
-    $this->mock(CertificateImageRenderer::class, function (MockInterface $mock) use ($png): void {
-        $mock->shouldReceive('render')->once()->andReturn($png);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($pdf): void {
+        $mock->shouldReceive('render')->once()->andReturn($pdf);
     });
 
     Http::fake(function (Request $request) {
@@ -533,7 +535,7 @@ test('a stale processing claim is shown for review and can be cleared by explici
         ->where('id', $fixture['certificate']->id)
         ->update([
             'whatsapp_delivery_status' => Certificate::WHATSAPP_DELIVERY_PROCESSING,
-            'whatsapp_image_filename' => 'certificate-'.$fixture['certificate']->certificate_number.'.png',
+            'whatsapp_image_filename' => 'شهادة-سورة-مريم-'.$fixture['certificate']->certificate_number.'.pdf',
             'updated_at' => now()->subMinutes(Certificate::WHATSAPP_PROCESSING_STALE_AFTER_MINUTES + 1),
         ]);
 
