@@ -108,6 +108,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('students/{student}/certificates', [StudentCertificateController::class, 'index'])->name('students.certificates.index');
         Route::post('students/{student}/certificates', [StudentCertificateController::class, 'store'])->name('students.certificates.store');
         Route::put('students/{student}/certificates/{certificate}/design', [StudentCertificateController::class, 'redesign'])->name('students.certificates.redesign');
+        Route::post('students/{student}/certificates/{certificate}/whatsapp', [StudentCertificateController::class, 'sendWhatsApp'])->name('students.certificates.whatsapp');
         Route::patch('students/{student}/certificates/{certificate}/revoke', [StudentCertificateController::class, 'revoke'])->name('students.certificates.revoke');
         Route::get('students/{student}/certificates/{certificate}', [StudentCertificateController::class, 'show'])->name('students.certificates.show');
         Route::get('students/{student}/certificates/{certificate}/pdf', [StudentCertificateController::class, 'pdf'])->name('students.certificates.pdf');

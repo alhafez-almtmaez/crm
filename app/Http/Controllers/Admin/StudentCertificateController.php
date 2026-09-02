@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\CertificateStoreRequest;
 use App\Models\Certificate;
 use App\Models\Student;
 use App\Services\Admin\AdminDataScopeService;
+use App\Services\Admin\CertificateWhatsAppService;
 use App\Services\Admin\StudentCertificateService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,7 @@ class StudentCertificateController extends Controller implements HasMiddleware
     public function __construct(
         private readonly StudentCertificateService $service,
         private readonly AdminDataScopeService $dataScope,
+        private readonly CertificateWhatsAppService $certificateWhatsApp,
     ) {}
 
     public static function middleware(): array
@@ -31,6 +33,7 @@ class StudentCertificateController extends Controller implements HasMiddleware
             new Middleware('can:students.view', only: ['index', 'show', 'pdf']),
             new Middleware('can:students.update', only: ['store', 'redesign']),
             new Middleware('can:certificates.revoke', only: ['revoke']),
+            new Middleware('can:certificates.send', only: ['sendWhatsApp']),
         ];
     }
 
@@ -93,6 +96,21 @@ class StudentCertificateController extends Controller implements HasMiddleware
         return response()->json([
             'message' => __('certificates.revoked_successfully'),
             'certificate' => $this->service->listItem($student, $certificate),
+        ]);
+    }
+
+    public function sendWhatsApp(Student $student, Certificate $certificate): JsonResponse
+    {
+        $this->authorizeNestedCertificate($student, $certificate);
+
+        $result = $this->certificateWhatsApp->send($student, $certificate);
+
+        return response()->json([
+            'message' => $result['message'],
+            'partial' => $result['partial'],
+            'already_sent' => $result['already_sent'],
+            'uncertain' => $result['uncertain'],
+            'certificate' => $this->service->listItem($student, $result['certificate']),
         ]);
     }
 

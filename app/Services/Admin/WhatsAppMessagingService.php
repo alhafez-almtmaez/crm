@@ -9,12 +9,18 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
 class WhatsAppMessagingService
 {
     private const DEFAULT_MEDIA_URL = 'https://dash.alhafez-almtmaez.com/media/logos/logo.png';
+
+    private const PNG_SIGNATURE = "\x89PNG\r\n\x1a\n";
+
+    /** Keeps the base64 JSON request below wwebjs-api's default body limit. */
+    private const MAX_PNG_BYTES = 8_000_000;
 
     /** @var array<string, bool> */
     private array $registrationResults = [];
@@ -33,6 +39,70 @@ class WhatsAppMessagingService
         // action that never happened, so pending delivery must always be explicit
         // and tied to a verifiable source.
         $this->sendMediaCaptionToChatIds($recipients, $content, queueOnFailure: false);
+    }
+
+    /**
+     * Send one PNG image with a caption to personal WhatsApp numbers.
+     *
+     * @param  array<int, string>  $phones
+     */
+    public function sendPngCaption(
+        array $phones,
+        string $caption,
+        string $pngBytes,
+        string $filename,
+    ): void {
+        $filename = $this->validatedPngFilename($filename);
+        $this->assertValidPng($pngBytes);
+
+        $encodedPng = base64_encode($pngBytes);
+        $filesize = strlen($pngBytes);
+
+        $this->sendPreparedMessageToChatIds(
+            $this->recipientChatIds($phones),
+            $caption,
+            static fn (string $chatId): array => [
+                'chatId' => $chatId,
+                'contentType' => 'MessageMedia',
+                'content' => [
+                    'mimetype' => 'image/png',
+                    'data' => $encodedPng,
+                    'filename' => $filename,
+                    'filesize' => $filesize,
+                ],
+                'options' => ['caption' => $caption],
+            ],
+            requestTimeoutSeconds: 60,
+        );
+    }
+
+    /**
+     * Fail before expensive message preparation when no intended recipient is eligible.
+     * Successful personal-number checks remain cached for the subsequent send.
+     *
+     * @param  array<int, string>  $phones
+     */
+    public function assertHasEligibleRecipients(array $phones, ?string $groupSerialized = null): void
+    {
+        $baseUrl = rtrim((string) config('services.whatsapp_api.url', ''), '/');
+        if ($baseUrl === '') {
+            throw new RuntimeException(__('whatsapp.api_not_configured'));
+        }
+
+        $recipients = $this->recipientChatIds($phones, $groupSerialized);
+        if ($recipients === []) {
+            throw new RuntimeException(__('students.no_recipients_provided'));
+        }
+
+        $device = $this->sendingDevice(null);
+        if (! $device) {
+            throw new WhatsAppMessageSendException(
+                __('students.whatsapp_device_not_connected'),
+                $recipients,
+            );
+        }
+
+        $this->filterRegisteredRecipients($device, $recipients, $baseUrl);
     }
 
     public function sendTextMessage(string $phone, string $content, ?Device $preferredDevice = null): void
@@ -55,6 +125,33 @@ class WhatsAppMessagingService
         ?string $sourceType = null,
         int|string|null $sourceId = null,
         ?Device $preferredDevice = null,
+    ): void {
+        $this->sendPreparedMessageToChatIds(
+            $chatIds,
+            $content,
+            fn (string $chatId): array => $this->messagePayload($chatId, $content, $mediaUrl),
+            $mediaUrl,
+            $queueOnFailure,
+            $sourceType,
+            $sourceId,
+            $preferredDevice,
+        );
+    }
+
+    /**
+     * @param  array<int, string>  $chatIds
+     * @param  callable(string): array<string, mixed>  $payloadForChatId
+     */
+    private function sendPreparedMessageToChatIds(
+        array $chatIds,
+        string $content,
+        callable $payloadForChatId,
+        ?string $mediaUrl = null,
+        bool $queueOnFailure = false,
+        ?string $sourceType = null,
+        int|string|null $sourceId = null,
+        ?Device $preferredDevice = null,
+        int $requestTimeoutSeconds = 20,
     ): void {
         $baseUrl = rtrim((string) config('services.whatsapp_api.url', ''), '/');
         if ($baseUrl === '') {
@@ -94,9 +191,9 @@ class WhatsAppMessagingService
 
         foreach ($recipients as $index => $chatId) {
             $sessionId = (string) $device->session_id;
-            $response = $this->apiRequest()->post(
+            $response = $this->apiRequest($requestTimeoutSeconds)->post(
                 "{$baseUrl}/client/sendMessage/{$sessionId}",
-                $this->messagePayload($chatId, $content, $mediaUrl),
+                $payloadForChatId($chatId),
             );
 
             if ($this->isRejectedResponse($response) && $this->isSessionUnavailableResponse($response)) {
@@ -104,9 +201,9 @@ class WhatsAppMessagingService
 
                 if ($replacementDevice) {
                     $device = $replacementDevice;
-                    $response = $this->apiRequest()->post(
+                    $response = $this->apiRequest($requestTimeoutSeconds)->post(
                         "{$baseUrl}/client/sendMessage/{$device->session_id}",
-                        $this->messagePayload($chatId, $content, $mediaUrl),
+                        $payloadForChatId($chatId),
                     );
                 }
             }
@@ -131,7 +228,11 @@ class WhatsAppMessagingService
                     $sourceId,
                 );
 
-                throw new WhatsAppMessageSendException($message, $unsentRecipients);
+                throw new WhatsAppMessageSendException(
+                    $message,
+                    $unsentRecipients,
+                    deliveryAttempted: true,
+                );
             }
 
             if ($index < count($recipients) - 1) {
@@ -140,10 +241,10 @@ class WhatsAppMessagingService
         }
     }
 
-    private function apiRequest(): PendingRequest
+    private function apiRequest(int $timeoutSeconds = 20): PendingRequest
     {
         return Http::withHeader('x-api-key', (string) config('services.whatsapp_api.key', config('app.key')))
-            ->timeout(20);
+            ->timeout($timeoutSeconds);
     }
 
     private function isSessionUnavailableResponse(Response $response): bool
@@ -374,6 +475,31 @@ class WhatsAppMessagingService
             'content' => $mediaUrl,
             'options' => ['caption' => $content],
         ];
+    }
+
+    private function assertValidPng(string $pngBytes): void
+    {
+        if (! str_starts_with($pngBytes, self::PNG_SIGNATURE)) {
+            throw new InvalidArgumentException('The supplied media is not a valid PNG image.');
+        }
+
+        if (strlen($pngBytes) > self::MAX_PNG_BYTES) {
+            throw new InvalidArgumentException('The PNG image is too large to send through WhatsApp.');
+        }
+    }
+
+    private function validatedPngFilename(string $filename): string
+    {
+        $filename = trim($filename);
+
+        if ($filename === ''
+            || strlen($filename) > 255
+            || ! str_ends_with(strtolower($filename), '.png')
+            || preg_match('~[\x00-\x1F\x7F/\\\\]~', $filename) === 1) {
+            throw new InvalidArgumentException('The PNG filename is invalid.');
+        }
+
+        return $filename;
     }
 
     /**

@@ -38,6 +38,16 @@ class Certificate extends Model
 
     public const STATUS_REPLACED = 'replaced';
 
+    public const WHATSAPP_DELIVERY_PROCESSING = 'processing';
+
+    public const WHATSAPP_DELIVERY_SENT = 'sent';
+
+    public const WHATSAPP_DELIVERY_PARTIAL = 'partial';
+
+    public const WHATSAPP_DELIVERY_REVIEW_REQUIRED = 'review_required';
+
+    public const WHATSAPP_PROCESSING_STALE_AFTER_MINUTES = 10;
+
     public const STATUSES = [
         self::STATUS_VALID,
         self::STATUS_REVOKED,
@@ -82,6 +92,10 @@ class Certificate extends Model
         'status',
         'revoked_at',
         'revoked_reason',
+        'whatsapp_delivery_status',
+        'whatsapp_sent_at',
+        'whatsapp_sent_by',
+        'whatsapp_image_filename',
     ];
 
     protected function casts(): array
@@ -96,6 +110,8 @@ class Certificate extends Model
             'achieved_at' => 'datetime',
             'issued_at' => 'datetime',
             'revoked_at' => 'datetime',
+            'whatsapp_sent_at' => 'datetime',
+            'whatsapp_sent_by' => 'int',
         ];
     }
 
@@ -117,6 +133,10 @@ class Certificate extends Model
                 'three_parts',
                 'book_name',
                 'issued_at',
+                'whatsapp_delivery_status',
+                'whatsapp_sent_at',
+                'whatsapp_sent_by',
+                'whatsapp_image_filename',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
@@ -140,6 +160,11 @@ class Certificate extends Model
     public function issuer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
+    }
+
+    public function whatsappSender(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'whatsapp_sent_by');
     }
 
     protected static function booted(): void

@@ -101,6 +101,7 @@ class StudentCertificateService
                 'center_name' => $student->center?->name,
                 'plan_name' => $student->plan?->name,
                 'current_plan_point_name' => $currentPoint?->name,
+                'has_whatsapp_recipient' => $this->studentHasWhatsAppRecipient($student),
             ],
             'availableCertificates' => $availableCertificates,
             'certificates' => $issuedCertificates
@@ -109,6 +110,7 @@ class StudentCertificateService
             'canIssue' => (bool) Auth::user()?->can('students.update'),
             'canRedesign' => (bool) Auth::user()?->can('students.update'),
             'canRevoke' => (bool) Auth::user()?->can('certificates.revoke'),
+            'canSendWhatsApp' => (bool) Auth::user()?->can('certificates.send'),
         ];
     }
 
@@ -308,6 +310,16 @@ class StudentCertificateService
             $oldTemplateId = data_get($lockedCertificate->wording_snapshot, 'template_id');
             $oldTemplateRevision = data_get($lockedCertificate->wording_snapshot, 'template_revision');
             $oldDesign = $lockedCertificate->design_snapshot;
+            $oldWhatsAppDeliveryStatus = $lockedCertificate->whatsapp_delivery_status;
+            $oldWhatsAppSentAt = $lockedCertificate->whatsapp_sent_at;
+            $oldWhatsAppFilename = $lockedCertificate->whatsapp_image_filename;
+
+            if ($oldWhatsAppDeliveryStatus === Certificate::WHATSAPP_DELIVERY_PROCESSING
+                && ! $this->isStaleWhatsAppProcessingClaim($lockedCertificate)) {
+                throw ValidationException::withMessages([
+                    'certificate' => __('certificates.whatsapp_send_in_progress'),
+                ]);
+            }
 
             $lockedCertificate->forceFill([
                 'design_snapshot' => $designSnapshot,
@@ -320,6 +332,10 @@ class StudentCertificateService
                 'show_center_manager_signature' => $currentCenter !== null
                     ? (bool) $currentCenter->show_center_manager_signature
                     : (bool) $lockedCertificate->show_center_manager_signature,
+                'whatsapp_delivery_status' => null,
+                'whatsapp_sent_at' => null,
+                'whatsapp_sent_by' => null,
+                'whatsapp_image_filename' => null,
             ])->save();
 
             $activity = activity('certificates')
@@ -338,6 +354,11 @@ class StudentCertificateService
                     'achievement_type' => (string) $lockedCertificate->achievement_type,
                     'old_design' => $oldDesign,
                     'new_design' => $designSnapshot,
+                    'previous_whatsapp_delivery_status' => $oldWhatsAppDeliveryStatus,
+                    'previous_whatsapp_sent_at' => $oldWhatsAppSentAt?->toISOString(),
+                    'previous_whatsapp_image_filename' => $oldWhatsAppFilename,
+                    'whatsapp_delivery_reset' => $oldWhatsAppDeliveryStatus !== null
+                        || $oldWhatsAppSentAt !== null,
                 ])
                 ->event('redesigned');
             if (Auth::user() !== null) {
@@ -369,6 +390,13 @@ class StudentCertificateService
                 ]);
             }
 
+            if ($lockedCertificate->whatsapp_delivery_status === Certificate::WHATSAPP_DELIVERY_PROCESSING
+                && ! $this->isStaleWhatsAppProcessingClaim($lockedCertificate)) {
+                throw ValidationException::withMessages([
+                    'certificate' => __('certificates.whatsapp_send_in_progress'),
+                ]);
+            }
+
             $lockedCertificate->forceFill([
                 'status' => Certificate::STATUS_REVOKED,
                 'revoked_at' => now(),
@@ -385,6 +413,20 @@ class StudentCertificateService
     public function listItem(Student $student, Certificate $certificate): array
     {
         $certificate->loadMissing('issuer:id,name');
+        $canSendWhatsApp = (bool) Auth::user()?->can('certificates.send');
+        $wasSentViaWhatsApp = $certificate->whatsapp_sent_at !== null;
+        $whatsAppDeliveryStatus = is_string($certificate->whatsapp_delivery_status)
+            ? $certificate->whatsapp_delivery_status
+            : null;
+        if ($whatsAppDeliveryStatus === Certificate::WHATSAPP_DELIVERY_PROCESSING
+            && $this->isStaleWhatsAppProcessingClaim($certificate)) {
+            $whatsAppDeliveryStatus = Certificate::WHATSAPP_DELIVERY_REVIEW_REQUIRED;
+        }
+        $canSendThisCertificate = $canSendWhatsApp
+            && $certificate->status === Certificate::STATUS_VALID
+            && ! $wasSentViaWhatsApp
+            && $whatsAppDeliveryStatus === null
+            && $this->studentHasWhatsAppRecipient($student);
 
         return [
             'id' => (string) $certificate->ulid,
@@ -406,6 +448,18 @@ class StudentCertificateService
                 && (bool) Auth::user()?->can('certificates.revoke')
                     ? route('admin.students.certificates.revoke', [$student, $certificate])
                     : null,
+            'was_sent_via_whatsapp' => $wasSentViaWhatsApp,
+            'whatsapp_delivery_status' => $whatsAppDeliveryStatus,
+            'whatsapp_delivery_requires_review' => $whatsAppDeliveryStatus === Certificate::WHATSAPP_DELIVERY_REVIEW_REQUIRED,
+            'whatsapp_sent_at' => $certificate->whatsapp_sent_at?->toISOString(),
+            'whatsapp_sent_at_formatted' => $certificate->whatsapp_sent_at !== null
+                ? $this->dateTimeFormatter->formatForAdmin($certificate->whatsapp_sent_at)
+                : null,
+            'whatsapp_image_filename' => $certificate->whatsapp_image_filename,
+            'can_send_whatsapp' => $canSendThisCertificate,
+            'whatsapp_send_url' => $canSendWhatsApp
+                ? route('admin.students.certificates.whatsapp', [$student, $certificate])
+                : null,
         ];
     }
 
@@ -672,6 +726,26 @@ class StudentCertificateService
             Certificate::STATUS_REPLACED => __('certificates.statuses.replaced'),
             default => __('certificates.statuses.unknown'),
         };
+    }
+
+    private function studentHasWhatsAppRecipient(Student $student): bool
+    {
+        foreach ([$student->parent_phone_number, $student->phone_number] as $phone) {
+            if (is_string($phone) && trim($phone) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isStaleWhatsAppProcessingClaim(Certificate $certificate): bool
+    {
+        return $certificate->whatsapp_delivery_status === Certificate::WHATSAPP_DELIVERY_PROCESSING
+            && $certificate->updated_at !== null
+            && $certificate->updated_at->lte(
+                now()->subMinutes(Certificate::WHATSAPP_PROCESSING_STALE_AFTER_MINUTES),
+            );
     }
 
     private function verificationUrl(Certificate|string $certificate): string

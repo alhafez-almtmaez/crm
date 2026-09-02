@@ -9,8 +9,11 @@ class WhatsAppMessageSendException extends RuntimeException
     /**
      * @param  array<int, string>  $unsentChatIds
      */
-    public function __construct(string $message, private readonly array $unsentChatIds)
-    {
+    public function __construct(
+        string $message,
+        private readonly array $unsentChatIds,
+        private readonly bool $deliveryAttempted = false,
+    ) {
         parent::__construct($message);
     }
 
@@ -20,5 +23,10 @@ class WhatsAppMessageSendException extends RuntimeException
     public function unsentChatIds(): array
     {
         return $this->unsentChatIds;
+    }
+
+    public function deliveryAttempted(): bool
+    {
+        return $this->deliveryAttempted;
     }
 }

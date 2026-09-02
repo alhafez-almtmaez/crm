@@ -4,7 +4,7 @@ import { Head, router } from '@inertiajs/vue3';
 import Button from 'primevue/button';
 import Dialog from 'primevue/dialog';
 import Textarea from 'primevue/textarea';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../../admin/navItems';
 import AdminBreadcrumbs from '../../../components/admin/AdminBreadcrumbs.vue';
@@ -38,6 +38,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    canSendWhatsApp: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const issueDialogVisible = ref(false);
@@ -50,6 +54,8 @@ const revokeDialogVisible = ref(false);
 const selectedRevokeCertificate = ref(null);
 const revokeReason = ref('');
 const revoking = ref(false);
+const issuedCertificates = ref([...props.certificates]);
+const sendingCertificateIds = ref(new Set());
 const validAvailableCount = computed(() => props.availableCertificates.filter((item) => item.can_issue).length);
 const breadcrumbItems = computed(() => [
     { labelKey: 'breadcrumbs.dashboard', href: '/admin/dashboard' },
@@ -60,6 +66,13 @@ const breadcrumbItems = computed(() => [
 const goBack = () => {
     router.get('/admin/students');
 };
+
+watch(
+    () => props.certificates,
+    (certificates) => {
+        issuedCertificates.value = [...certificates];
+    },
+);
 
 const openIssueDialog = (checkpoint) => {
     if (!props.canIssue || !checkpoint?.can_issue) {
@@ -188,6 +201,144 @@ const statusBadgeClass = (status) => ({
     replaced: 'bg-orange-100 text-orange-800',
 }[status] ?? 'bg-slate-100 text-slate-700');
 
+const isSendingCertificate = (certificateId) => sendingCertificateIds.value.has(certificateId);
+const certificateWasSent = (certificate) => Boolean(certificate.was_sent_via_whatsapp || certificate.whatsapp_sent_at);
+const certificateNeedsDeliveryReview = (certificate) => (
+    certificate.whatsapp_delivery_status === 'review_required'
+    || certificate.whatsapp_delivery_requires_review
+);
+
+const setCertificateSending = (certificateId, sending) => {
+    const nextIds = new Set(sendingCertificateIds.value);
+
+    if (sending) {
+        nextIds.add(certificateId);
+    } else {
+        nextIds.delete(certificateId);
+    }
+
+    sendingCertificateIds.value = nextIds;
+};
+
+const whatsappActionTitle = (certificate) => {
+    if (isSendingCertificate(certificate.id) || certificate.whatsapp_delivery_status === 'processing') {
+        return t('certificates.whatsappSending');
+    }
+
+    if (certificateNeedsDeliveryReview(certificate)) {
+        return t('certificates.whatsappNeedsReview');
+    }
+
+    if (certificate.whatsapp_delivery_status === 'partial') {
+        return t('certificates.whatsappPartiallySent');
+    }
+
+    if (certificateWasSent(certificate)) {
+        const sentAt = certificate.whatsapp_sent_at_formatted || certificate.whatsapp_sent_at;
+
+        return sentAt
+            ? t('certificates.whatsappSentAt', { date: sentAt })
+            : t('certificates.whatsappSent');
+    }
+
+    if (certificate.status !== 'valid') {
+        return t('certificates.whatsappValidOnly');
+    }
+
+    if (!props.student.has_whatsapp_recipient) {
+        return t('certificates.whatsappNoRecipient');
+    }
+
+    if (!certificate.whatsapp_send_url || !certificate.can_send_whatsapp) {
+        return t('certificates.whatsappUnavailable');
+    }
+
+    return t('certificates.sendViaWhatsApp');
+};
+
+const isWhatsAppSendDisabled = (certificate) => (
+    isSendingCertificate(certificate.id)
+    || certificateWasSent(certificate)
+    || Boolean(certificate.whatsapp_delivery_status)
+    || certificate.status !== 'valid'
+    || !props.student.has_whatsapp_recipient
+    || !certificate.whatsapp_send_url
+    || !certificate.can_send_whatsapp
+);
+
+const whatsappStatusLabel = (certificate) => {
+    if (certificate.whatsapp_delivery_status === 'processing') {
+        return t('certificates.whatsappSending');
+    }
+
+    if (certificateNeedsDeliveryReview(certificate)) {
+        return t('certificates.whatsappNeedsReview');
+    }
+
+    if (certificate.whatsapp_delivery_status === 'partial') {
+        return t('certificates.whatsappPartiallySent');
+    }
+
+    return t('certificates.whatsappSent');
+};
+
+const whatsappStatusClass = (certificate) => (
+    certificateNeedsDeliveryReview(certificate)
+    || ['partial', 'processing'].includes(certificate.whatsapp_delivery_status)
+        ? 'text-[var(--status-warning)]'
+        : 'text-[var(--status-success)]'
+);
+
+const whatsappActionIcon = (certificate) => {
+    if (certificateNeedsDeliveryReview(certificate)) {
+        return 'pi pi-exclamation-triangle';
+    }
+
+    return certificateWasSent(certificate) ? 'pi pi-check-circle' : 'pi pi-whatsapp';
+};
+
+const sendCertificateViaWhatsApp = async (certificate) => {
+    if (
+        !props.canSendWhatsApp
+        || !certificate
+        || isWhatsAppSendDisabled(certificate)
+    ) {
+        return;
+    }
+
+    setCertificateSending(certificate.id, true);
+
+    try {
+        const { data } = await axios.post(certificate.whatsapp_send_url);
+
+        if (data?.certificate) {
+            issuedCertificates.value = issuedCertificates.value.map((item) => (
+                String(item.id) === String(data.certificate.id)
+                    ? { ...item, ...data.certificate }
+                    : item
+            ));
+        }
+
+        if (data?.partial || data?.uncertain) {
+            appToast.push({
+                severity: 'warn',
+                summary: t('certificates.whatsappDeliveryWarning'),
+                detail: data?.message ?? t('certificates.whatsappNeedsReview'),
+                life: 5000,
+            });
+        } else {
+            appToast.success(data?.message ?? t('certificates.whatsappSendSuccess'));
+        }
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.requestFailedTitle'),
+            fallback: t('certificates.whatsappSendFailed'),
+        });
+    } finally {
+        setCertificateSending(certificate.id, false);
+    }
+};
+
 const openUrl = (url) => {
     if (url) {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -296,11 +447,11 @@ const openUrl = (url) => {
                         <p class="mt-1 text-sm text-(--muted-foreground)">{{ t('certificates.issuedHint') }}</p>
                     </div>
                     <span class="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-900">
-                        {{ certificates.length }}
+                        {{ issuedCertificates.length }}
                     </span>
                 </div>
 
-                <div v-if="certificates.length" class="overflow-x-auto rounded-md border border-(--border)">
+                <div v-if="issuedCertificates.length" class="overflow-x-auto rounded-md border border-(--border)">
                     <table class="min-w-full border-separate border-spacing-0 text-sm">
                         <thead class="bg-(--background)">
                             <tr>
@@ -314,7 +465,7 @@ const openUrl = (url) => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="item in certificates" :key="item.id">
+                            <tr v-for="item in issuedCertificates" :key="item.id">
                                 <td dir="ltr" class="border-b border-(--border) px-4 py-3 text-end font-mono font-semibold">{{ item.certificate_number }}</td>
                                 <td class="border-b border-(--border) px-4 py-3">
                                     <span class="font-semibold">{{ item.achievement_type_label }}:</span>
@@ -324,12 +475,41 @@ const openUrl = (url) => {
                                 <td class="border-b border-(--border) px-4 py-3">{{ item.issued_at }}</td>
                                 <td class="border-b border-(--border) px-4 py-3">{{ item.issued_by_name || t('common.na') }}</td>
                                 <td class="border-b border-(--border) px-4 py-3">
-                                    <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold" :class="statusBadgeClass(item.status)">
-                                        {{ item.status_label }}
-                                    </span>
+                                    <div class="flex flex-col items-start gap-1.5">
+                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold" :class="statusBadgeClass(item.status)">
+                                            {{ item.status_label }}
+                                        </span>
+                                        <span
+                                            v-if="certificateWasSent(item) || Boolean(item.whatsapp_delivery_status)"
+                                            class="inline-flex items-center gap-1 text-xs font-semibold"
+                                            :class="whatsappStatusClass(item)"
+                                            :title="whatsappActionTitle(item)"
+                                        >
+                                            <i class="pi pi-whatsapp" aria-hidden="true"></i>
+                                            {{ whatsappStatusLabel(item) }}
+                                        </span>
+                                    </div>
                                 </td>
                                 <td class="border-b border-(--border) px-4 py-3">
-                                    <div class="flex gap-2">
+                                    <div class="flex flex-wrap gap-2">
+                                        <span
+                                            v-if="canSendWhatsApp"
+                                            :title="whatsappActionTitle(item)"
+                                            class="inline-flex"
+                                        >
+                                            <Button
+                                                type="button"
+                                                size="small"
+                                                severity="success"
+                                                outlined
+                                                :icon="whatsappActionIcon(item)"
+                                                :loading="isSendingCertificate(item.id)"
+                                                :disabled="isWhatsAppSendDisabled(item)"
+                                                :title="whatsappActionTitle(item)"
+                                                :aria-label="whatsappActionTitle(item)"
+                                                @click="sendCertificateViaWhatsApp(item)"
+                                            />
+                                        </span>
                                         <Button
                                             v-if="canRedesign"
                                             type="button"

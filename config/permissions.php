@@ -18,6 +18,7 @@ return [
         'certificate_designs.view',
         'certificate_designs.update',
         'certificates.revoke',
+        'certificates.send',
         'whatsapp.view',
     ],
 
@@ -84,6 +85,7 @@ return [
             'message_templates.create',
             'message_templates.update',
             'message_templates.delete',
+            'certificates.send',
         ],
     ],
 ];

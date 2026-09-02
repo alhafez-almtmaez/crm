@@ -1,5 +1,7 @@
 @php
     $previewMode = (bool) ($certificate['design_preview_mode'] ?? false);
+    $imageMode = (bool) ($certificate['image_mode'] ?? false);
+    $fixedViewportMode = $previewMode || $imageMode;
     $showCenterIdentity = (bool) ($certificate['show_center_manager_signature'] ?? true);
     $previewCatalog = is_array($certificate['preview_catalog'] ?? null)
         ? $certificate['preview_catalog']
@@ -121,8 +123,15 @@
     @endforeach
     <link rel="stylesheet" href="{{ $certificate['stylesheet_url'] }}">
 </head>
-<body @class(['certificate-preview-body' => $previewMode])>
-    <main @class(['certificate-page', 'certificate-page--preview' => $previewMode]) @if ($designStyle !== '') style="{{ $designStyle }}" @endif>
+<body @class([
+    'certificate-preview-body' => $fixedViewportMode,
+    'certificate-image-body' => $imageMode,
+])>
+    <main @class([
+        'certificate-page',
+        'certificate-page--preview' => $fixedViewportMode,
+        'certificate-page--image' => $imageMode,
+    ]) @if ($designStyle !== '') style="{{ $designStyle }}" @endif>
         @if (! $certificate['pdf_mode'] && ! $previewMode)
             <div class="certificate-toolbar" aria-label="{{ $certificate['labels']['tools'] }}">
                 <a class="certificate-toolbar__link certificate-toolbar__link--secondary" href="{{ $certificate['back_url'] }}">
