@@ -107,7 +107,7 @@ class HomeworkService
                 $row->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->created_at));
                 $row->setAttribute(
                     'date_formatted',
-                    Carbon::parse((string) $row->date)->locale(app()->getLocale())->translatedFormat('l ، j F ، Y'),
+                    Carbon::parse((string) $row->date)->locale(app()->getLocale())->translatedFormat('l ، d/m/Y'),
                 );
 
                 return $row;

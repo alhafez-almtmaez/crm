@@ -75,12 +75,15 @@ test('homework creation derives center and scopes students and uniqueness to gro
         'date' => '2026-08-31',
     ])->assertSessionHasErrors('items.0.student_id');
 
-    $this->getJson('/admin/homeworks/records?group_id='.$secondGroup->id.'&sort_by=group_name&sort_dir=asc')
+    $response = $this->getJson('/admin/homeworks/records?group_id='.$secondGroup->id.'&sort_by=group_name&sort_dir=asc')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.center_name', 'Main Center')
         ->assertJsonPath('data.0.group_name', 'Beta Group')
         ->assertJsonPath('data.0.group_id', $secondGroup->id);
+
+    expect((string) $response->json('data.0.date_formatted'))
+        ->toMatch('/^.+ ، 30\/08\/2026$/u');
 });
 
 test('homework update accepts historical students but rejects unrelated students', function () {
