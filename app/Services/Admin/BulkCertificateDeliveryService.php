@@ -348,7 +348,7 @@ class BulkCertificateDeliveryService
         $checkpoints = PlanPoint::query()
             ->whereIn('plan_id', $planIds)
             ->where('requires_certificate', true)
-            ->with('plan:id,name')
+            ->with('plan:id,name,category')
             ->orderBy('plan_id')
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -477,7 +477,7 @@ class BulkCertificateDeliveryService
             ->with([
                 'student:id,full_name,parent_phone_number,phone_number,is_active',
                 'planPoint:id,plan_id,sort_order,name',
-                'planPoint.plan:id,name',
+                'planPoint.plan:id,name,category',
             ])
             ->orderBy('bulk_students.id')
             ->orderBy('evidence_plan_points.plan_id')
