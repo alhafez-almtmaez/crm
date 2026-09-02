@@ -241,7 +241,7 @@ class WhatsAppMessagingService
             }
 
             if ($index < count($recipients) - 1) {
-                $this->sleepBetweenMessages();
+                $this->waitBetweenMessages();
             }
         }
     }
@@ -617,12 +617,25 @@ class WhatsAppMessagingService
         }
     }
 
-    private function sleepBetweenMessages(): void
+    /**
+     * Wait for the configured pacing interval and return the chosen seconds.
+     * When no maximum is configured, existing fixed-delay behavior is preserved.
+     */
+    public function waitBetweenMessages(): int
     {
-        $seconds = max(0, (int) config('services.whatsapp_api.message_delay_seconds', 30));
+        $minimum = max(0, (int) config('services.whatsapp_api.message_delay_seconds', 30));
+        $configuredMaximum = config('services.whatsapp_api.message_delay_max_seconds');
+        $maximum = $configuredMaximum === null || $configuredMaximum === ''
+            ? $minimum
+            : max($minimum, (int) $configuredMaximum);
+        $seconds = $minimum === $maximum
+            ? $minimum
+            : random_int($minimum, $maximum);
 
         if ($seconds > 0) {
             sleep($seconds);
         }
+
+        return $seconds;
     }
 }

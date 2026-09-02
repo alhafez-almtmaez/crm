@@ -155,88 +155,202 @@ class StudentCertificateService
                 ]);
             }
 
-            $achievement = $this->certificateAchievements->resolve($planPoint);
-            if ($achievement === null) {
+            return $this->createCertificate(
+                $lockedStudent,
+                $planPoint,
+                $this->achievementDate($lockedStudent, $planPoint),
+                $lockedStudent->plan?->name,
+            );
+        });
+    }
+
+    /**
+     * Issue an auditable historical certificate from a completion event that
+     * proves the student reached the requested checkpoint. The evidence and
+     * checkpoint must belong to the same historical plan, so a later transfer
+     * cannot leak progress from one plan into another.
+     */
+    public function issueFromCompletion(
+        StudentPointTransaction $transaction,
+        ?int $certificatePlanPointId = null,
+    ): Certificate {
+        return DB::transaction(function () use ($transaction, $certificatePlanPointId): Certificate {
+            /** @var StudentPointTransaction $lockedTransaction */
+            $lockedTransaction = StudentPointTransaction::query()
+                ->whereKey($transaction->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedTransaction->type !== StudentPointTransaction::TYPE_HOMEWORK_COMPLETED
+                || $lockedTransaction->student_id === null
+                || $lockedTransaction->plan_point_id === null
+                || $lockedTransaction->created_at === null) {
                 throw ValidationException::withMessages([
-                    'plan_point_id' => __('certificates.missing_achievement_data'),
+                    'transaction' => __('certificates.checkpoint_not_reached'),
                 ]);
             }
 
-            $designSnapshot = $this->certificateDesigns->resolveForCenter(
-                $lockedStudent->center,
-                $achievement['type'],
-            );
-            $legacyWording = $this->certificateWordings->resolve(
-                (string) $designSnapshot['student_gender'],
-                $achievement['type'],
-            );
-
-            $achievedAt = $this->achievementDate($lockedStudent, $planPoint);
-            $dates = $this->certificateDates($achievedAt);
-            $issuedAt = now();
-            $ulid = (string) Str::ulid();
-            $certificateNumber = $this->certificateNumber($ulid, $issuedAt);
-            $centerName = $this->nullableTrim($lockedStudent->center?->certificate_name)
-                ?? $lockedStudent->center?->name;
-            $displayAchievementName = $this->certificateAchievements->displayName(
-                $achievement['type'],
-                $achievement['name'],
-            );
-            $wordingSnapshot = $this->certificateContentTemplates->resolveSnapshot(
-                $lockedStudent->center,
-                $achievement['type'],
-                [
-                    'student_name' => trim((string) $lockedStudent->full_name),
-                    'center_name' => $centerName ?? (string) __('certificates.default_center_name'),
-                    'achievement_label' => (string) $legacyWording['achievement_label'],
-                    'achievement_name' => $displayAchievementName,
-                    'certificate_number' => $certificateNumber,
-                    'plan_name' => (string) ($lockedStudent->plan?->name ?? ''),
-                    'plan_point_name' => (string) $planPoint->name,
-                    'hijri_date' => $dates['hijri'] ?? '—',
-                    'gregorian_date' => $dates['gregorian'],
-                ],
-                (string) $designSnapshot['student_gender'],
-            ) ?? $legacyWording;
-            $contentSnapshot = $this->certificateContentTemplates->snapshot($wordingSnapshot);
-            $renderedContent = is_array($contentSnapshot['rendered_sections'] ?? null)
-                ? $contentSnapshot['rendered_sections']
-                : [];
-
-            return Certificate::query()->create([
-                'ulid' => $ulid,
-                'student_id' => $lockedStudent->id,
-                'plan_point_id' => $planPoint->id,
-                'issued_by' => Auth::id(),
-                'certificate_number' => $certificateNumber,
-                'status' => Certificate::STATUS_VALID,
-                'student_name' => trim((string) $lockedStudent->full_name),
-                'center_name' => $centerName,
-                'show_center_manager_signature' => (bool) ($lockedStudent->center?->show_center_manager_signature ?? true),
-                'design_snapshot' => $designSnapshot,
-                'wording_snapshot' => $wordingSnapshot,
-                'plan_name' => $lockedStudent->plan?->name,
-                'plan_point_name' => (string) $planPoint->name,
-                'achievement_type' => $achievement['type'],
-                'achievement_name' => $achievement['name'],
-                'surah_name' => $this->nullableTrim($planPoint->surah_name),
-                'part_name' => $this->nullableTrim($planPoint->part_name),
-                'three_parts' => $this->nullableTrim($planPoint->three_parts),
-                'book_name' => $this->nullableTrim($planPoint->book_name),
-                'title' => (string) ($renderedContent['title'] ?? config('certificates.title')),
-                'quote_first' => (string) ($renderedContent['quote_first'] ?? config('certificates.quote_first')),
-                'quote_second' => (string) ($renderedContent['quote_second'] ?? config('certificates.quote_second')),
-                'project_name' => (string) ($wordingSnapshot['project_name'] ?? ''),
-                'closing_text' => (string) ($renderedContent['closing'] ?? $wordingSnapshot['closing_text'] ?? ''),
-                'center_manager_title' => (string) config('certificates.center_manager_title'),
-                'project_manager_title' => (string) config('certificates.project_manager_title'),
-                'date_title' => (string) config('certificates.date_title'),
-                'hijri_date' => $dates['hijri'],
-                'gregorian_date' => $dates['gregorian'],
-                'achieved_at' => $achievedAt,
-                'issued_at' => $issuedAt,
+            /** @var Student $lockedStudent */
+            $lockedStudent = Student::query()
+                ->whereKey($lockedTransaction->student_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ((int) $lockedStudent->is_active !== Student::STATUS_ACTIVE) {
+                throw ValidationException::withMessages([
+                    'student' => __('certificates.bulk_active_students_only'),
+                ]);
+            }
+            $lockedStudent->loadMissing([
+                'center:id,name,certificate_name,student_gender,show_center_manager_signature',
+                'plan:id,name',
             ]);
+
+            /** @var PlanPoint|null $evidencePoint */
+            $evidencePoint = PlanPoint::query()
+                ->with('plan:id,name,category')
+                ->whereKey($lockedTransaction->plan_point_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($evidencePoint === null) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('certificates.checkpoint_not_reached'),
+                ]);
+            }
+
+            $targetPlanPointId = $certificatePlanPointId ?? (int) $evidencePoint->id;
+            /** @var PlanPoint|null $planPoint */
+            $planPoint = (int) $evidencePoint->id === $targetPlanPointId
+                ? $evidencePoint
+                : PlanPoint::query()
+                    ->with('plan:id,name,category')
+                    ->whereKey($targetPlanPointId)
+                    ->lockForUpdate()
+                    ->first();
+
+            if ($planPoint === null || ! $planPoint->requires_certificate) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('certificates.not_certificate_checkpoint'),
+                ]);
+            }
+
+            if ((int) $planPoint->plan_id !== (int) $evidencePoint->plan_id
+                || ! $this->pointIsAtOrBefore($planPoint, $evidencePoint)) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('certificates.checkpoint_not_reached'),
+                ]);
+            }
+
+            $existing = Certificate::query()
+                ->where('student_id', $lockedStudent->id)
+                ->where('plan_point_id', $planPoint->id)
+                ->first();
+            if ($existing !== null) {
+                return $existing;
+            }
+
+            return $this->createCertificate(
+                $lockedStudent,
+                $planPoint,
+                $lockedTransaction->created_at,
+                $planPoint->plan?->name,
+            );
         });
+    }
+
+    private function pointIsAtOrBefore(PlanPoint $checkpoint, PlanPoint $evidence): bool
+    {
+        return (int) $checkpoint->sort_order < (int) $evidence->sort_order
+            || ((int) $checkpoint->sort_order === (int) $evidence->sort_order
+                && (int) $checkpoint->id <= (int) $evidence->id);
+    }
+
+    private function createCertificate(
+        Student $lockedStudent,
+        PlanPoint $planPoint,
+        CarbonInterface $achievedAt,
+        ?string $planName,
+    ): Certificate {
+        $achievement = $this->certificateAchievements->resolve($planPoint);
+        if ($achievement === null) {
+            throw ValidationException::withMessages([
+                'plan_point_id' => __('certificates.missing_achievement_data'),
+            ]);
+        }
+
+        $designSnapshot = $this->certificateDesigns->resolveForCenter(
+            $lockedStudent->center,
+            $achievement['type'],
+        );
+        $legacyWording = $this->certificateWordings->resolve(
+            (string) $designSnapshot['student_gender'],
+            $achievement['type'],
+        );
+
+        $dates = $this->certificateDates($achievedAt);
+        $issuedAt = now();
+        $ulid = (string) Str::ulid();
+        $certificateNumber = $this->certificateNumber($ulid, $issuedAt);
+        $centerName = $this->nullableTrim($lockedStudent->center?->certificate_name)
+            ?? $lockedStudent->center?->name;
+        $displayAchievementName = $this->certificateAchievements->displayName(
+            $achievement['type'],
+            $achievement['name'],
+        );
+        $wordingSnapshot = $this->certificateContentTemplates->resolveSnapshot(
+            $lockedStudent->center,
+            $achievement['type'],
+            [
+                'student_name' => trim((string) $lockedStudent->full_name),
+                'center_name' => $centerName ?? (string) __('certificates.default_center_name'),
+                'achievement_label' => (string) $legacyWording['achievement_label'],
+                'achievement_name' => $displayAchievementName,
+                'certificate_number' => $certificateNumber,
+                'plan_name' => (string) ($planName ?? ''),
+                'plan_point_name' => (string) $planPoint->name,
+                'hijri_date' => $dates['hijri'] ?? '—',
+                'gregorian_date' => $dates['gregorian'],
+            ],
+            (string) $designSnapshot['student_gender'],
+        ) ?? $legacyWording;
+        $contentSnapshot = $this->certificateContentTemplates->snapshot($wordingSnapshot);
+        $renderedContent = is_array($contentSnapshot['rendered_sections'] ?? null)
+            ? $contentSnapshot['rendered_sections']
+            : [];
+
+        return Certificate::query()->create([
+            'ulid' => $ulid,
+            'student_id' => $lockedStudent->id,
+            'plan_point_id' => $planPoint->id,
+            'issued_by' => Auth::id(),
+            'certificate_number' => $certificateNumber,
+            'status' => Certificate::STATUS_VALID,
+            'student_name' => trim((string) $lockedStudent->full_name),
+            'center_name' => $centerName,
+            'show_center_manager_signature' => (bool) ($lockedStudent->center?->show_center_manager_signature ?? true),
+            'design_snapshot' => $designSnapshot,
+            'wording_snapshot' => $wordingSnapshot,
+            'plan_name' => $planName,
+            'plan_point_name' => (string) $planPoint->name,
+            'achievement_type' => $achievement['type'],
+            'achievement_name' => $achievement['name'],
+            'surah_name' => $this->nullableTrim($planPoint->surah_name),
+            'part_name' => $this->nullableTrim($planPoint->part_name),
+            'three_parts' => $this->nullableTrim($planPoint->three_parts),
+            'book_name' => $this->nullableTrim($planPoint->book_name),
+            'title' => (string) ($renderedContent['title'] ?? config('certificates.title')),
+            'quote_first' => (string) ($renderedContent['quote_first'] ?? config('certificates.quote_first')),
+            'quote_second' => (string) ($renderedContent['quote_second'] ?? config('certificates.quote_second')),
+            'project_name' => (string) ($wordingSnapshot['project_name'] ?? ''),
+            'closing_text' => (string) ($renderedContent['closing'] ?? $wordingSnapshot['closing_text'] ?? ''),
+            'center_manager_title' => (string) config('certificates.center_manager_title'),
+            'project_manager_title' => (string) config('certificates.project_manager_title'),
+            'date_title' => (string) config('certificates.date_title'),
+            'hijri_date' => $dates['hijri'],
+            'gregorian_date' => $dates['gregorian'],
+            'achieved_at' => $achievedAt,
+            'issued_at' => $issuedAt,
+        ]);
     }
 
     public function redesign(Student $student, Certificate $certificate): Certificate

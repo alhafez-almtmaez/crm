@@ -26,6 +26,7 @@ return [
     'already_issued' => 'A certificate has already been issued for this plan checkpoint.',
     'not_certificate_checkpoint' => 'The selected point is not a certificate checkpoint.',
     'checkpoint_not_reached' => 'The student has not reached this plan checkpoint yet.',
+    'bulk_active_students_only' => 'Bulk certificate issuance is limited to active students.',
     'missing_achievement_data' => 'Certificate data is missing from the plan point. Add an achievement that matches the plan category.',
     'design_settings_updated' => 'Certificate designs saved successfully.',
     'content_template_created' => 'The certificate content template was created successfully.',

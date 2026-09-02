@@ -26,6 +26,7 @@ return [
     'already_issued' => 'سبق إصدار شهادة لهذه النقطة من الخطة.',
     'not_certificate_checkpoint' => 'النقطة المحددة ليست نقطة إصدار شهادة.',
     'checkpoint_not_reached' => 'لم يصل الطالب إلى هذه النقطة من الخطة بعد.',
+    'bulk_active_students_only' => 'الإصدار الجماعي متاح للطلاب الفعّالين فقط.',
     'missing_achievement_data' => 'بيانات الشهادة ناقصة في نقطة الخطة؛ أدخل إنجازًا مناسبًا لصنف الخطة.',
     'design_settings_updated' => 'تم حفظ تصاميم الشهادات بنجاح.',
     'content_template_created' => 'تم إنشاء قالب محتوى الشهادة بنجاح.',
