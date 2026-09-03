@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Certificate;
-use App\Models\Student;
 use App\Services\Admin\StudentCertificateService;
 use App\Services\System\StudentCertificatePortalService;
 use Illuminate\Contracts\View\View;
@@ -22,15 +20,11 @@ class StudentCertificatePortalController extends Controller
         private readonly StudentCertificateService $certificates,
     ) {}
 
-    public function index(string $student_slug, string $portal_id): InertiaResponse|RedirectResponse|Response
+    public function index(string $portal_id): InertiaResponse|Response
     {
         $student = $this->portals->findStudent($portal_id);
         if ($student === null) {
             return $this->notFoundResponse();
-        }
-
-        if ($redirect = $this->canonicalRedirect($student, $student_slug)) {
-            return $redirect;
         }
 
         return Inertia::render('Certificates/StudentGallery', [
@@ -39,10 +33,9 @@ class StudentCertificatePortalController extends Controller
     }
 
     public function show(
-        string $student_slug,
         string $portal_id,
         string $certificate_public_id,
-    ): View|RedirectResponse|Response {
+    ): View|Response {
         $student = $this->portals->findStudent($portal_id);
         if ($student === null) {
             return $this->notFoundResponse();
@@ -51,10 +44,6 @@ class StudentCertificatePortalController extends Controller
         $certificate = $this->portals->findValidCertificate($student, $certificate_public_id);
         if ($certificate === null) {
             return $this->notFoundResponse();
-        }
-
-        if ($redirect = $this->canonicalRedirect($student, $student_slug, $certificate, 'show')) {
-            return $redirect;
         }
 
         $payload = $this->certificates->viewPayload($student, $certificate);
@@ -65,10 +54,9 @@ class StudentCertificatePortalController extends Controller
     }
 
     public function pdf(
-        string $student_slug,
         string $portal_id,
         string $certificate_public_id,
-    ): PdfBuilder|RedirectResponse|Response {
+    ): PdfBuilder|Response {
         $student = $this->portals->findStudent($portal_id);
         if ($student === null) {
             return $this->notFoundResponse();
@@ -77,10 +65,6 @@ class StudentCertificatePortalController extends Controller
         $certificate = $this->portals->findValidCertificate($student, $certificate_public_id);
         if ($certificate === null) {
             return $this->notFoundResponse();
-        }
-
-        if ($redirect = $this->canonicalRedirect($student, $student_slug, $certificate, 'pdf')) {
-            return $redirect;
         }
 
         $payload = $this->certificates->viewPayload($student, $certificate, pdf: true);
@@ -110,27 +94,54 @@ class StudentCertificatePortalController extends Controller
             ]);
     }
 
+    public function legacyIndex(string $student_slug, string $portal_id): RedirectResponse|Response
+    {
+        $student = $this->portals->findStudent($portal_id);
+        if ($student === null) {
+            return $this->notFoundResponse();
+        }
+
+        return redirect()->to($this->portals->url($student));
+    }
+
+    public function legacyShow(
+        string $student_slug,
+        string $portal_id,
+        string $certificate_public_id,
+    ): RedirectResponse|Response {
+        $student = $this->portals->findStudent($portal_id);
+        if ($student === null) {
+            return $this->notFoundResponse();
+        }
+
+        $certificate = $this->portals->findValidCertificate($student, $certificate_public_id);
+        if ($certificate === null) {
+            return $this->notFoundResponse();
+        }
+
+        return redirect()->to($this->portals->previewUrl($student, $certificate));
+    }
+
+    public function legacyPdf(
+        string $student_slug,
+        string $portal_id,
+        string $certificate_public_id,
+    ): RedirectResponse|Response {
+        $student = $this->portals->findStudent($portal_id);
+        if ($student === null) {
+            return $this->notFoundResponse();
+        }
+
+        $certificate = $this->portals->findValidCertificate($student, $certificate_public_id);
+        if ($certificate === null) {
+            return $this->notFoundResponse();
+        }
+
+        return redirect()->to($this->portals->pdfUrl($student, $certificate));
+    }
+
     private function notFoundResponse(): Response
     {
         return response()->view('certificates.portal-not-found', status: 404);
-    }
-
-    private function canonicalRedirect(
-        Student $student,
-        string $requestedSlug,
-        ?Certificate $certificate = null,
-        ?string $action = null,
-    ): ?RedirectResponse {
-        if (hash_equals($this->portals->slug($student), $requestedSlug)) {
-            return null;
-        }
-
-        $url = match ($action) {
-            'show' => $this->portals->previewUrl($student, $certificate),
-            'pdf' => $this->portals->pdfUrl($student, $certificate),
-            default => $this->portals->url($student),
-        };
-
-        return redirect()->to($url);
     }
 }

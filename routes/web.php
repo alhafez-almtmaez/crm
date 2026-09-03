@@ -33,20 +33,30 @@ Route::get('verify/{public_id}', CertificateVerificationController::class)
     ->middleware('throttle:certificate-verification')
     ->name('certificates.verify');
 
-Route::prefix('certificates/{student_slug}/{portal_id}')
-    ->name('certificate-portals.')
+Route::prefix('certificates')
     ->middleware(['certificate-portal-privacy'])
     ->controller(StudentCertificatePortalController::class)
     ->group(function (): void {
-        Route::get('/', 'index')
+        Route::get('{portal_id}', 'index')
             ->middleware('throttle:certificate-portal')
-            ->name('show');
-        Route::get('{certificate_public_id}/view', 'show')
+            ->name('certificate-portals.show');
+        Route::get('{portal_id}/{certificate_public_id}/view', 'show')
             ->middleware('throttle:certificate-portal')
-            ->name('certificates.show');
-        Route::get('{certificate_public_id}/download', 'pdf')
+            ->name('certificate-portals.certificates.show');
+        Route::get('{portal_id}/{certificate_public_id}/download', 'pdf')
             ->middleware('throttle:certificate-portal-pdf')
-            ->name('certificates.pdf');
+            ->name('certificate-portals.certificates.pdf');
+
+        // Keep already-delivered links working while redirecting them to the compact URL.
+        Route::get('{student_slug}/{portal_id}', 'legacyIndex')
+            ->middleware('throttle:certificate-portal')
+            ->name('certificate-portals.legacy.show');
+        Route::get('{student_slug}/{portal_id}/{certificate_public_id}/view', 'legacyShow')
+            ->middleware('throttle:certificate-portal')
+            ->name('certificate-portals.legacy.certificates.show');
+        Route::get('{student_slug}/{portal_id}/{certificate_public_id}/download', 'legacyPdf')
+            ->middleware('throttle:certificate-portal-pdf')
+            ->name('certificate-portals.legacy.certificates.pdf');
     });
 
 Route::get('evaluations/report/{publicId}', [EvaluationController::class, 'report'])

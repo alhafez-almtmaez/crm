@@ -132,8 +132,7 @@ function studentCertificatePortalSlug(Student $student): string
 function studentCertificatePortalUrl(Student $student): string
 {
     return route('certificate-portals.show', [
-        studentCertificatePortalSlug($student),
-        $student->certificate_portal_id,
+        'portal_id' => $student->certificate_portal_id,
     ]);
 }
 
@@ -164,7 +163,11 @@ test('students receive unique UUID v4 certificate portal ids and the admin paylo
     $payload = app(StudentCertificateService::class)->indexPayload($first);
 
     expect(data_get($payload, 'student.certificate_portal_url'))
-        ->toBe(studentCertificatePortalUrl($first));
+        ->toBe(studentCertificatePortalUrl($first))
+        ->and(parse_url(studentCertificatePortalUrl($first), PHP_URL_PATH))
+        ->toBe('/certificates/'.$first->certificate_portal_id)
+        ->and(studentCertificatePortalUrl($first))
+        ->not->toContain(studentCertificatePortalSlug($first));
 });
 
 test('the public portal is available without authentication and returns only valid certificates without private data', function () {
@@ -198,16 +201,13 @@ test('the public portal is available without authentication and returns only val
 test('a public certificate preview uses portal URLs and never renders an admin link', function () {
     $fixture = studentCertificatePortalFixture();
     $student = $fixture['student'];
-    $slug = studentCertificatePortalSlug($student);
     $previewUrl = route('certificate-portals.certificates.show', [
-        $slug,
-        $student->certificate_portal_id,
-        $fixture['valid']->public_id,
+        'portal_id' => $student->certificate_portal_id,
+        'certificate_public_id' => $fixture['valid']->public_id,
     ]);
     $pdfUrl = route('certificate-portals.certificates.pdf', [
-        $slug,
-        $student->certificate_portal_id,
-        $fixture['valid']->public_id,
+        'portal_id' => $student->certificate_portal_id,
+        'certificate_public_id' => $fixture['valid']->public_id,
     ]);
 
     $response = $this->get($previewUrl);
@@ -226,8 +226,7 @@ test('portal and certificate UUIDs are nested and invalid certificate states can
     $second = studentCertificatePortalFixture();
     $student = $first['student'];
     $parameters = [
-        studentCertificatePortalSlug($student),
-        $student->certificate_portal_id,
+        'portal_id' => $student->certificate_portal_id,
     ];
 
     Pdf::fake();
@@ -235,12 +234,12 @@ test('portal and certificate UUIDs are nested and invalid certificate states can
     foreach ([$second['valid'], $first['revoked'], $first['replaced']] as $certificate) {
         $this->get(route('certificate-portals.certificates.show', [
             ...$parameters,
-            $certificate->public_id,
+            'certificate_public_id' => $certificate->public_id,
         ]))->assertNotFound();
 
         $this->get(route('certificate-portals.certificates.pdf', [
             ...$parameters,
-            $certificate->public_id,
+            'certificate_public_id' => $certificate->public_id,
         ]))->assertNotFound();
     }
 });
@@ -248,12 +247,10 @@ test('portal and certificate UUIDs are nested and invalid certificate states can
 test('a valid public certificate downloads as a named PDF containing the student and achievement names', function () {
     $fixture = studentCertificatePortalFixture();
     $student = $fixture['student'];
-    $slug = studentCertificatePortalSlug($student);
     $portalUrl = studentCertificatePortalUrl($student);
     $pdfUrl = route('certificate-portals.certificates.pdf', [
-        $slug,
-        $student->certificate_portal_id,
-        $fixture['valid']->public_id,
+        'portal_id' => $student->certificate_portal_id,
+        'certificate_public_id' => $fixture['valid']->public_id,
     ]);
 
     Pdf::fake();
@@ -277,21 +274,32 @@ test('a valid public certificate downloads as a named PDF containing the student
     assertStudentCertificatePortalPrivacyHeaders($response);
 });
 
-test('an outdated student slug redirects to the canonical portal URL', function () {
+test('legacy student slug links redirect to the compact canonical URLs', function () {
     $fixture = studentCertificatePortalFixture();
     $student = $fixture['student'];
 
-    $this->get(route('certificate-portals.show', [
-        'old-student-name',
-        $student->certificate_portal_id,
+    $this->get(route('certificate-portals.legacy.show', [
+        'student_slug' => 'old-student-name',
+        'portal_id' => $student->certificate_portal_id,
     ]))->assertRedirect(studentCertificatePortalUrl($student));
+
+    $this->get(route('certificate-portals.legacy.certificates.show', [
+        'student_slug' => studentCertificatePortalSlug($student),
+        'portal_id' => $student->certificate_portal_id,
+        'certificate_public_id' => $fixture['valid']->public_id,
+    ]))->assertRedirect(app(StudentCertificatePortalService::class)->previewUrl($student, $fixture['valid']));
+
+    $this->get(route('certificate-portals.legacy.certificates.pdf', [
+        'student_slug' => studentCertificatePortalSlug($student),
+        'portal_id' => $student->certificate_portal_id,
+        'certificate_public_id' => $fixture['valid']->public_id,
+    ]))->assertRedirect(app(StudentCertificatePortalService::class)->pdfUrl($student, $fixture['valid']));
 });
 
 test('unknown and malformed portal ids return the same private generic page', function () {
     foreach ([(string) Str::uuid(), 'not-a-portal-id'] as $portalId) {
         $response = $this->get(route('certificate-portals.show', [
-            'student-name',
-            $portalId,
+            'portal_id' => $portalId,
         ]));
 
         $response->assertNotFound()

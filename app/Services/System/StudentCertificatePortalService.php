@@ -38,7 +38,6 @@ class StudentCertificatePortalService
     public function url(Student $student): string
     {
         return route('certificate-portals.show', [
-            'student_slug' => $this->slug($student),
             'portal_id' => (string) $student->certificate_portal_id,
         ]);
     }
@@ -46,7 +45,6 @@ class StudentCertificatePortalService
     public function previewUrl(Student $student, Certificate $certificate): string
     {
         return route('certificate-portals.certificates.show', [
-            'student_slug' => $this->slug($student),
             'portal_id' => (string) $student->certificate_portal_id,
             'certificate_public_id' => (string) $certificate->public_id,
         ]);
@@ -55,7 +53,6 @@ class StudentCertificatePortalService
     public function pdfUrl(Student $student, Certificate $certificate): string
     {
         return route('certificate-portals.certificates.pdf', [
-            'student_slug' => $this->slug($student),
             'portal_id' => (string) $student->certificate_portal_id,
             'certificate_public_id' => (string) $certificate->public_id,
         ]);
