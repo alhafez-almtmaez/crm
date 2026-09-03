@@ -8,7 +8,9 @@
     $metaDescription = $resolvedMeta['description'] ?? ($brandTagline !== '' ? $brandTagline : $brandName);
     $metaUrl = $resolvedMeta['url'] ?? url()->current();
     $metaImage = $resolvedMeta['image'] ?? null;
+    $metaImageAlt = $resolvedMeta['image_alt'] ?? ('شعار '.$brandName);
     $metaType = $resolvedMeta['type'] ?? 'website';
+    $metaLocale = $resolvedMeta['locale'] ?? (app()->getLocale() === 'ar' ? 'ar_AR' : 'en_US');
 @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ app()->getLocale() === 'ar' ? 'rtl' : 'ltr' }}">
 <head>
@@ -21,10 +23,13 @@
         <link rel="shortcut icon" href="{{ $metaImage }}">
         <meta property="og:image" content="{{ $metaImage }}">
         <meta property="og:image:secure_url" content="{{ $metaImage }}">
+        <meta property="og:image:alt" content="{{ $metaImageAlt }}">
         <meta name="twitter:image" content="{{ $metaImage }}">
+        <meta name="twitter:image:alt" content="{{ $metaImageAlt }}">
     @endif
     <meta property="og:url" content="{{ $metaUrl }}">
     <meta property="og:type" content="{{ $metaType }}">
+    <meta property="og:locale" content="{{ $metaLocale }}">
     <meta property="og:title" content="{{ $metaTitle }}">
     <meta property="og:description" content="{{ $metaDescription }}">
     <meta name="twitter:card" content="summary_large_image">

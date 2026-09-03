@@ -214,6 +214,8 @@ test('the public portal exposes the project logo and student context as social s
     $response->assertOk()
         ->assertSee('<meta property="og:image" content="'.$logoUrl.'">', false)
         ->assertSee('<meta property="og:image:secure_url" content="'.$logoUrl.'">', false)
+        ->assertSee('<meta property="og:image:alt" content="شعار مشروع الحافظ المتميز">', false)
+        ->assertSee('<meta property="og:locale" content="ar_AR">', false)
         ->assertSee('<meta name="twitter:image" content="'.$logoUrl.'">', false)
         ->assertSee('<meta property="og:url" content="'.studentCertificatePortalUrl($student).'">', false)
         ->assertSee('شهادات '.$student->full_name.' | مشروع الحافظ المتميز');

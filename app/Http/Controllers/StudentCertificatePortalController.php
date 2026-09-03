@@ -39,6 +39,8 @@ class StudentCertificatePortalController extends Controller
                 'description' => $description,
                 'url' => $portal['portal_url'],
                 'image' => $portal['logo_url'],
+                'image_alt' => 'شعار '.$portal['brand_name'],
+                'locale' => 'ar_AR',
                 'type' => 'website',
             ],
         ]);
