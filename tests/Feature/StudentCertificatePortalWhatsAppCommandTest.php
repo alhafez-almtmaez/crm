@@ -25,13 +25,14 @@ uses(RefreshDatabase::class);
 function studentCertificatePortalWhatsAppFixture(
     ?string $parentPhone = '0791111111',
     ?string $studentPhone = '0782222222',
+    string $studentGender = Center::STUDENT_GENDER_MALE,
 ): array {
     foreach (['students.update', 'certificates.send'] as $permission) {
         Permission::findOrCreate($permission, 'web');
     }
     $actor = User::factory()->create();
     $actor->givePermissionTo(['students.update', 'certificates.send']);
-    $center = Center::factory()->create();
+    $center = Center::factory()->create(['student_gender' => $studentGender]);
     $group = Group::factory()->create(['center_id' => $center->id]);
     $plan = Plan::factory()->quran()->create();
     $point = PlanPoint::factory()->create([
@@ -132,7 +133,40 @@ test('one command issues missing certificates and sends one portal link to stude
         expect($message['contentType'])->toBe('string')
             ->and((string) $message['content'])->toContain($fixture['student']->full_name)
             ->and((string) $message['content'])->toContain($portalUrl)
+            ->and((string) $message['content'])->toContain('الخاصة بالطالب')
+            ->and((string) $message['content'])->toContain('بارك الله في جهوده، وزاده')
             ->and((string) $message['content'])->not->toContain('HMT-');
+    }
+});
+
+test('female center students receive feminine certificate portal wording', function () {
+    $fixture = studentCertificatePortalWhatsAppFixture(
+        studentGender: Center::STUDENT_GENDER_FEMALE,
+    );
+    Device::factory()->connected()->create(['session_id' => 'female-portal-session']);
+    Http::fake(function (Request $request) {
+        if (str_contains($request->url(), '/client/isRegisteredUser/')) {
+            return Http::response(['success' => true, 'result' => true]);
+        }
+
+        return Http::response(['success' => true, 'message' => ['id' => 'sent-message']]);
+    });
+
+    $this->artisan('certificates:bulk-portal-deliver', studentCertificatePortalWhatsAppCommandOptions(
+        $fixture['actor'],
+        (int) $fixture['student']->id,
+    ))->assertSuccessful();
+
+    $messages = collect(Http::recorded())
+        ->map(static fn (array $record): Request => $record[0])
+        ->filter(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/'));
+
+    expect($messages)->toHaveCount(2);
+    foreach ($messages as $message) {
+        expect((string) $message['content'])
+            ->toContain('الخاصة بالطالبة')
+            ->toContain('بارك الله في جهودها، وزادها')
+            ->not->toContain('الخاصة بالطالب:');
     }
 });
 

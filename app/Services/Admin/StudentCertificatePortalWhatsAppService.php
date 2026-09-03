@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Exceptions\WhatsAppMessageSendException;
 use App\Exceptions\WhatsAppRecipientNotRegisteredException;
+use App\Models\Center;
 use App\Models\Certificate;
 use App\Models\Student;
 use App\Services\System\StudentCertificatePortalService;
@@ -352,7 +353,7 @@ class StudentCertificatePortalWhatsAppService
 
         return Student::query()
             ->with([
-                'center:id,name',
+                'center:id,name,student_gender',
                 'certificates' => static fn ($query) => $query
                     ->where('status', Certificate::STATUS_VALID)
                     ->orderBy('id')
@@ -409,9 +410,13 @@ class StudentCertificatePortalWhatsAppService
 
     public function message(Student $student): string
     {
+        $student->loadMissing('center:id,student_gender');
         $brand = trim((string) ($this->settings->get()['brandName'] ?? config('app.name')));
+        $messageKey = $student->center?->student_gender === Center::STUDENT_GENDER_FEMALE
+            ? 'certificates.portal_whatsapp_messages.female'
+            : 'certificates.portal_whatsapp_messages.male';
 
-        return Lang::get('certificates.portal_whatsapp_message', [
+        return Lang::get($messageKey, [
             'brand' => $brand !== '' ? $brand : (string) config('app.name'),
             'student' => trim((string) $student->full_name),
             'portal_url' => $this->portals->url($student),

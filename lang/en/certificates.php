@@ -14,7 +14,10 @@ return [
     'whatsapp_pdf_failed' => 'The certificate PDF could not be prepared. Please try again.',
     'whatsapp_send_failed' => 'The certificate PDF could not be sent via WhatsApp.',
     'portal_whatsapp_not_eligible' => 'This student has no valid portal certificates eligible before the selected cutoff.',
-    'portal_whatsapp_message' => "🎓 *Achievement certificates | :brand*\n\nPeace be upon you,\nWe are pleased to share the achievement certificate page for:\n*:student*\n\nAll certificates can be viewed and downloaded as PDF from:\n:portal_url\n\nMay Allah bless this effort and grant continued knowledge, steadfastness, and success.",
+    'portal_whatsapp_messages' => [
+        'male' => "🎓 *Achievement certificates | :brand*\n\nPeace be upon you,\nWe are pleased to share the achievement certificate page for:\n*:student*\n\nAll certificates can be viewed and downloaded as PDF from:\n:portal_url\n\nMay Allah bless this effort and grant continued knowledge, steadfastness, and success.",
+        'female' => "🎓 *Achievement certificates | :brand*\n\nPeace be upon you,\nWe are pleased to share the achievement certificate page for:\n*:student*\n\nAll certificates can be viewed and downloaded as PDF from:\n:portal_url\n\nMay Allah bless this effort and grant continued knowledge, steadfastness, and success.",
+    ],
     'whatsapp_caption' => "🎓 *Achievement Certificate*\n\nThe administration of *:center* warmly congratulates *:student* in recognition of :achievement_phrase.\n\nMay this achievement be blessed and followed by continued success and steadfast progress.\n\n📎 The certificate is attached as a PDF.",
     'whatsapp_achievement_phrases' => [
         'surah' => 'completing the memorization of Surah *:achievement*',
