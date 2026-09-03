@@ -133,7 +133,9 @@ test('one command issues missing certificates and sends one portal link to stude
         expect($message['contentType'])->toBe('string')
             ->and((string) $message['content'])->toContain($fixture['student']->full_name)
             ->and((string) $message['content'])->toContain($portalUrl)
+            ->and((string) $message['content'])->toContain('شهادات الإنجاز | '.$fixture['student']->center->name)
             ->and((string) $message['content'])->toContain('الخاصة بالطالب')
+            ->and((string) $message['content'])->toContain('جميع شهاداته')
             ->and((string) $message['content'])->toContain('بارك الله في جهوده، وزاده')
             ->and((string) $message['content'])->not->toContain('HMT-');
     }
@@ -164,7 +166,9 @@ test('female center students receive feminine certificate portal wording', funct
     expect($messages)->toHaveCount(2);
     foreach ($messages as $message) {
         expect((string) $message['content'])
+            ->toContain('شهادات الإنجاز | '.$fixture['student']->center->name)
             ->toContain('الخاصة بالطالبة')
+            ->toContain('جميع شهاداتها')
             ->toContain('بارك الله في جهودها، وزادها')
             ->not->toContain('الخاصة بالطالب:');
     }

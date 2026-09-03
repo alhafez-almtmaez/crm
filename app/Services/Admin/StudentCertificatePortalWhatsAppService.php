@@ -8,7 +8,6 @@ use App\Models\Center;
 use App\Models\Certificate;
 use App\Models\Student;
 use App\Services\System\StudentCertificatePortalService;
-use App\Services\System\SystemSettingsService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -29,7 +28,6 @@ class StudentCertificatePortalWhatsAppService
     public function __construct(
         private readonly WhatsAppMessagingService $messaging,
         private readonly StudentCertificatePortalService $portals,
-        private readonly SystemSettingsService $settings,
     ) {}
 
     /**
@@ -410,14 +408,14 @@ class StudentCertificatePortalWhatsAppService
 
     public function message(Student $student): string
     {
-        $student->loadMissing('center:id,student_gender');
-        $brand = trim((string) ($this->settings->get()['brandName'] ?? config('app.name')));
+        $student->loadMissing('center:id,name,student_gender');
         $messageKey = $student->center?->student_gender === Center::STUDENT_GENDER_FEMALE
             ? 'certificates.portal_whatsapp_messages.female'
             : 'certificates.portal_whatsapp_messages.male';
+        $centerName = trim((string) $student->center?->name);
 
         return Lang::get($messageKey, [
-            'brand' => $brand !== '' ? $brand : (string) config('app.name'),
+            'center' => $centerName !== '' ? $centerName : (string) config('app.name'),
             'student' => trim((string) $student->full_name),
             'portal_url' => $this->portals->url($student),
         ], 'ar');
