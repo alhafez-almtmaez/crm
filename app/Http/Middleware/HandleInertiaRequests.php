@@ -8,9 +8,7 @@ use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
-    public function __construct(private readonly SystemSettingsService $systemSettings)
-    {
-    }
+    public function __construct(private readonly SystemSettingsService $systemSettings) {}
 
     /**
      * The root template that's loaded on the first page visit.
@@ -43,11 +41,12 @@ class HandleInertiaRequests extends Middleware
         $settings = $this->systemSettings->get();
         app()->setLocale($settings['language']);
         $user = $request->user();
+        $brandName = trim((string) ($settings['brandName'] ?? ''));
 
         return [
             ...parent::share($request),
             'app' => [
-                'name' => config('app.name', 'Vita'),
+                'name' => $brandName !== '' ? $brandName : config('app.name', 'Vita'),
                 'tagline' => $settings['brandTagline'] ?? '',
             ],
             'auth' => [

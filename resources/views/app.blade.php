@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 @php
-    $brandTagline = app(\App\Services\System\SystemSettingsService::class)->get()['brandTagline'] ?? '';
+    $systemSettings = app(\App\Services\System\SystemSettingsService::class)->get();
+    $brandName = trim((string) ($systemSettings['brandName'] ?? '')) ?: config('app.name');
+    $brandTagline = $systemSettings['brandTagline'] ?? '';
     $resolvedMeta = $pageMeta ?? [];
-    $metaTitle = $resolvedMeta['title'] ?? config('app.name');
-    $metaDescription = $resolvedMeta['description'] ?? ($brandTagline !== '' ? $brandTagline : config('app.name', 'Vita'));
+    $metaTitle = $resolvedMeta['title'] ?? $brandName;
+    $metaDescription = $resolvedMeta['description'] ?? ($brandTagline !== '' ? $brandTagline : $brandName);
     $metaUrl = $resolvedMeta['url'] ?? url()->current();
     $metaImage = $resolvedMeta['image'] ?? null;
     $metaType = $resolvedMeta['type'] ?? 'website';
