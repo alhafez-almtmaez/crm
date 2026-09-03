@@ -90,8 +90,9 @@ class BulkCertificateDeliveryService
         bool $activeOnly = true,
         ?int $limit = null,
         ?callable $onProgress = null,
+        ?int $studentId = null,
     ): array {
-        $transactions = $this->missingIssueCandidates($cutoffUtc, $activeOnly, $limit);
+        $transactions = $this->missingIssueCandidates($cutoffUtc, $activeOnly, $limit, $studentId);
         $summary = [
             'candidates' => $transactions->count(),
             'checked' => 0,
@@ -324,10 +325,11 @@ class BulkCertificateDeliveryService
         CarbonInterface $cutoffUtc,
         bool $activeOnly = true,
         ?int $limit = null,
+        ?int $studentId = null,
     ): EloquentCollection {
         $this->assertValidLimit($limit);
 
-        $evidenceTransactions = $this->completionEvidenceQuery($cutoffUtc, $activeOnly)->get()
+        $evidenceTransactions = $this->completionEvidenceQuery($cutoffUtc, $activeOnly, $studentId)->get()
             ->filter(static fn (StudentPointTransaction $transaction): bool => $transaction->student instanceof Student
                 && $transaction->planPoint instanceof PlanPoint
                 && (int) $transaction->planPoint->plan_id > 0
@@ -460,6 +462,7 @@ class BulkCertificateDeliveryService
     public function completionEvidenceQuery(
         CarbonInterface $cutoffUtc,
         bool $activeOnly = true,
+        ?int $studentId = null,
     ): Builder {
         return StudentPointTransaction::query()
             ->select('student_point_transactions.*')
@@ -467,6 +470,10 @@ class BulkCertificateDeliveryService
             ->join('plan_points as evidence_plan_points', 'evidence_plan_points.id', '=', 'student_point_transactions.plan_point_id')
             ->where('student_point_transactions.type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
             ->where('student_point_transactions.created_at', '<', $cutoffUtc)
+            ->when($studentId !== null, static fn (Builder $builder): Builder => $builder->where(
+                'student_point_transactions.student_id',
+                $studentId,
+            ))
             ->when(
                 $activeOnly,
                 static fn (Builder $builder): Builder => $builder->where(

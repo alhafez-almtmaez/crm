@@ -440,6 +440,54 @@ class CertificateContentTemplateService
         ];
     }
 
+    /**
+     * Replace selected frozen variable values without consulting or applying
+     * the current template. This keeps the issued wording and template revision
+     * intact while correcting authoritative snapshot values such as dates.
+     *
+     * @param  array<string, mixed>  $variables
+     * @return array<string, mixed>|null
+     */
+    public function replaceSnapshotVariables(mixed $snapshot, array $variables): ?array
+    {
+        $normalized = $this->snapshot($snapshot);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $replacements = collect($variables)
+            ->filter(static fn (mixed $value, string $key): bool => array_key_exists($key, self::VARIABLES)
+                && is_scalar($value))
+            ->map(static fn (mixed $value): string => (string) $value)
+            ->all();
+        if ($replacements === []) {
+            return $snapshot;
+        }
+
+        $changed = false;
+        foreach (self::SECTION_KEYS as $sectionKey) {
+            foreach ($normalized['rendered_segments'][$sectionKey] as &$segment) {
+                $key = $segment['key'] ?? null;
+                if (($segment['type'] ?? null) === 'variable'
+                    && is_string($key)
+                    && array_key_exists($key, $replacements)) {
+                    if ((string) ($segment['text'] ?? '') !== $replacements[$key]) {
+                        $segment['text'] = $replacements[$key];
+                        $changed = true;
+                    }
+                }
+            }
+            unset($segment);
+
+            $normalized['rendered_sections'][$sectionKey] = collect(
+                $normalized['rendered_segments'][$sectionKey],
+            )->map(static fn (array $segment): string => (string) ($segment['text'] ?? ''))
+                ->implode('');
+        }
+
+        return $changed ? $normalized : $snapshot;
+    }
+
     /** @param array<string, mixed> $data */
     public function create(array $data, ?int $userId): CertificateContentTemplate
     {

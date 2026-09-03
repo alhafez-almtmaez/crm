@@ -58,6 +58,7 @@ function certificateWhatsAppFixture(): array
         'current_plan_point_id' => $point->id,
         'admin_id' => $user->id,
     ]);
+    recordStudentPlanCompletion($student, $point);
 
     Auth::guard('web')->login($user);
     try {

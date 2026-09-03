@@ -85,8 +85,9 @@ class WhatsAppMessagingService
      * Successful personal-number checks remain cached for the subsequent send.
      *
      * @param  array<int, string>  $phones
+     * @return array<int, string> Eligible chat IDs after registration checks.
      */
-    public function assertHasEligibleRecipients(array $phones, ?string $groupSerialized = null): void
+    public function assertHasEligibleRecipients(array $phones, ?string $groupSerialized = null): array
     {
         $baseUrl = rtrim((string) config('services.whatsapp_api.url', ''), '/');
         if ($baseUrl === '') {
@@ -106,13 +107,28 @@ class WhatsAppMessagingService
             );
         }
 
-        $this->filterRegisteredRecipients($device, $recipients, $baseUrl);
+        return $this->filterRegisteredRecipients($device, $recipients, $baseUrl)['recipients'];
     }
 
     public function sendTextMessage(string $phone, string $content, ?Device $preferredDevice = null): void
     {
+        $this->sendTextMessageToPhones([$phone], $content, $preferredDevice);
+    }
+
+    /**
+     * Send the same text to all distinct personal recipients. Registration is
+     * checked before delivery; numbers confirmed as unregistered are skipped
+     * while the remaining valid recipients continue.
+     *
+     * @param  array<int, string>  $phones
+     */
+    public function sendTextMessageToPhones(
+        array $phones,
+        string $content,
+        ?Device $preferredDevice = null,
+    ): void {
         $this->sendMediaCaptionToChatIds(
-            $this->recipientChatIds([$phone]),
+            $this->recipientChatIds($phones),
             $content,
             preferredDevice: $preferredDevice,
         );

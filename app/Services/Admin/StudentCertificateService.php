@@ -7,16 +7,17 @@ use App\Models\Certificate;
 use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentPointTransaction;
+use App\Services\System\CertificateAchievementDateService;
 use App\Services\System\CertificateAchievementService;
 use App\Services\System\CertificateContentTemplateService;
 use App\Services\System\CertificateDesignSettingsService;
 use App\Services\System\CertificateQrCodeService;
 use App\Services\System\CertificateWordingService;
 use App\Services\System\DateTimeFormatterService;
+use App\Services\System\StudentCertificatePortalService;
 use App\Services\System\SystemSettingsService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -63,6 +64,8 @@ class StudentCertificateService
         private readonly CertificateQrCodeService $certificateQrCodes,
         private readonly CertificateWordingService $certificateWordings,
         private readonly CertificateContentTemplateService $certificateContentTemplates,
+        private readonly StudentCertificatePortalService $certificatePortals,
+        private readonly CertificateAchievementDateService $certificateAchievementDates,
     ) {}
 
     /**
@@ -88,9 +91,18 @@ class StudentCertificateService
             ->map(static fn ($id): int => (int) $id)
             ->all();
 
-        $availableCertificates = $this->reachedCertificatePoints($student, $currentPoint)
+        $unissuedReachedPoints = $this->reachedCertificatePoints($student, $currentPoint)
             ->reject(static fn (PlanPoint $point): bool => in_array((int) $point->id, $issuedPlanPointIds, true))
-            ->map(fn (PlanPoint $point): array => $this->checkpointItem($point))
+            ->values();
+        $achievementEvidence = $this->certificateAchievementDates->earliestEvidenceForCheckpoints(
+            $student,
+            $unissuedReachedPoints,
+        );
+        $availableCertificates = $unissuedReachedPoints
+            ->map(fn (PlanPoint $point): array => $this->checkpointItem(
+                $point,
+                isset($achievementEvidence[(int) $point->id]),
+            ))
             ->values()
             ->all();
 
@@ -102,6 +114,7 @@ class StudentCertificateService
                 'plan_name' => $student->plan?->name,
                 'current_plan_point_name' => $currentPoint?->name,
                 'has_whatsapp_recipient' => $this->studentHasWhatsAppRecipient($student),
+                'certificate_portal_url' => $this->certificatePortals->url($student),
             ],
             'availableCertificates' => $availableCertificates,
             'certificates' => $issuedCertificates
@@ -155,10 +168,21 @@ class StudentCertificateService
                 ]);
             }
 
+            $achievementEvidence = $this->certificateAchievementDates->earliestEvidence(
+                $lockedStudent,
+                $planPoint,
+                lockForUpdate: true,
+            );
+            if ($achievementEvidence === null || $achievementEvidence->created_at === null) {
+                throw ValidationException::withMessages([
+                    'plan_point_id' => __('certificates.achievement_date_not_documented'),
+                ]);
+            }
+
             return $this->createCertificate(
                 $lockedStudent,
                 $planPoint,
-                $this->achievementDate($lockedStudent, $planPoint),
+                $achievementEvidence->created_at,
                 $lockedStudent->plan?->name,
             );
         });
@@ -175,6 +199,21 @@ class StudentCertificateService
         ?int $certificatePlanPointId = null,
     ): Certificate {
         return DB::transaction(function () use ($transaction, $certificatePlanPointId): Certificate {
+            $studentId = StudentPointTransaction::query()
+                ->whereKey($transaction->id)
+                ->value('student_id');
+            if ($studentId === null) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('certificates.checkpoint_not_reached'),
+                ]);
+            }
+
+            /** @var Student $lockedStudent */
+            $lockedStudent = Student::query()
+                ->whereKey($studentId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             /** @var StudentPointTransaction $lockedTransaction */
             $lockedTransaction = StudentPointTransaction::query()
                 ->whereKey($transaction->id)
@@ -183,6 +222,7 @@ class StudentCertificateService
 
             if ($lockedTransaction->type !== StudentPointTransaction::TYPE_HOMEWORK_COMPLETED
                 || $lockedTransaction->student_id === null
+                || (int) $lockedTransaction->student_id !== (int) $lockedStudent->id
                 || $lockedTransaction->plan_point_id === null
                 || $lockedTransaction->created_at === null) {
                 throw ValidationException::withMessages([
@@ -190,11 +230,6 @@ class StudentCertificateService
                 ]);
             }
 
-            /** @var Student $lockedStudent */
-            $lockedStudent = Student::query()
-                ->whereKey($lockedTransaction->student_id)
-                ->lockForUpdate()
-                ->firstOrFail();
             if ((int) $lockedStudent->is_active !== Student::STATUS_ACTIVE) {
                 throw ValidationException::withMessages([
                     'student' => __('certificates.bulk_active_students_only'),
@@ -249,10 +284,21 @@ class StudentCertificateService
                 return $existing;
             }
 
+            $achievementEvidence = $this->certificateAchievementDates->earliestEvidence(
+                $lockedStudent,
+                $planPoint,
+                lockForUpdate: true,
+            );
+            if ($achievementEvidence === null || $achievementEvidence->created_at === null) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('certificates.achievement_date_not_documented'),
+                ]);
+            }
+
             return $this->createCertificate(
                 $lockedStudent,
                 $planPoint,
-                $lockedTransaction->created_at,
+                $achievementEvidence->created_at,
                 $planPoint->plan?->name,
             );
         });
@@ -351,6 +397,151 @@ class StudentCertificateService
             'achieved_at' => $achievedAt,
             'issued_at' => $issuedAt,
         ]);
+    }
+
+    /**
+     * Reconcile one issued certificate with the first persisted completion
+     * event that proves its checkpoint was reached in the same plan.
+     *
+     * @return array{
+     *     status: string,
+     *     certificate_id: int,
+     *     certificate_number: string,
+     *     student_id: int|null,
+     *     evidence_transaction_id: int|null,
+     *     previous_achieved_at: string|null,
+     *     corrected_achieved_at: string|null
+     * }
+     */
+    public function synchronizeAchievementDate(Certificate $certificate, bool $apply = false): array
+    {
+        if ($apply) {
+            return DB::transaction(function () use ($certificate): array {
+                /** @var Certificate $lockedCertificate */
+                $lockedCertificate = Certificate::query()
+                    ->whereKey($certificate->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                return $this->achievementDateSynchronization($lockedCertificate, true);
+            });
+        }
+
+        /** @var Certificate $freshCertificate */
+        $freshCertificate = Certificate::query()->findOrFail($certificate->getKey());
+
+        return $this->achievementDateSynchronization($freshCertificate, false);
+    }
+
+    /**
+     * @return array{
+     *     status: string,
+     *     certificate_id: int,
+     *     certificate_number: string,
+     *     student_id: int|null,
+     *     evidence_transaction_id: int|null,
+     *     previous_achieved_at: string|null,
+     *     corrected_achieved_at: string|null
+     * }
+     */
+    private function achievementDateSynchronization(Certificate $certificate, bool $apply): array
+    {
+        $result = [
+            'status' => 'unlinked',
+            'certificate_id' => (int) $certificate->getKey(),
+            'certificate_number' => (string) $certificate->certificate_number,
+            'student_id' => $certificate->student_id !== null ? (int) $certificate->student_id : null,
+            'evidence_transaction_id' => null,
+            'previous_achieved_at' => $certificate->achieved_at?->toISOString(),
+            'corrected_achieved_at' => null,
+        ];
+        if ($apply && $certificate->whatsapp_delivery_status === Certificate::WHATSAPP_DELIVERY_PROCESSING) {
+            $result['status'] = 'processing';
+
+            return $result;
+        }
+        if ($certificate->student_id === null || $certificate->plan_point_id === null) {
+            return $result;
+        }
+
+        $planPoint = PlanPoint::query()->find($certificate->plan_point_id);
+        if ($planPoint === null) {
+            return $result;
+        }
+
+        $evidence = $this->certificateAchievementDates->earliestEvidence(
+            (int) $certificate->student_id,
+            $planPoint,
+            lockForUpdate: $apply,
+        );
+        if ($evidence === null || $evidence->created_at === null) {
+            $result['status'] = 'no_evidence';
+
+            return $result;
+        }
+
+        $correctedAt = $evidence->created_at;
+        $dates = $this->certificateDates($correctedAt);
+        $updatedWording = $this->certificateContentTemplates->replaceSnapshotVariables(
+            $certificate->wording_snapshot,
+            [
+                'hijri_date' => $dates['hijri'] ?? '—',
+                'gregorian_date' => $dates['gregorian'],
+            ],
+        );
+        $dateChanged = $certificate->achieved_at === null
+            || ! $certificate->achieved_at->equalTo($correctedAt)
+            || (string) $certificate->gregorian_date !== $dates['gregorian']
+            || $this->nullableTrim($certificate->hijri_date) !== $this->nullableTrim($dates['hijri']);
+        $wordingChanged = $updatedWording !== null
+            && $updatedWording !== $certificate->wording_snapshot;
+        $result['evidence_transaction_id'] = (int) $evidence->id;
+        $result['corrected_achieved_at'] = $correctedAt->toISOString();
+
+        if (! $dateChanged && ! $wordingChanged) {
+            $result['status'] = 'unchanged';
+
+            return $result;
+        }
+
+        $result['status'] = $apply ? 'updated' : 'needs_update';
+        if (! $apply) {
+            return $result;
+        }
+
+        $updates = [
+            'achieved_at' => $correctedAt,
+            'gregorian_date' => $dates['gregorian'],
+            'hijri_date' => $dates['hijri'],
+        ];
+        if ($updatedWording !== null) {
+            $rendered = $updatedWording['rendered_sections'];
+            $updates = [
+                ...$updates,
+                'wording_snapshot' => $updatedWording,
+                'title' => (string) $rendered['title'],
+                'quote_first' => (string) $rendered['quote_first'],
+                'quote_second' => (string) $rendered['quote_second'],
+                'closing_text' => (string) $rendered['closing'],
+            ];
+        }
+
+        $certificate->forceFill($updates)->save();
+
+        activity('certificates')
+            ->performedOn($certificate)
+            ->withProperties([
+                'action' => 'synchronize_achievement_date',
+                'student_id' => (int) $certificate->student_id,
+                'plan_point_id' => (int) $certificate->plan_point_id,
+                'evidence_transaction_id' => (int) $evidence->id,
+                'previous_achieved_at' => $result['previous_achieved_at'],
+                'corrected_achieved_at' => $result['corrected_achieved_at'],
+                'whatsapp_delivery_state_preserved' => true,
+            ])
+            ->log('certificate achievement date synchronized');
+
+        return $result;
     }
 
     public function redesign(Student $student, Certificate $certificate): Certificate
@@ -753,9 +944,10 @@ class StudentCertificateService
     /**
      * @return array<string, mixed>
      */
-    private function checkpointItem(PlanPoint $point): array
+    private function checkpointItem(PlanPoint $point, bool $hasAchievementEvidence): array
     {
         $achievement = $this->certificateAchievements->resolve($point);
+        $canIssue = $achievement !== null && $hasAchievementEvidence;
 
         return [
             'id' => (int) $point->id,
@@ -765,21 +957,13 @@ class StudentCertificateService
                 ? $this->achievementTypeLabel($achievement['type'])
                 : null,
             'achievement_name' => $achievement['name'] ?? null,
-            'can_issue' => $achievement !== null,
-            'issue_problem' => $achievement === null ? __('certificates.missing_achievement_data') : null,
+            'can_issue' => $canIssue,
+            'issue_problem' => match (true) {
+                $achievement === null => __('certificates.missing_achievement_data'),
+                ! $hasAchievementEvidence => __('certificates.achievement_date_not_documented'),
+                default => null,
+            },
         ];
-    }
-
-    private function achievementDate(Student $student, PlanPoint $point): CarbonInterface
-    {
-        $completedAt = StudentPointTransaction::query()
-            ->where('student_id', $student->id)
-            ->where('plan_point_id', $point->id)
-            ->where('type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
-            ->oldest('created_at')
-            ->value('created_at');
-
-        return $completedAt !== null ? Carbon::parse($completedAt) : now();
     }
 
     /**

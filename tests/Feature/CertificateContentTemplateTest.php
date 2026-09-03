@@ -84,6 +84,7 @@ function certificateContentTestIssuanceFixture(): array
         'current_plan_point_id' => $point->id,
         'admin_id' => $user->id,
     ]);
+    recordStudentPlanCompletion($student, $point);
 
     return compact('user', 'student', 'center', 'point');
 }

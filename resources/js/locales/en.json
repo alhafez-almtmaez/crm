@@ -441,7 +441,12 @@
     "notStarted": "Not started",
     "viewOnlyNotice": "You can view certificates, but issuing a new one requires student update permission.",
     "confirmTitle": "Confirm Certificate Issue",
-    "confirmMessage": "A new certificate will be saved for {name}. The same plan checkpoint cannot be issued twice."
+    "confirmMessage": "A new certificate will be saved for {name}. The same plan checkpoint cannot be issued twice.",
+    "portalTitle": "{name}'s Certificate Page",
+    "portalHint": "A private, stable link where the student can view every valid certificate and download it as a PDF.",
+    "copyPortalLink": "Copy Link",
+    "portalLinkCopied": "Link Copied",
+    "openPortal": "Open Student Page"
   },
   "certificateDesign": {
     "title": "Certificate Design",

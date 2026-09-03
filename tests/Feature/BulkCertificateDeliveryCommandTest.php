@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Mockery\MockInterface;
 use Spatie\Permission\Models\Permission;
 
@@ -797,29 +798,21 @@ test('bulk stale lock can be explicitly recovered only through the dedicated opt
     $replacementLock->release();
 });
 
-test('bulk delivery includes an authoritative issued certificate even without a direct checkpoint transaction', function () {
+test('manual issuance refuses pointer only progress without completion evidence', function () {
     $actor = bulkCertificateActor(['students.update']);
     ['center' => $center, 'group' => $group] = bulkCertificateLocation();
     $plan = Plan::factory()->create();
     $point = bulkCertificatePoint($plan);
     $student = bulkCertificateStudent($center, $group, $plan, $point);
 
-    Carbon::setTestNow('2026-08-20 12:00:00 UTC');
     Auth::guard('web')->login($actor);
     try {
-        $certificate = app(StudentCertificateService::class)->issue($student, (int) $point->id);
+        expect(fn () => app(StudentCertificateService::class)->issue($student, (int) $point->id))
+            ->toThrow(ValidationException::class);
     } finally {
         Auth::guard('web')->logout();
-        Carbon::setTestNow('2026-09-02 12:00:00 UTC');
     }
-    $point->update(['requires_certificate' => false]);
 
     expect(StudentPointTransaction::query()->count())->toBe(0)
-        ->and(app(BulkCertificateDeliveryService::class)
-            ->pendingSendQuery(Carbon::parse('2026-08-31 21:00:00', 'UTC'))
-            ->pluck('certificates.id')
-            ->all())
-        ->toBe([$certificate->id]);
-
-    Carbon::setTestNow();
+        ->and(Certificate::query()->count())->toBe(0);
 });

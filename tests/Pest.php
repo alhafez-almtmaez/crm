@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\PlanPoint;
+use App\Models\Student;
+use App\Models\StudentPointTransaction;
 use Tests\TestCase;
 
 /*
@@ -46,4 +49,34 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+function recordStudentPlanCompletion(
+    Student $student,
+    PlanPoint $point,
+    string $completedAt = '2026-08-20 09:00:00',
+): StudentPointTransaction {
+    $existing = StudentPointTransaction::query()
+        ->where('student_id', $student->id)
+        ->where('plan_point_id', $point->id)
+        ->where('type', StudentPointTransaction::TYPE_HOMEWORK_COMPLETED)
+        ->first();
+    if ($existing !== null) {
+        return $existing;
+    }
+
+    $transaction = new StudentPointTransaction([
+        'student_id' => $student->id,
+        'plan_point_id' => $point->id,
+        'type' => StudentPointTransaction::TYPE_HOMEWORK_COMPLETED,
+        'points' => 0,
+        'balance_before' => 0,
+        'balance_after' => 0,
+        'created_by' => $student->admin_id,
+    ]);
+    $transaction->created_at = $completedAt;
+    $transaction->updated_at = $completedAt;
+    $transaction->save();
+
+    return $transaction;
 }

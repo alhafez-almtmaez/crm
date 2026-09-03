@@ -56,6 +56,7 @@ function sunnahCertificateFixture(): array
         'current_plan_point_id' => $partPoint->id,
         'admin_id' => $user->id,
     ]);
+    recordStudentPlanCompletion($student, $partPoint);
 
     return compact('user', 'student', 'center', 'plan', 'bookPoint', 'partPoint');
 }

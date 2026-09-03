@@ -56,6 +56,7 @@ const revokeReason = ref('');
 const revoking = ref(false);
 const issuedCertificates = ref([...props.certificates]);
 const sendingCertificateIds = ref(new Set());
+const portalLinkCopied = ref(false);
 const activeCertificateTab = ref('available');
 const validAvailableCount = computed(() => props.availableCertificates.filter((item) => item.can_issue).length);
 const certificateTabOptions = computed(() => [
@@ -377,6 +378,32 @@ const openUrl = (url) => {
         window.open(url, '_blank', 'noopener,noreferrer');
     }
 };
+
+const copyPortalLink = async () => {
+    const url = String(props.student.certificate_portal_url ?? '').trim();
+    if (!url) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(url);
+    } catch {
+        const input = document.createElement('input');
+        input.value = url;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+    }
+
+    portalLinkCopied.value = true;
+    window.setTimeout(() => {
+        portalLinkCopied.value = false;
+    }, 1800);
+};
 </script>
 
 <template>
@@ -420,6 +447,48 @@ const openUrl = (url) => {
                         <p class="mt-1 font-semibold">{{ student.current_plan_point_name || t('certificates.notStarted') }}</p>
                     </div>
                 </div>
+            </article>
+
+            <article
+                v-if="student.certificate_portal_url"
+                class="rounded-(--radius-base) border border-[color-mix(in_oklab,var(--accent)_28%,var(--border))] bg-[color-mix(in_oklab,var(--accent)_4%,var(--card))] p-5 text-(--card-foreground) shadow-(--shadow-sm)"
+            >
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <span class="grid size-11 shrink-0 place-items-center rounded-xl bg-[color-mix(in_oklab,var(--accent)_12%,transparent)] text-[var(--accent)]">
+                            <i class="pi pi-link text-lg" aria-hidden="true"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h3 class="font-bold text-(--foreground)">{{ t('certificates.portalTitle', { name: student.full_name }) }}</h3>
+                            <p class="mt-1 text-sm leading-6 text-(--muted-foreground)">{{ t('certificates.portalHint') }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            severity="secondary"
+                            outlined
+                            :icon="portalLinkCopied ? 'pi pi-check' : 'pi pi-copy'"
+                            :label="portalLinkCopied ? t('certificates.portalLinkCopied') : t('certificates.copyPortalLink')"
+                            @click="copyPortalLink"
+                        />
+                        <Button
+                            type="button"
+                            icon="pi pi-external-link"
+                            :label="t('certificates.openPortal')"
+                            @click="openUrl(student.certificate_portal_url)"
+                        />
+                    </div>
+                </div>
+
+                <div
+                    dir="ltr"
+                    class="mt-4 overflow-x-auto rounded-lg border border-(--border) bg-(--background) px-3 py-2.5 text-start font-mono text-xs text-(--muted-foreground) sm:text-sm"
+                >
+                    {{ student.certificate_portal_url }}
+                </div>
+                <span class="sr-only" aria-live="polite">{{ portalLinkCopied ? t('certificates.portalLinkCopied') : '' }}</span>
             </article>
 
             <nav

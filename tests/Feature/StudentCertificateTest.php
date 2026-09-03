@@ -637,6 +637,7 @@ test('female wording renders in html and pdf for every achievement type', functi
 
     if ($achievementType === Certificate::ACHIEVEMENT_THREE_PARTS) {
         $student->update(['current_plan_point_id' => $point->id]);
+        recordStudentPlanCompletion($student, $point);
     }
 
     $this->actingAs($user, 'web')
@@ -736,6 +737,7 @@ test('certificate display avoids repeating the achievement type inside its saved
         ->and($service->viewPayload($student, $partCertificate)['achievement_name'])->toBe('الأول');
 
     $student->update(['current_plan_point_id' => $threePartsPoint->id]);
+    recordStudentPlanCompletion($student, $threePartsPoint);
     $this->actingAs($user, 'web')
         ->postJson(route('admin.students.certificates.store', $student), [
             'plan_point_id' => $threePartsPoint->id,

@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\WhatsAppController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\CertificateVerificationController;
+use App\Http\Controllers\StudentCertificatePortalController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -31,6 +32,22 @@ Route::redirect('/', '/admin');
 Route::get('verify/{public_id}', CertificateVerificationController::class)
     ->middleware('throttle:certificate-verification')
     ->name('certificates.verify');
+
+Route::prefix('certificates/{student_slug}/{portal_id}')
+    ->name('certificate-portals.')
+    ->middleware(['certificate-portal-privacy'])
+    ->controller(StudentCertificatePortalController::class)
+    ->group(function (): void {
+        Route::get('/', 'index')
+            ->middleware('throttle:certificate-portal')
+            ->name('show');
+        Route::get('{certificate_public_id}/view', 'show')
+            ->middleware('throttle:certificate-portal')
+            ->name('certificates.show');
+        Route::get('{certificate_public_id}/download', 'pdf')
+            ->middleware('throttle:certificate-portal-pdf')
+            ->name('certificates.pdf');
+    });
 
 Route::get('evaluations/report/{publicId}', [EvaluationController::class, 'report'])
     ->name('evaluations.report');
