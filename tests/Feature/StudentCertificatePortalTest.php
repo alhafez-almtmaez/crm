@@ -9,6 +9,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Services\Admin\StudentCertificateService;
 use App\Services\System\StudentCertificatePortalService;
+use App\Services\System\SystemSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -196,6 +197,26 @@ test('the public portal is available without authentication and returns only val
         ->not->toContain($fixture['revoked_reason']);
 
     assertStudentCertificatePortalPrivacyHeaders($response);
+});
+
+test('the public portal exposes the project logo and student context as social sharing metadata', function () {
+    $fixture = studentCertificatePortalFixture();
+    $student = $fixture['student'];
+    $logoUrl = 'https://cdn.example.test/project-logo.png';
+
+    app(SystemSettingsService::class)->update([
+        'brandName' => 'مشروع الحافظ المتميز',
+        'logoLightUrl' => $logoUrl,
+    ]);
+
+    $response = $this->get(studentCertificatePortalUrl($student));
+
+    $response->assertOk()
+        ->assertSee('<meta property="og:image" content="'.$logoUrl.'">', false)
+        ->assertSee('<meta property="og:image:secure_url" content="'.$logoUrl.'">', false)
+        ->assertSee('<meta name="twitter:image" content="'.$logoUrl.'">', false)
+        ->assertSee('<meta property="og:url" content="'.studentCertificatePortalUrl($student).'">', false)
+        ->assertSee('شهادات '.$student->full_name.' | مشروع الحافظ المتميز');
 });
 
 test('a public certificate preview uses portal URLs and never renders an admin link', function () {

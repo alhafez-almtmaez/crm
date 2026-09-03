@@ -27,8 +27,20 @@ class StudentCertificatePortalController extends Controller
             return $this->notFoundResponse();
         }
 
+        $portal = $this->portals->payload($student);
+        $title = 'شهادات '.$portal['student_name'].' | '.$portal['brand_name'];
+        $description = 'شهادات الإنجاز الخاصة بـ '.$portal['student_name'].' والصادرة عن '.$portal['brand_name'].'.';
+
         return Inertia::render('Certificates/StudentGallery', [
-            'portal' => $this->portals->payload($student),
+            'portal' => $portal,
+        ])->withViewData([
+            'pageMeta' => [
+                'title' => $title,
+                'description' => $description,
+                'url' => $portal['portal_url'],
+                'image' => $portal['logo_url'],
+                'type' => 'website',
+            ],
         ]);
     }
 
