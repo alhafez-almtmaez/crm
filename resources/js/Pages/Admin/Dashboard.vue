@@ -53,6 +53,7 @@ const metricCards = computed(() => [
         value: formatPercent(summary.value.attendance_rate_last_30),
         subtitle: t('dashboard.metrics.attendanceSubtitle', {
             present: formatNumber(summary.value.attendance_present_last_30),
+            late: formatNumber(summary.value.attendance_late_last_30),
             total: formatNumber(summary.value.attendance_total_last_30),
         }),
         icon: 'pi pi-list-check',

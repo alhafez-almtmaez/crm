@@ -43,6 +43,8 @@ const { t } = useI18n();
 const ALL_CENTERS_VALUE = '__all_centers__';
 
 const attendanceTypeOptions = computed(() => [
+    { value: 'present', label: t('absenceRules.attendancePresent') },
+    { value: 'late', label: t('absenceRules.attendanceLate') },
     { value: 'absence', label: t('absenceRules.attendanceAbsence') },
     { value: 'excused_absence', label: t('absenceRules.attendanceExcusedAbsence') },
 ]);
@@ -177,6 +179,7 @@ const isFreezeAction = computed(() => props.form.action === 'freeze_student');
                     input-type="number"
                     :invalid="Boolean(props.form.errors.deduction_points_count)"
                     :error="props.form.errors.deduction_points_count"
+                    :hint="t('absenceRules.deductionPointsHint')"
                 />
 
                 <PrimeFloatField

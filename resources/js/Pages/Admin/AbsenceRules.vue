@@ -34,6 +34,14 @@ const {
 });
 
 const attendanceLabel = (type) => {
+    if (type === 'present') {
+        return t('absenceRules.attendancePresent');
+    }
+
+    if (type === 'late') {
+        return t('absenceRules.attendanceLate');
+    }
+
     if (type === 'absence') {
         return t('absenceRules.attendanceAbsence');
     }

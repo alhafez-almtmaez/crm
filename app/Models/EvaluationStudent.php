@@ -11,10 +11,16 @@ class EvaluationStudent extends Model
     use HasFactory;
 
     public const ATTENDANCE_PRESENT = 1;
+
     public const ATTENDANCE_EXCUSED_ABSENCE = 2;
+
     public const ATTENDANCE_ABSENCE = 3;
+
     public const ATTENDANCE_FROZEN = 4;
+
     public const ATTENDANCE_EXEMPT = 5;
+
+    public const ATTENDANCE_LATE = 6;
 
     protected $table = 'evaluations_users';
 
@@ -54,5 +60,13 @@ class EvaluationStudent extends Model
     public function resolvedStudentId(): ?int
     {
         return $this->student_id ?? $this->user_id;
+    }
+
+    public static function hasScores(int $attendance): bool
+    {
+        return in_array($attendance, [
+            self::ATTENDANCE_PRESENT,
+            self::ATTENDANCE_LATE,
+        ], true);
     }
 }

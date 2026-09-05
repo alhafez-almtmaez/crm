@@ -684,8 +684,11 @@ class EvaluationService
                 continue;
             }
 
-            $isPresent = $attendance === EvaluationStudent::ATTENDANCE_PRESENT;
-            $scorePayload = $this->buildScorePayload($item, $isPresent, $evaluationType);
+            $scorePayload = $this->buildScorePayload(
+                $item,
+                EvaluationStudent::hasScores($attendance),
+                $evaluationType,
+            );
 
             $rowsByStudent[$studentId] = [
                 ...$scorePayload,
@@ -739,8 +742,11 @@ class EvaluationService
             }
 
             $attendance = (int) ($item['attendances'] ?? EvaluationStudent::ATTENDANCE_PRESENT);
-            $isPresent = $attendance === EvaluationStudent::ATTENDANCE_PRESENT;
-            $scorePayload = $this->buildScorePayload($item, $isPresent, $evaluationType);
+            $scorePayload = $this->buildScorePayload(
+                $item,
+                EvaluationStudent::hasScores($attendance),
+                $evaluationType,
+            );
             $payload = [
                 ...$scorePayload,
                 'note' => $this->normalizeNote($item),
@@ -1276,6 +1282,8 @@ class EvaluationService
     private function attendanceLabel(string $attendanceType): string
     {
         return match ($attendanceType) {
+            'present' => 'حاضر',
+            'late' => 'متأخر',
             'excused_absence' => 'غياب بعذر',
             'absence' => 'غياب بدون عذر',
             default => $attendanceType,

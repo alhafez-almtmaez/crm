@@ -49,6 +49,8 @@ class StudentService
             'admin_name' => 'admins.name',
             'parent_phone_number' => 'students.parent_phone_number',
             'phone_number' => 'students.phone_number',
+            'points_balance' => 'students.points_balance',
+            'deducted_points_count' => 'students.deducted_points_count',
             'is_active' => 'students.is_active',
             'created_at' => 'students.created_at',
         ];
@@ -66,6 +68,8 @@ class StudentService
                 'students.full_name',
                 'students.parent_phone_number',
                 'students.phone_number',
+                'students.points_balance',
+                'students.deducted_points_count',
                 'students.is_active',
                 'students.created_at',
                 'centers.name as center_name',

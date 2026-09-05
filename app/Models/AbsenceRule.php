@@ -12,6 +12,10 @@ class AbsenceRule extends Model
 {
     use HasFactory;
 
+    public const ATTENDANCE_TYPE_PRESENT = 'present';
+
+    public const ATTENDANCE_TYPE_LATE = 'late';
+
     public const ATTENDANCE_TYPE_ABSENCE = 'absence';
 
     public const ATTENDANCE_TYPE_EXCUSED_ABSENCE = 'excused_absence';

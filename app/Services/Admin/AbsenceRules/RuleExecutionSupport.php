@@ -4,7 +4,9 @@ namespace App\Services\Admin\AbsenceRules;
 
 use App\Models\Student;
 use App\Models\StudentFreeze;
+use App\Models\StudentPointTransaction;
 use App\Services\Admin\WhatsAppMessagingService;
+use Illuminate\Support\Facades\DB;
 
 class RuleExecutionSupport
 {
@@ -97,9 +99,48 @@ class RuleExecutionSupport
             return 0;
         }
 
-        $context->student->increment('deducted_points_count', $points);
+        return DB::transaction(function () use ($context, $points): int {
+            $existing = StudentPointTransaction::query()
+                ->where('evaluation_student_id', $context->evaluationStudent->id)
+                ->where('type', StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION)
+                ->first();
 
-        return $points;
+            if ($existing instanceof StudentPointTransaction) {
+                return abs(min(0, (int) $existing->points));
+            }
+
+            /** @var Student $student */
+            $student = Student::query()
+                ->whereKey($context->student->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $balanceBefore = (int) $student->points_balance;
+            $balanceAfter = $balanceBefore - $points;
+
+            $student->update([
+                'points_balance' => $balanceAfter,
+                'deducted_points_count' => (int) $student->deducted_points_count + $points,
+            ]);
+
+            StudentPointTransaction::query()->create([
+                'student_id' => $student->id,
+                'homework_id' => null,
+                'homework_student_point_id' => null,
+                'evaluation_id' => $context->evaluation->id,
+                'evaluation_student_id' => $context->evaluationStudent->id,
+                'absence_rule_id' => $context->rule->id,
+                'plan_point_id' => null,
+                'type' => StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION,
+                'points' => -$points,
+                'balance_before' => $balanceBefore,
+                'balance_after' => $balanceAfter,
+                'created_by' => $context->executedBy,
+            ]);
+
+            $context->student->setRawAttributes($student->getAttributes(), true);
+
+            return $points;
+        });
     }
 
     public function shouldCreateLocalPreview(): bool

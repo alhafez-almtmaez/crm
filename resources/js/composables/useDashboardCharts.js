@@ -103,6 +103,15 @@ export function useDashboardCharts(dashboardRef, t) {
                     pointRadius: 2,
                 },
                 {
+                    label: t('dashboard.attendance.late'),
+                    data: trend.late ?? [],
+                    borderColor: chartColors.sky,
+                    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+                    fill: false,
+                    tension: 0.35,
+                    pointRadius: 2,
+                },
+                {
                     label: t('dashboard.attendance.absent'),
                     data: trend.absent ?? [],
                     borderColor: chartColors.rose,

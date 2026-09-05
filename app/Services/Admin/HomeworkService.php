@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\Center;
+use App\Models\EvaluationStudent;
 use App\Models\Group;
 use App\Models\Homework;
 use App\Models\HomeworkStudent;
@@ -505,7 +506,12 @@ class HomeworkService
         $this->dataScope->abortUnlessCanAccessStudent($student);
 
         return StudentPointTransaction::query()
-            ->with(['homework:id,date', 'planPoint:id,name,points'])
+            ->with([
+                'homework:id,date',
+                'evaluation:id,date',
+                'evaluationStudent:id,attendances',
+                'planPoint:id,name,points',
+            ])
             ->where('student_id', $student->id)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -513,15 +519,37 @@ class HomeworkService
             ->map(fn (StudentPointTransaction $transaction): array => [
                 'id' => $transaction->id,
                 'date' => $transaction->created_at?->locale(app()->getLocale())->translatedFormat('l ، j F ، Y H:i'),
-                'homework_date' => $transaction->homework?->date?->locale(app()->getLocale())->translatedFormat('l ، j F ، Y'),
-                'plan_point_name' => $transaction->type === StudentPointTransaction::TYPE_HOMEWORK_MANUAL_ADJUSTMENT
-                    ? __('homeworks.manual_adjustment')
-                    : $transaction->planPoint?->name,
+                'homework_date' => ($transaction->homework?->date ?? $transaction->evaluation?->date)
+                    ?->locale(app()->getLocale())
+                    ->translatedFormat('l ، j F ، Y'),
+                'description' => $this->pointTransactionLabel($transaction),
+                'plan_point_name' => $this->pointTransactionLabel($transaction),
                 'points' => $transaction->points,
                 'balance_before' => $transaction->balance_before,
                 'balance_after' => $transaction->balance_after,
             ])
             ->all();
+    }
+
+    private function pointTransactionLabel(StudentPointTransaction $transaction): ?string
+    {
+        if ($transaction->type === StudentPointTransaction::TYPE_HOMEWORK_MANUAL_ADJUSTMENT) {
+            return __('homeworks.manual_adjustment');
+        }
+
+        if ($transaction->type === StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION) {
+            $attendance = match ((int) $transaction->evaluationStudent?->attendances) {
+                EvaluationStudent::ATTENDANCE_PRESENT => __('homeworks.attendance_present'),
+                EvaluationStudent::ATTENDANCE_LATE => __('homeworks.attendance_late'),
+                EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE => __('homeworks.attendance_excused_absence'),
+                EvaluationStudent::ATTENDANCE_ABSENCE => __('homeworks.attendance_absence'),
+                default => __('homeworks.attendance_unknown'),
+            };
+
+            return __('homeworks.attendance_rule_deduction', ['attendance' => $attendance]);
+        }
+
+        return $transaction->planPoint?->name;
     }
 
     /**

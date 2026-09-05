@@ -58,9 +58,11 @@ const emit = defineEmits(['cancel', 'reload', 'submit']);
 const { t } = useI18n();
 const EVALUATION_TYPE_ALHIFZ = 1;
 const EVALUATION_TYPE_TAJWID = 2;
+const attendanceHasScores = (value) => [1, 6].includes(Number(value));
 
 const attendanceOptions = computed(() => [
     { value: 1, label: t('evaluations.present') },
+    { value: 6, label: t('evaluations.late') },
     { value: 2, label: t('evaluations.excusedAbsence') },
     { value: 3, label: t('evaluations.absence') },
     { value: 5, label: t('evaluations.exempt') },
@@ -161,7 +163,7 @@ const onAttendanceChange = (item) => {
         return;
     }
 
-    if (Number(item.attendances) === 1) {
+    if (attendanceHasScores(item.attendances)) {
         if (item.alhifz === null || item.alhifz === '') {
             item.alhifz = 10;
         }
@@ -423,7 +425,7 @@ const rowMarkerClass = (item) => {
                                         max="10"
                                         step="1"
                                         class="h-10 w-20 rounded-md border border-(--border) bg-(--background) px-2"
-                                        :disabled="Number(item.attendances) !== 1"
+                                        :disabled="!attendanceHasScores(item.attendances)"
                                         @input="clampScoreField(item, showScoreModeSelector ? visiblePrimaryScoreField : 'alhifz')"
                                     >
                                 </td>
@@ -435,7 +437,7 @@ const rowMarkerClass = (item) => {
                                         max="10"
                                         step="1"
                                         class="h-10 w-20 rounded-md border border-(--border) bg-(--background) px-2"
-                                        :disabled="Number(item.attendances) !== 1"
+                                        :disabled="!attendanceHasScores(item.attendances)"
                                         @input="clampScoreField(item, 'warud')"
                                     >
                                 </td>
@@ -447,7 +449,7 @@ const rowMarkerClass = (item) => {
                                         max="10"
                                         step="1"
                                         class="h-10 w-20 rounded-md border border-(--border) bg-(--background) px-2"
-                                        :disabled="Number(item.attendances) !== 1"
+                                        :disabled="!attendanceHasScores(item.attendances)"
                                         @input="clampScoreField(item, 'akhlaqi')"
                                     >
                                 </td>
@@ -459,7 +461,7 @@ const rowMarkerClass = (item) => {
                                         max="10"
                                         step="1"
                                         class="h-10 w-20 rounded-md border border-(--border) bg-(--background) px-2"
-                                        :disabled="Number(item.attendances) !== 1"
+                                        :disabled="!attendanceHasScores(item.attendances)"
                                         @input="clampScoreField(item, 'tajwid')"
                                     >
                                 </td>

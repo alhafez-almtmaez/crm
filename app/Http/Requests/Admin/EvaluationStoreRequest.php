@@ -117,6 +117,7 @@ class EvaluationStoreRequest extends FormRequest
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
                 EvaluationStudent::ATTENDANCE_EXEMPT,
+                EvaluationStudent::ATTENDANCE_LATE,
             ])],
             'items.*.alhifz' => ['nullable', 'integer', 'min:0', 'max:10'],
             'items.*.warud' => ['nullable', 'integer', 'min:0', 'max:10'],

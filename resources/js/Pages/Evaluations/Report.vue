@@ -38,6 +38,7 @@ const summary = computed(() => {
     const totals = {
         total: rows.value.length,
         present: 0,
+        late: 0,
         excused: 0,
         absent: 0,
         frozen: 0,
@@ -57,6 +58,8 @@ const summary = computed(() => {
             totals.absent += 1;
         } else if (attendance === 4) {
             totals.frozen += 1;
+        } else if (attendance === 6) {
+            totals.late += 1;
         } else {
             totals.present += 1;
         }
@@ -65,7 +68,7 @@ const summary = computed(() => {
             totals.perfect += 1;
         }
 
-        if (attendance === 1 && hasScore(row.primary_score) && hasScore(row.akhlaqi)) {
+        if ([1, 6].includes(attendance) && hasScore(row.primary_score) && hasScore(row.akhlaqi)) {
             const hasWarud = hasScore(row.warud);
             scoreSum += Number(row.primary_score) + Number(row.akhlaqi) + (hasWarud ? Number(row.warud) : 0);
             scoreMax += hasWarud ? 30 : 20;
@@ -82,6 +85,7 @@ const summary = computed(() => {
 const summaryCards = computed(() => [
     { key: 'total', label: 'الطلاب', value: summary.value.total, icon: 'pi pi-users', tone: 'slate' },
     { key: 'present', label: 'حضور', value: summary.value.present, icon: 'pi pi-check-circle', tone: 'green' },
+    { key: 'late', label: 'متأخر', value: summary.value.late, icon: 'pi pi-clock', tone: 'blue' },
     { key: 'absent', label: 'غياب', value: summary.value.absent, icon: 'pi pi-times-circle', tone: 'red' },
     { key: 'excused', label: 'بعذر', value: summary.value.excused, icon: 'pi pi-info-circle', tone: 'amber' },
     { key: 'frozen', label: 'مجمد', value: summary.value.frozen, icon: 'pi pi-lock', tone: 'cyan' },
@@ -93,7 +97,7 @@ const attendancePercent = computed(() => {
         return 0;
     }
 
-    return Math.round((summary.value.present / summary.value.total) * 100);
+    return Math.round(((summary.value.present + summary.value.late) / summary.value.total) * 100);
 });
 
 const performanceBars = computed(() => [
@@ -126,6 +130,10 @@ const rowToneClass = (row, index) => {
         return 'is-frozen';
     }
 
+    if (attendance === 6) {
+        return 'is-late';
+    }
+
     return index % 2 === 0 ? 'is-odd' : 'is-even';
 };
 
@@ -156,6 +164,10 @@ const statusClass = (row) => {
         return 'status-pill--frozen';
     }
 
+    if (attendance === 6) {
+        return 'status-pill--late';
+    }
+
     return 'status-pill--present';
 };
 
@@ -174,6 +186,10 @@ const statusLabel = (row) => {
         return 'مجمد';
     }
 
+    if (attendance === 6) {
+        return 'متأخر';
+    }
+
     return row.is_perfect ? 'ممتاز' : 'حاضر';
 };
 
@@ -190,6 +206,10 @@ const stateMessage = (row) => {
 
     if (attendance === 4) {
         return `مجمد من ${row.freeze_from ?? '-'} إلى ${row.freeze_to ?? '-'}`;
+    }
+
+    if (attendance === 6) {
+        return 'حضر متأخرًا';
     }
 
     return '';
@@ -301,6 +321,7 @@ const copyReportLink = async () => {
 
             <div class="legend-row print-hidden" aria-label="دليل الألوان">
                 <span><i class="legend-dot legend-dot--present" />حاضر</span>
+                <span><i class="legend-dot legend-dot--late" />متأخر</span>
                 <span><i class="legend-dot legend-dot--excused" />غائب بعذر</span>
                 <span><i class="legend-dot legend-dot--absent" />غائب</span>
                 <span><i class="legend-dot legend-dot--frozen" />مجمد</span>
@@ -737,6 +758,10 @@ const copyReportLink = async () => {
     background: #22c55e;
 }
 
+.legend-dot--late {
+    background: #3b82f6;
+}
+
 .legend-dot--excused {
     background: #f59e0b;
 }
@@ -887,6 +912,10 @@ const copyReportLink = async () => {
     background: #cffafe;
 }
 
+.report-row.is-late {
+    background: #dbeafe;
+}
+
 .report-index {
     width: 72px;
     white-space: nowrap;
@@ -1008,6 +1037,10 @@ const copyReportLink = async () => {
     background: #06b6d4;
 }
 
+.student-card.is-late::before {
+    background: #3b82f6;
+}
+
 .student-card__header {
     display: block;
 }
@@ -1084,6 +1117,11 @@ const copyReportLink = async () => {
 .status-pill--present {
     background: #dcfce7;
     color: #166534;
+}
+
+.status-pill--late {
+    background: #dbeafe;
+    color: #1e40af;
 }
 
 .status-pill--excused {

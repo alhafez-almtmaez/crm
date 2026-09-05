@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'created_successfully' => 'Absence rule created successfully.',
-    'updated_successfully' => 'Absence rule updated successfully.',
-    'deleted_successfully' => 'Absence rule deleted successfully.',
+    'created_successfully' => 'Attendance rule created successfully.',
+    'updated_successfully' => 'Attendance rule updated successfully.',
+    'deleted_successfully' => 'Attendance rule deleted successfully.',
 ];

@@ -55,6 +55,16 @@ class EvaluationStudentFactory extends Factory
         ]);
     }
 
+    public function late(): static
+    {
+        return $this->state(fn (): array => [
+            'attendances' => EvaluationStudent::ATTENDANCE_LATE,
+            'alhifz' => fake()->numberBetween(4, 10),
+            'warud' => fake()->numberBetween(4, 10),
+            'akhlaqi' => fake()->numberBetween(4, 10),
+        ]);
+    }
+
     public function absence(): static
     {
         return $this->state(fn (): array => [
@@ -87,4 +97,3 @@ class EvaluationStudentFactory extends Factory
         ]);
     }
 }
-

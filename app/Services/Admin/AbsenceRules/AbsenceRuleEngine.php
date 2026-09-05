@@ -26,12 +26,16 @@ class AbsenceRuleEngine
 {
     /** @var array<int, string> */
     private const ATTENDANCE_TYPE_MAP = [
+        EvaluationStudent::ATTENDANCE_PRESENT => AbsenceRule::ATTENDANCE_TYPE_PRESENT,
+        EvaluationStudent::ATTENDANCE_LATE => AbsenceRule::ATTENDANCE_TYPE_LATE,
         EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE => AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,
         EvaluationStudent::ATTENDANCE_ABSENCE => AbsenceRule::ATTENDANCE_TYPE_ABSENCE,
     ];
 
     /** @var array<string, string> */
     private const ATTENDANCE_AR_LABELS = [
+        AbsenceRule::ATTENDANCE_TYPE_PRESENT => 'حاضر',
+        AbsenceRule::ATTENDANCE_TYPE_LATE => 'متأخر',
         AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE => 'غياب بعذر',
         AbsenceRule::ATTENDANCE_TYPE_ABSENCE => 'غياب بدون عذر',
     ];
@@ -801,6 +805,7 @@ class AbsenceRuleEngine
         /** @var CarbonImmutable|null $freezeTo */
         $freezeTo = Arr::get($freezeWindow, 'to');
         $studentDeductedPoints = (int) $student->deducted_points_count;
+        $studentPointsBalance = (int) $student->points_balance;
         $ruleDeductionPoints = (int) $rule->deduction_points_count;
         $center = $this->evaluationCenter($evaluation, $student);
         $group = $evaluation->group;
@@ -813,6 +818,8 @@ class AbsenceRuleEngine
                 'phone_number' => $student->phone_number,
                 'deducted_points_count' => $studentDeductedPoints,
                 'deducted_points_after' => $studentDeductedPoints + $ruleDeductionPoints,
+                'points_balance' => $studentPointsBalance,
+                'points_balance_after' => $studentPointsBalance - $ruleDeductionPoints,
             ],
             'center' => [
                 'id' => $center?->id ?? $evaluation->center_id,
@@ -863,6 +870,8 @@ class AbsenceRuleEngine
             'deduction_points_count' => $ruleDeductionPoints,
             'student_deducted_points_count' => $studentDeductedPoints,
             'student_deducted_points_after' => $studentDeductedPoints + $ruleDeductionPoints,
+            'student_points_balance' => $studentPointsBalance,
+            'student_points_balance_after' => $studentPointsBalance - $ruleDeductionPoints,
             'freeze_from' => $freezeFrom?->locale('ar')->translatedFormat('l ، j F ، Y'),
             'freeze_to' => $freezeTo?->locale('ar')->translatedFormat('l ، j F ، Y'),
             'freeze_reason' => Arr::get($freezeWindow, 'reason'),

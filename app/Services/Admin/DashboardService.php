@@ -57,6 +57,7 @@ class DashboardService
             ->join('students', 'evaluations_users.student_id', '=', 'students.id')
             ->whereIn('attendances', [
                 EvaluationStudent::ATTENDANCE_PRESENT,
+                EvaluationStudent::ATTENDANCE_LATE,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
             ])
@@ -69,6 +70,10 @@ class DashboardService
         $attendancePresent = (clone $attendanceBase)
             ->where('attendances', EvaluationStudent::ATTENDANCE_PRESENT)
             ->count();
+        $attendanceLate = (clone $attendanceBase)
+            ->where('attendances', EvaluationStudent::ATTENDANCE_LATE)
+            ->count();
+        $attendanceAttended = $attendancePresent + $attendanceLate;
 
         $homeworkPointsBase = HomeworkStudentPoint::query()
             ->join('students', 'homework_student_points.student_id', '=', 'students.id')
@@ -94,8 +99,10 @@ class DashboardService
             'homework_points_completed_month' => (clone $homeworkPointsBase)->count(),
             'homework_points_awarded_month' => (int) (clone $homeworkPointsBase)->sum('homework_student_points.awarded_points'),
             'attendance_present_last_30' => $attendancePresent,
+            'attendance_late_last_30' => $attendanceLate,
+            'attendance_attended_last_30' => $attendanceAttended,
             'attendance_total_last_30' => $attendanceTotal,
-            'attendance_rate_last_30' => $this->percentage($attendancePresent, $attendanceTotal),
+            'attendance_rate_last_30' => $this->percentage($attendanceAttended, $attendanceTotal),
             'whatsapp_connected_devices' => $this->dataScope->shouldScope() ? 0 : Device::query()->where('status', 'CONNECTED')->count(),
             'whatsapp_devices_total' => $this->dataScope->shouldScope() ? 0 : Device::query()->count(),
         ];
@@ -123,7 +130,7 @@ class DashboardService
     }
 
     /**
-     * @return array{labels: array<int, string>, present: array<int, int>, absent: array<int, int>, excused: array<int, int>}
+     * @return array{labels: array<int, string>, present: array<int, int>, late: array<int, int>, absent: array<int, int>, excused: array<int, int>}
      */
     private function attendanceTrend(CarbonImmutable $today): array
     {
@@ -137,6 +144,7 @@ class DashboardService
             ->whereBetween('evaluations.date', [$startDate, $today->toDateString()])
             ->whereIn('evaluations_users.attendances', [
                 EvaluationStudent::ATTENDANCE_PRESENT,
+                EvaluationStudent::ATTENDANCE_LATE,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE,
             ])
@@ -152,6 +160,10 @@ class DashboardService
             'present' => $dates->map(fn (CarbonImmutable $date): int => $this->attendanceCount(
                 $rows->get($date->toDateString(), collect()),
                 EvaluationStudent::ATTENDANCE_PRESENT,
+            ))->all(),
+            'late' => $dates->map(fn (CarbonImmutable $date): int => $this->attendanceCount(
+                $rows->get($date->toDateString(), collect()),
+                EvaluationStudent::ATTENDANCE_LATE,
             ))->all(),
             'absent' => $dates->map(fn (CarbonImmutable $date): int => $this->attendanceCount(
                 $rows->get($date->toDateString(), collect()),

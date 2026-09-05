@@ -10,10 +10,12 @@ use App\Models\Group;
 use App\Models\MessageTemplate;
 use App\Models\Student;
 use App\Models\StudentFreeze;
+use App\Models\StudentPointTransaction;
 use App\Models\User;
 use App\Services\Admin\AbsenceRules\AbsenceAlertExecutionLock;
 use App\Services\Admin\AbsenceRules\AbsenceRuleEngine;
 use App\Services\Admin\AbsenceRules\MessageDispatchResult;
+use App\Services\Admin\HomeworkService;
 use App\Services\Admin\WhatsAppMessagingService;
 use App\Services\Auth\PermissionSyncService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -108,6 +110,38 @@ test('admin can create an alert only absence rule', function () {
     ]);
 });
 
+test('admin can create rules for present and late attendance', function (string $attendanceType) {
+    app(PermissionSyncService::class)->sync();
+
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $center = Center::factory()->create();
+    $template = MessageTemplate::factory()->create();
+
+    $this->actingAs($admin, 'web')
+        ->post('/admin/absence-rules', [
+            'center_id' => $center->id,
+            'attendance_type' => $attendanceType,
+            'occurrence_number' => 1,
+            'action' => AbsenceRule::ACTION_SEND_MESSAGE,
+            'message_template_id' => $template->id,
+            'send_to_center_group' => false,
+            'deduction_points_count' => 0,
+            'is_active' => true,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect('/admin/absence-rules');
+
+    $this->assertDatabaseHas('absence_rules', [
+        'center_id' => $center->id,
+        'attendance_type' => $attendanceType,
+        'occurrence_number' => 1,
+    ]);
+})->with([
+    'present' => AbsenceRule::ATTENDANCE_TYPE_PRESENT,
+    'late' => AbsenceRule::ATTENDANCE_TYPE_LATE,
+]);
+
 test('alert only absence rule sends the message and deducts configured points without freezing', function () {
     $messaging = new class extends WhatsAppMessagingService
     {
@@ -132,6 +166,7 @@ test('alert only absence rule sends the message and deducts configured points wi
         ->create([
             'center_id' => $center->id,
             'deducted_points_count' => 7,
+            'points_balance' => 100,
         ]);
     $template = MessageTemplate::factory()->create([
         'content' => 'Alert for {{full_name}} on {{date}}.',
@@ -142,7 +177,7 @@ test('alert only absence rule sends the message and deducts configured points wi
         'is_send_absence_alerts' => false,
     ]);
 
-    EvaluationStudent::factory()
+    $evaluationStudent = EvaluationStudent::factory()
         ->absence()
         ->create([
             'evaluation_id' => $evaluation->id,
@@ -177,7 +212,84 @@ test('alert only absence rule sends the message and deducts configured points wi
         ->and($log->deduction_points_count)->toBe(25)
         ->and(StudentFreeze::query()->count())->toBe(0)
         ->and($student->refresh()->is_active)->toBe(Student::STATUS_ACTIVE)
-        ->and($student->deducted_points_count)->toBe(32);
+        ->and($student->deducted_points_count)->toBe(32)
+        ->and($student->points_balance)->toBe(75);
+
+    $transaction = StudentPointTransaction::query()->sole();
+    expect($transaction->type)->toBe(StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION)
+        ->and($transaction->evaluation_id)->toBe($evaluation->id)
+        ->and($transaction->evaluation_student_id)->toBe($evaluationStudent->id)
+        ->and($transaction->absence_rule_id)->toBe($rule->id)
+        ->and($transaction->points)->toBe(-25)
+        ->and($transaction->balance_before)->toBe(100)
+        ->and($transaction->balance_after)->toBe(75)
+        ->and(app(HomeworkService::class)->pointHistory($student)[0]['plan_point_name'])
+        ->toBe(__('homeworks.attendance_rule_deduction', [
+            'attendance' => __('homeworks.attendance_absence'),
+        ]));
+
+    app(PermissionSyncService::class)->sync();
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+    $this->actingAs($admin, 'web')
+        ->getJson(route('admin.students.point-history', $student))
+        ->assertOk()
+        ->assertJsonPath('data.0.points', -25)
+        ->assertJsonPath('data.0.balance_after', 75)
+        ->assertJsonPath('data.0.plan_point_name', __('homeworks.attendance_rule_deduction', [
+            'attendance' => __('homeworks.attendance_absence'),
+        ]));
+
+    $evaluation->update(['is_send_absence_alerts' => false]);
+    app(AbsenceRuleEngine::class)->process($evaluation->refresh());
+
+    expect(StudentPointTransaction::query()->count())->toBe(1)
+        ->and($student->refresh()->points_balance)->toBe(75);
+});
+
+test('late attendance triggers its matching monthly rule', function () {
+    $messaging = new class extends WhatsAppMessagingService
+    {
+        /** @var array<int, string> */
+        public array $messages = [];
+
+        public function sendMediaCaption(array $phones, string $content, ?string $groupSerialized = null): void
+        {
+            $this->messages[] = $content;
+        }
+    };
+    app()->instance(WhatsAppMessagingService::class, $messaging);
+
+    $center = Center::factory()->create();
+    $student = Student::factory()->active()->create(['center_id' => $center->id]);
+    $evaluation = Evaluation::factory()->create([
+        'center_id' => $center->id,
+        'date' => '2026-07-08',
+        'is_send_absence_alerts' => false,
+    ]);
+    EvaluationStudent::factory()->late()->create([
+        'evaluation_id' => $evaluation->id,
+        'student_id' => $student->id,
+        'user_id' => $student->id,
+    ]);
+    $template = MessageTemplate::factory()->create([
+        'content' => '{{attendance.label_ar}} - {{attendance.occurrence_number}}',
+    ]);
+    AbsenceRule::factory()->sendMessageAction()->create([
+        'center_id' => $center->id,
+        'attendance_type' => AbsenceRule::ATTENDANCE_TYPE_LATE,
+        'occurrence_number' => 1,
+        'message_template_id' => $template->id,
+        'deduction_points_count' => 0,
+    ]);
+
+    $result = app(AbsenceRuleEngine::class)->process($evaluation);
+
+    expect($result['processed'])->toBe(1)
+        ->and($result['errors'])->toBe([])
+        ->and($messaging->messages)->toBe(['متأخر - 1'])
+        ->and(AbsenceRuleExecutionLog::query()->sole()->attendance_type)
+        ->toBe(AbsenceRule::ATTENDANCE_TYPE_LATE);
 });
 
 test('group evaluation drives the rule center group message template and freeze schedule', function () {

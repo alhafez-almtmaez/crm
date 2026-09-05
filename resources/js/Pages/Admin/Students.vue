@@ -78,6 +78,10 @@ const {
 const historyVisible = ref(false);
 const historyEndpoint = ref('');
 const historyEntityName = ref('');
+const pointHistoryVisible = ref(false);
+const pointHistoryLoading = ref(false);
+const pointHistoryRows = ref([]);
+const pointHistoryStudent = ref(null);
 const freezeVisible = ref(false);
 const congratulatoryVisible = ref(false);
 const exportVisible = ref(false);
@@ -145,10 +149,19 @@ const columns = computed(() => [
     { field: 'admin_name', header: t('students.admin'), sortable: true, sortField: 'admin_name' },
     { field: 'parent_phone_number', header: t('students.parentPhone'), sortable: true, sortField: 'parent_phone_number', ltr: true },
     { field: 'phone_number', header: t('students.phone'), sortable: true, sortField: 'phone_number', ltr: true },
+    { field: 'points_balance', header: t('students.pointsBalance'), sortable: true },
+    { field: 'deducted_points_count', header: t('students.deductedPoints'), sortable: true },
     { field: 'status_label', header: t('students.status'), sortable: true, sortField: 'is_active', badge: true, badgeClassField: 'status_badge_class' },
 ]);
 
 const rowActions = computed(() => [
+    {
+        key: 'point-history',
+        icon: 'pi pi-chart-bar',
+        severity: 'info',
+        outlined: true,
+        title: t('homeworks.pointsHistory'),
+    },
     {
         key: 'certificates',
         icon: 'pi pi-id-card',
@@ -503,6 +516,11 @@ const handleRowAction = (payload) => {
         return;
     }
 
+    if (payload.action === 'point-history') {
+        openPointHistory(payload.data);
+        return;
+    }
+
     if (payload.action === 'certificates') {
         router.get(`/admin/students/${payload.data.id}/certificates`);
         return;
@@ -520,6 +538,25 @@ const handleRowAction = (payload) => {
 
     if (payload.action === 'congratulatory') {
         openCongratulatoryDialog(payload.data);
+    }
+};
+
+const openPointHistory = async (student) => {
+    pointHistoryStudent.value = student;
+    pointHistoryRows.value = [];
+    pointHistoryVisible.value = true;
+    pointHistoryLoading.value = true;
+
+    try {
+        const { data } = await axios.get(`/admin/students/${student.id}/point-history`);
+        pointHistoryRows.value = data?.data ?? [];
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.loadFailedTitle'),
+            fallback: t('homeworks.historyFailed'),
+        });
+    } finally {
+        pointHistoryLoading.value = false;
     }
 };
 
@@ -696,6 +733,42 @@ onMounted(() => {
                 :endpoint="historyEndpoint"
                 :entity-name="historyEntityName"
             />
+
+            <Dialog
+                v-model:visible="pointHistoryVisible"
+                modal
+                :header="pointHistoryStudent ? `${t('homeworks.pointsHistory')} - ${pointHistoryStudent.full_name}` : t('homeworks.pointsHistory')"
+                class="w-[min(920px,95vw)]"
+            >
+                <div v-if="pointHistoryLoading" class="py-6 text-sm text-(--muted-foreground)">
+                    {{ t('common.loading') }}
+                </div>
+                <div v-else-if="pointHistoryRows.length === 0" class="py-6 text-sm text-(--muted-foreground)">
+                    {{ t('homeworks.noHistory') }}
+                </div>
+                <div v-else class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-(--border)">
+                        <thead>
+                            <tr class="text-sm">
+                                <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.historyDate') }}</th>
+                                <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.historyDescription') }}</th>
+                                <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.points') }}</th>
+                                <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.balanceAfter') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-(--border)">
+                            <tr v-for="row in pointHistoryRows" :key="row.id" class="text-sm">
+                                <td class="px-3 py-2">{{ row.date }}</td>
+                                <td class="px-3 py-2">{{ row.description || row.plan_point_name || t('common.na') }}</td>
+                                <td class="px-3 py-2" :class="Number(row.points) < 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'">
+                                    {{ row.points }}
+                                </td>
+                                <td class="px-3 py-2">{{ row.balance_after }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </Dialog>
 
             <Dialog
                 v-model:visible="exportVisible"

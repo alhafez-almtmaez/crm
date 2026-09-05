@@ -66,6 +66,8 @@ class AbsenceRuleUpdateRequest extends FormRequest
                     }),
             ],
             'attendance_type' => ['required', Rule::in([
+                AbsenceRule::ATTENDANCE_TYPE_PRESENT,
+                AbsenceRule::ATTENDANCE_TYPE_LATE,
                 AbsenceRule::ATTENDANCE_TYPE_ABSENCE,
                 AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,
             ])],

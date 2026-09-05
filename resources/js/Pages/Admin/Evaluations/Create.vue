@@ -48,8 +48,8 @@ const mapStudents = (rows = []) => rows.map((row) => {
         return Math.min(10, Math.max(0, parsed));
     };
     const attendance = Number(row.attendances ?? 1);
-    const normalizedAttendance = [1, 2, 3, 5].includes(attendance) ? attendance : 1;
-    const hasScores = normalizedAttendance === 1;
+    const normalizedAttendance = [1, 2, 3, 5, 6].includes(attendance) ? attendance : 1;
+    const hasScores = [1, 6].includes(normalizedAttendance);
     const normalizedAlhifz = hasScores ? normalizeScore(row.alhifz) : null;
     const normalizedWarud = hasScores ? normalizeScore(row.warud) : null;
     const normalizedAkhlaqi = hasScores ? normalizeScore(row.akhlaqi) : null;

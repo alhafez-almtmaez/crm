@@ -22,6 +22,8 @@ class AbsenceRuleFactory extends Factory
         return [
             'center_id' => null,
             'attendance_type' => fake()->randomElement([
+                AbsenceRule::ATTENDANCE_TYPE_PRESENT,
+                AbsenceRule::ATTENDANCE_TYPE_LATE,
                 AbsenceRule::ATTENDANCE_TYPE_ABSENCE,
                 AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,
             ]),

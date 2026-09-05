@@ -25,7 +25,13 @@ class AbsenceRuleExecutionLogFactory extends Factory
      */
     public function definition(): array
     {
-        $attendanceValue = fake()->randomElement([2, 3]);
+        $attendanceTypes = [
+            EvaluationStudent::ATTENDANCE_PRESENT => AbsenceRule::ATTENDANCE_TYPE_PRESENT,
+            EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE => AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,
+            EvaluationStudent::ATTENDANCE_ABSENCE => AbsenceRule::ATTENDANCE_TYPE_ABSENCE,
+            EvaluationStudent::ATTENDANCE_LATE => AbsenceRule::ATTENDANCE_TYPE_LATE,
+        ];
+        $attendanceValue = fake()->randomElement(array_keys($attendanceTypes));
 
         return [
             'evaluation_id' => Evaluation::factory(),
@@ -34,7 +40,7 @@ class AbsenceRuleExecutionLogFactory extends Factory
             'center_id' => Center::factory(),
             'absence_rule_id' => AbsenceRule::factory(),
             'message_template_id' => MessageTemplate::factory(),
-            'attendance_type' => $attendanceValue === 2 ? 'excused_absence' : 'absence',
+            'attendance_type' => $attendanceTypes[$attendanceValue],
             'attendance_value' => $attendanceValue,
             'occurrence_number' => fake()->numberBetween(1, 3),
             'action' => fake()->randomElement(['freeze_student', 'dismiss_student']),
@@ -69,4 +75,3 @@ class AbsenceRuleExecutionLogFactory extends Factory
         ]);
     }
 }
-

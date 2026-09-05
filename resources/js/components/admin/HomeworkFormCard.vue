@@ -673,7 +673,7 @@ const pointCardClass = (point) => {
                     <thead>
                         <tr class="text-sm">
                             <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.historyDate') }}</th>
-                            <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.planPoint') }}</th>
+                            <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.historyDescription') }}</th>
                             <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.points') }}</th>
                             <th class="px-3 py-2 text-start font-semibold">{{ t('homeworks.balanceAfter') }}</th>
                         </tr>
@@ -681,7 +681,7 @@ const pointCardClass = (point) => {
                     <tbody class="divide-y divide-(--border)">
                         <tr v-for="row in historyRows" :key="row.id" class="text-sm">
                             <td class="px-3 py-2">{{ row.date }}</td>
-                            <td class="px-3 py-2">{{ row.plan_point_name || t('common.na') }}</td>
+                            <td class="px-3 py-2">{{ row.description || row.plan_point_name || t('common.na') }}</td>
                             <td class="px-3 py-2">{{ row.points }}</td>
                             <td class="px-3 py-2">{{ row.balance_after }}</td>
                         </tr>

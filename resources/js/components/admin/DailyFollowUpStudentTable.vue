@@ -28,9 +28,11 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'open-report']);
 const { t } = useI18n();
 const search = ref('');
+const attendanceHasScores = (value) => [1, 6].includes(Number(value));
 
 const attendanceOptions = computed(() => [
     { value: 1, label: t('evaluations.present') },
+    { value: 6, label: t('evaluations.late') },
     { value: 2, label: t('evaluations.excusedAbsence') },
     { value: 3, label: t('evaluations.absence') },
     { value: 5, label: t('evaluations.exempt') },
@@ -130,7 +132,7 @@ const clampScore = (item, field) => {
 };
 const onAttendanceChange = (item) => {
     ['alhifz', 'warud', 'akhlaqi', 'tajwid'].forEach((field) => {
-        if (Number(item.attendances) !== 1) {
+        if (!attendanceHasScores(item.attendances)) {
             item[field] = null;
         } else if (item[field] === null || item[field] === '') {
             item[field] = 10;
@@ -321,7 +323,7 @@ watch(errorCount, (count) => {
                                 min="0"
                                 max="10"
                                 class="h-10 w-full rounded-md border border-(--border) bg-(--card) px-2 text-(--foreground) outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[color-mix(in_oklab,var(--accent)_16%,transparent)] disabled:opacity-55"
-                                :disabled="!canManageEvaluation || Number(row.evaluationItem.attendances) !== 1"
+                                :disabled="!canManageEvaluation || !attendanceHasScores(row.evaluationItem.attendances)"
                                 @input="clampScore(row.evaluationItem, field)"
                             />
                         </label>

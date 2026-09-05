@@ -15,6 +15,7 @@ use App\Models\Student;
 use App\Services\Admin\ActivityLogService;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\GroupService;
+use App\Services\Admin\HomeworkService;
 use App\Services\Admin\StudentCommunicationService;
 use App\Services\Admin\StudentService;
 use Illuminate\Http\JsonResponse;
@@ -34,6 +35,7 @@ class StudentController extends Controller implements HasMiddleware
         private readonly StudentService $studentService,
         private readonly StudentCommunicationService $studentCommunicationService,
         private readonly GroupService $groupService,
+        private readonly HomeworkService $homeworkService,
         private readonly ActivityLogService $activityLogService,
         private readonly AdminDataScopeService $dataScope,
     ) {}
@@ -41,7 +43,7 @@ class StudentController extends Controller implements HasMiddleware
     public static function middleware(): array
     {
         return [
-            new Middleware('can:students.view', only: ['index', 'records']),
+            new Middleware('can:students.view', only: ['index', 'records', 'pointHistory']),
             new Middleware('can:students.view', only: ['activityLogs']),
             new Middleware('can:students.view', only: ['export']),
             new Middleware('can:students.create', only: ['create', 'store']),
@@ -162,6 +164,15 @@ class StudentController extends Controller implements HasMiddleware
 
         return response()->json([
             'data' => $this->activityLogService->listForSubject(Student::class, $student->getKey()),
+        ]);
+    }
+
+    public function pointHistory(Student $student): JsonResponse
+    {
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
+        return response()->json([
+            'data' => $this->homeworkService->pointHistory($student),
         ]);
     }
 

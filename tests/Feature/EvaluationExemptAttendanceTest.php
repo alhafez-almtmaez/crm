@@ -103,6 +103,46 @@ test('evaluation update can change an existing row to exempt attendance', functi
         ->and($row->tajwid)->toBeNull();
 });
 
+test('evaluation creation stores late attendance with its evaluation scores', function () {
+    $center = Center::factory()->create();
+    $group = Group::factory()->create([
+        'center_id' => $center->id,
+        'working_days' => evaluationExemptAllWorkingDays(),
+    ]);
+    createEvaluationExemptMonthlyPlan($group);
+    $student = Student::factory()
+        ->active()
+        ->create([
+            'center_id' => $center->id,
+            'group_id' => $group->id,
+        ]);
+
+    app(EvaluationService::class)->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'date' => '2026-06-16',
+        'evaluation_type' => Evaluation::TYPE_ALHIFZ,
+        'items' => [
+            [
+                'student_id' => $student->id,
+                'attendances' => EvaluationStudent::ATTENDANCE_LATE,
+                'alhifz' => 8,
+                'warud' => 7,
+                'akhlaqi' => 9,
+                'tajwid' => 6,
+            ],
+        ],
+    ]);
+
+    $row = EvaluationStudent::query()->firstOrFail();
+
+    expect($row->attendances)->toBe(EvaluationStudent::ATTENDANCE_LATE)
+        ->and($row->alhifz)->toBe(8)
+        ->and($row->warud)->toBe(7)
+        ->and($row->akhlaqi)->toBe(9)
+        ->and($row->tajwid)->toBeNull();
+});
+
 /** @return array<int, string> */
 function evaluationExemptAllWorkingDays(): array
 {

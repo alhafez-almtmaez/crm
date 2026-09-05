@@ -14,10 +14,15 @@ class StudentPointTransaction extends Model
 
     public const TYPE_HOMEWORK_MANUAL_ADJUSTMENT = 'homework_manual_adjustment';
 
+    public const TYPE_ATTENDANCE_RULE_DEDUCTION = 'attendance_rule_deduction';
+
     protected $fillable = [
         'student_id',
         'homework_id',
         'homework_student_point_id',
+        'evaluation_id',
+        'evaluation_student_id',
+        'absence_rule_id',
         'plan_point_id',
         'type',
         'points',
@@ -30,6 +35,9 @@ class StudentPointTransaction extends Model
         'student_id' => 'int',
         'homework_id' => 'int',
         'homework_student_point_id' => 'int',
+        'evaluation_id' => 'int',
+        'evaluation_student_id' => 'int',
+        'absence_rule_id' => 'int',
         'plan_point_id' => 'int',
         'points' => 'int',
         'balance_before' => 'int',
@@ -50,6 +58,21 @@ class StudentPointTransaction extends Model
     public function homeworkStudentPoint(): BelongsTo
     {
         return $this->belongsTo(HomeworkStudentPoint::class);
+    }
+
+    public function evaluation(): BelongsTo
+    {
+        return $this->belongsTo(Evaluation::class);
+    }
+
+    public function evaluationStudent(): BelongsTo
+    {
+        return $this->belongsTo(EvaluationStudent::class);
+    }
+
+    public function absenceRule(): BelongsTo
+    {
+        return $this->belongsTo(AbsenceRule::class);
     }
 
     public function planPoint(): BelongsTo

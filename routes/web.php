@@ -129,6 +129,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('students/export', [StudentController::class, 'export'])->name('students.export');
         Route::post('students/import', [StudentController::class, 'import'])->name('students.import');
         Route::get('students/{student}/activity-logs', [StudentController::class, 'activityLogs'])->name('students.activity-logs');
+        Route::get('students/{student}/point-history', [StudentController::class, 'pointHistory'])->name('students.point-history');
         Route::post('students/{student}/freeze', [StudentController::class, 'freeze'])->name('students.freeze');
         Route::post('students/{student}/unfreeze', [StudentController::class, 'unfreeze'])->name('students.unfreeze');
         Route::post('students/{student}/congratulatory', [StudentController::class, 'congratulatory'])->name('students.congratulatory');

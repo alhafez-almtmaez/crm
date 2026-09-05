@@ -253,8 +253,8 @@ const mapEvaluationStudents = (rows = []) => rows.map((row) => {
         return Number.isNaN(parsed) ? 10 : Math.min(10, Math.max(0, parsed));
     };
     const attendance = Number(row.attendances ?? 1);
-    const normalizedAttendance = [1, 2, 3, 5].includes(attendance) ? attendance : 1;
-    const hasScores = normalizedAttendance === 1;
+    const normalizedAttendance = [1, 2, 3, 5, 6].includes(attendance) ? attendance : 1;
+    const hasScores = [1, 6].includes(normalizedAttendance);
     const normalizedRow = {
         student_id: Number(row.student_id),
         full_name: row.full_name ?? '',

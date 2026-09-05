@@ -97,13 +97,14 @@ const attendanceChart = computed(() => {
     return {
         labels: [
             t('evaluations.present'),
+            t('evaluations.late'),
             t('evaluations.excusedAbsence'),
             t('evaluations.absence'),
             t('evaluations.exempt'),
         ],
         datasets: [{
-            data: [counts.present ?? 0, counts.excused ?? 0, counts.absent ?? 0, counts.exempt ?? 0],
-            backgroundColor: ['#059669', '#d97706', '#e11d48', '#64748b'],
+            data: [counts.present ?? 0, counts.late ?? 0, counts.excused ?? 0, counts.absent ?? 0, counts.exempt ?? 0],
+            backgroundColor: ['#059669', '#0284c7', '#d97706', '#e11d48', '#64748b'],
             borderWidth: 0,
             hoverOffset: 7,
         }],

@@ -508,6 +508,7 @@ class DailyFollowUpReportService
     {
         $counts = [
             'present' => $evaluations->where('attendances', EvaluationStudent::ATTENDANCE_PRESENT)->count(),
+            'late' => $evaluations->where('attendances', EvaluationStudent::ATTENDANCE_LATE)->count(),
             'excused' => $evaluations->where('attendances', EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE)->count(),
             'absent' => $evaluations->where('attendances', EvaluationStudent::ATTENDANCE_ABSENCE)->count(),
             'exempt' => $evaluations->whereIn('attendances', [
@@ -515,14 +516,16 @@ class DailyFollowUpReportService
                 EvaluationStudent::ATTENDANCE_EXEMPT,
             ])->count(),
         ];
-        $counted = $counts['present'] + $counts['excused'] + $counts['absent'];
+        $attended = $counts['present'] + $counts['late'];
+        $counted = $attended + $counts['excused'] + $counts['absent'];
 
         return [
             'counts' => $counts,
-            'rate' => $counted > 0 ? (int) round(($counts['present'] / $counted) * 100) : null,
+            'rate' => $counted > 0 ? (int) round(($attended / $counted) * 100) : null,
             'labels' => $evaluations->map(static fn ($row): string => CarbonImmutable::parse($row->evaluation_date)->toDateString())->all(),
             'present_series' => $evaluations->map(static fn ($row): ?int => match ((int) $row->attendances) {
                 EvaluationStudent::ATTENDANCE_PRESENT => 100,
+                EvaluationStudent::ATTENDANCE_LATE => 100,
                 EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
                 EvaluationStudent::ATTENDANCE_ABSENCE => 0,
                 default => null,
