@@ -1,4 +1,5 @@
 <script setup>
+import Button from 'primevue/button';
 import { computed, shallowRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 
@@ -13,6 +14,7 @@ const props = defineProps({
     },
 });
 
+const emit = defineEmits(['change-student-plan']);
 const { t } = useI18n();
 const studentSearch = shallowRef('');
 
@@ -232,9 +234,34 @@ const itemStatusLabel = (item) => {
                             <tr v-for="plan in filteredPlanRows" :key="plan.id" class="align-top">
                                 <th class="sticky right-0 z-20 min-w-72 border-b border-(--border) bg-(--card) px-3 py-3 text-start shadow-(--shadow-sm)">
                                     <span class="block font-semibold">{{ plan.student_name }}</span>
-                                    <span class="mt-1 block text-xs font-medium text-(--muted-foreground)">
-                                        {{ plan.plan_name || t('common.na') }}
-                                    </span>
+                                    <div class="mt-1 grid gap-1 text-xs font-medium text-(--muted-foreground)">
+                                        <span>
+                                            <template v-if="plan.transitions?.length">{{ t('monthlyPlans.initialPlan') }}: </template>
+                                            {{ plan.plan_name || t('common.na') }}
+                                        </span>
+                                        <span
+                                            v-for="transition in plan.transitions ?? []"
+                                            :key="transition.id"
+                                            class="rounded-sm border border-sky-200 bg-sky-50 px-1.5 py-1 text-sky-900"
+                                        >
+                                            {{ t('monthlyPlans.planFromDate', { date: transition.effective_date }) }}:
+                                            {{ transition.plan_name || t('common.na') }}
+                                            <template v-if="transition.starts_after_plan_point_name">
+                                                / {{ t('monthlyPlans.afterPoint', { point: transition.starts_after_plan_point_name }) }}
+                                            </template>
+                                        </span>
+                                    </div>
+                                    <Button
+                                        v-if="plan.status !== 'historical_marker'"
+                                        type="button"
+                                        icon="pi pi-directions-alt"
+                                        :label="t('monthlyPlans.changeStudentPlan')"
+                                        severity="secondary"
+                                        size="small"
+                                        outlined
+                                        class="mt-2"
+                                        @click="emit('change-student-plan', plan)"
+                                    />
                                     <div v-if="activeDayNames.length" class="mt-1">
                                         <span class="block text-xs text-(--muted-foreground)">
                                             {{ t('monthlyPlans.dailyWeightLimits') }}

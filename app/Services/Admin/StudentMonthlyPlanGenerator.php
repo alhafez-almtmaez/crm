@@ -5,11 +5,13 @@ namespace App\Services\Admin;
 use App\Models\Center;
 use App\Models\Group;
 use App\Models\MonthlyPlan;
+use App\Models\Plan;
 use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanDay;
 use App\Models\StudentMonthlyPlanItem;
+use App\Models\StudentMonthlyPlanTransition;
 use App\Services\System\SystemSettingsService;
 use App\Support\DailyWeightLimits;
 use Carbon\CarbonImmutable;
@@ -517,6 +519,123 @@ class StudentMonthlyPlanGenerator
         });
     }
 
+    /**
+     * Change one student's plan from a selected date while preserving earlier days.
+     *
+     * @return array{generated_items: int}
+     */
+    public function changePlanForStudentMonthlyPlan(
+        MonthlyPlan $monthlyPlan,
+        StudentMonthlyPlan $studentMonthlyPlan,
+        CarbonImmutable $effectiveDate,
+        int $planId,
+        ?int $startsAfterPlanPointId = null,
+    ): array {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+        abort_unless((int) $studentMonthlyPlan->monthly_plan_id === (int) $monthlyPlan->id, 404);
+
+        $student = $studentMonthlyPlan->student()->firstOrFail();
+        $this->dataScope->abortUnlessCanAccessStudent($student);
+
+        $effectiveDate = $effectiveDate->startOfDay();
+        [$periodStart, $periodEnd] = $this->periodForMonthlyPlan($monthlyPlan);
+        $studentEffectiveStart = $this->carbonDate($studentMonthlyPlan->effective_start_date);
+
+        if (
+            $effectiveDate->lt($periodStart)
+            || $effectiveDate->gt($periodEnd)
+            || ($studentEffectiveStart !== null && $effectiveDate->lt($studentEffectiveStart))
+        ) {
+            throw new InvalidArgumentException('Plan change date must be within the student monthly plan period.');
+        }
+
+        if ($studentMonthlyPlan->status === StudentMonthlyPlan::STATUS_HISTORICAL_MARKER) {
+            throw new InvalidArgumentException('Historical monthly plan markers cannot be changed.');
+        }
+
+        Plan::query()->findOrFail($planId);
+        if ($startsAfterPlanPointId !== null) {
+            PlanPoint::query()
+                ->where('plan_id', $planId)
+                ->findOrFail($startsAfterPlanPointId);
+        }
+
+        return DB::transaction(function () use (
+            $monthlyPlan,
+            $studentMonthlyPlan,
+            $effectiveDate,
+            $planId,
+            $startsAfterPlanPointId,
+        ): array {
+            /** @var MonthlyPlan $lockedMonthlyPlan */
+            $lockedMonthlyPlan = MonthlyPlan::query()
+                ->with(['center:id,working_days', 'group:id,working_days'])
+                ->whereKey($monthlyPlan->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /** @var StudentMonthlyPlan $lockedStudentPlan */
+            $lockedStudentPlan = StudentMonthlyPlan::query()
+                ->whereKey($studentMonthlyPlan->id)
+                ->where('monthly_plan_id', $lockedMonthlyPlan->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /** @var Student $lockedStudent */
+            $lockedStudent = Student::query()
+                ->whereKey($lockedStudentPlan->student_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->dataScope->abortUnlessCanAccessStudent($lockedStudent);
+
+            StudentMonthlyPlanTransition::query()
+                ->where('student_monthly_plan_id', $lockedStudentPlan->id)
+                ->whereDate('effective_date', '>', $effectiveDate->toDateString())
+                ->delete();
+
+            StudentMonthlyPlanTransition::query()->updateOrCreate([
+                'student_monthly_plan_id' => $lockedStudentPlan->id,
+                'effective_date' => $effectiveDate->toDateString(),
+            ], [
+                'plan_id' => $planId,
+                'starts_after_plan_point_id' => $startsAfterPlanPointId,
+            ]);
+
+            $lockedStudent->forceFill([
+                'plan_type_id' => $planId,
+                'current_plan_point_id' => $startsAfterPlanPointId,
+            ])->save();
+
+            [$periodStart, $periodEnd] = $this->periodForMonthlyPlan($lockedMonthlyPlan);
+            $workingDays = $this->workingDaysForMonthlyPlan($lockedMonthlyPlan);
+            $holidayDates = $this->normalizeHolidayDates(
+                (array) $lockedMonthlyPlan->holiday_dates,
+                $periodStart,
+                $periodEnd,
+            );
+            $dates = $this->workingDatesForPeriod(
+                $workingDays,
+                (int) $lockedMonthlyPlan->month,
+                (int) $lockedMonthlyPlan->year,
+                $effectiveDate,
+                $periodEnd,
+                $holidayDates,
+            );
+
+            $generatedItems = $this->regenerateFutureForStudentPlan(
+                plan: $lockedStudentPlan,
+                student: $lockedStudent,
+                dates: $dates,
+                fromDate: $effectiveDate,
+                workingDays: $workingDays,
+            );
+
+            $this->refreshMonthlyPlanTotals($lockedMonthlyPlan);
+
+            return ['generated_items' => $generatedItems];
+        });
+    }
+
     private function syncMissingStudentsForMonthlyPlan(MonthlyPlan $monthlyPlan, array $holidayDates): void
     {
         if ($monthlyPlan->group_id === null) {
@@ -787,10 +906,6 @@ class StudentMonthlyPlanGenerator
         $dates = $dates
             ->filter(static fn (CarbonImmutable $date): bool => $date->gte($fromDate))
             ->values();
-        $planId = (int) ($plan->plan_id ?? $student->plan_type_id);
-        $lastPreservedPlanPointId = $this->lastPlanPointIdBefore($plan, $fromDate)
-            ?? $plan->starts_after_plan_point_id;
-
         $futureDayIds = StudentMonthlyPlanDay::query()
             ->where('student_monthly_plan_id', $plan->id)
             ->whereDate('date', '>=', $fromDate->toDateString())
@@ -819,13 +934,63 @@ class StudentMonthlyPlanGenerator
             'daily_weight_limits' => $dailyWeightLimits,
         ])->save();
 
-        $startPoint = $this->planPointByIdForPlan($lastPreservedPlanPointId, $planId);
-        $points = $this->planPointsAfter($student, $startPoint, $planId);
         $startingSortOrder = ((int) $plan->items()->max('sort_order')) + 1;
-        $result = $this->fillMonthlyPlan($plan, $student, $points, $dates, $startingSortOrder);
+        $generatedItems = 0;
+        $usedPlanPointIds = $plan->items()
+            ->whereNotNull('plan_point_id')
+            ->pluck('plan_point_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+        $segments = $this->regenerationSegments($plan, $student, $fromDate);
+
+        foreach ($segments as $index => $segment) {
+            $segmentEffectiveDate = $segment['effective_date'];
+            $nextEffectiveDate = $segments->get($index + 1)['effective_date'] ?? null;
+            $segmentStartDate = $fromDate->gte($segmentEffectiveDate)
+                ? $fromDate
+                : $segmentEffectiveDate;
+            $segmentDates = $dates
+                ->filter(static fn (CarbonImmutable $date): bool => $date->gte($segmentStartDate))
+                ->when(
+                    $nextEffectiveDate instanceof CarbonImmutable,
+                    static fn (Collection $segmentDates) => $segmentDates->filter(
+                        static fn (CarbonImmutable $date): bool => $date->lt($nextEffectiveDate),
+                    ),
+                )
+                ->values();
+
+            if ($segmentDates->isEmpty() || $segment['plan_id'] <= 0) {
+                continue;
+            }
+
+            $startPointId = $segmentStartDate->gt($segmentEffectiveDate)
+                ? ($this->lastPlanPointIdForSegmentBefore(
+                    $plan,
+                    $segment['plan_id'],
+                    $segmentEffectiveDate,
+                    $segmentStartDate,
+                ) ?? $segment['starts_after_plan_point_id'])
+                : $segment['starts_after_plan_point_id'];
+            $startPoint = $this->planPointByIdForPlan($startPointId, $segment['plan_id']);
+            $points = $this->planPointsAfter($student, $startPoint, $segment['plan_id'])
+                ->reject(static fn (PlanPoint $point): bool => in_array((int) $point->id, $usedPlanPointIds, true))
+                ->values();
+            $result = $this->fillMonthlyPlan($plan, $student, $points, $segmentDates, $startingSortOrder);
+
+            $generatedItems += $result['generated_items_count'];
+            $startingSortOrder += $result['generated_items_count'];
+            $usedPlanPointIds = $plan->items()
+                ->whereNotNull('plan_point_id')
+                ->pluck('plan_point_id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+        }
 
         $totalItems = $plan->items()->count();
-        $lastPlanPointId = $result['last_plan_point_id'] ?? $lastPreservedPlanPointId;
+        $lastPlanPointId = $plan->items()
+            ->whereNotNull('plan_point_id')
+            ->orderByDesc('sort_order')
+            ->value('plan_point_id');
 
         $emptyStatus = $dates->isEmpty()
             ? $plan->status
@@ -841,15 +1006,68 @@ class StudentMonthlyPlanGenerator
             'generated_at' => now(),
         ]);
 
-        return $result['generated_items_count'];
+        return $generatedItems;
     }
 
-    private function lastPlanPointIdBefore(StudentMonthlyPlan $plan, CarbonImmutable $fromDate): ?int
-    {
+    /**
+     * @return Collection<int, array{effective_date: CarbonImmutable, plan_id: int, starts_after_plan_point_id: ?int}>
+     */
+    private function regenerationSegments(
+        StudentMonthlyPlan $plan,
+        Student $student,
+        CarbonImmutable $fromDate,
+    ): Collection {
+        $baseEffectiveDate = $this->carbonDate($plan->effective_start_date)
+            ?? CarbonImmutable::create((int) $plan->year, (int) $plan->month, 1)->startOfDay();
+        $segments = collect([[
+            'effective_date' => $baseEffectiveDate,
+            'plan_id' => (int) ($plan->plan_id ?? $student->plan_type_id),
+            'starts_after_plan_point_id' => $plan->starts_after_plan_point_id !== null
+                ? (int) $plan->starts_after_plan_point_id
+                : null,
+        ]]);
+
+        StudentMonthlyPlanTransition::query()
+            ->where('student_monthly_plan_id', $plan->id)
+            ->orderBy('effective_date')
+            ->orderBy('id')
+            ->get(['effective_date', 'plan_id', 'starts_after_plan_point_id'])
+            ->each(function (StudentMonthlyPlanTransition $transition) use ($segments): void {
+                $effectiveDate = $this->carbonDate($transition->effective_date);
+                if ($effectiveDate === null) {
+                    return;
+                }
+
+                $segments->push([
+                    'effective_date' => $effectiveDate,
+                    'plan_id' => (int) $transition->plan_id,
+                    'starts_after_plan_point_id' => $transition->starts_after_plan_point_id !== null
+                        ? (int) $transition->starts_after_plan_point_id
+                        : null,
+                ]);
+            });
+
+        $activeIndex = $segments
+            ->keys()
+            ->filter(static fn (int $index): bool => $segments[$index]['effective_date']->lte($fromDate))
+            ->last();
+
+        return $segments->slice($activeIndex ?? 0)->values();
+    }
+
+    private function lastPlanPointIdForSegmentBefore(
+        StudentMonthlyPlan $plan,
+        int $planId,
+        CarbonImmutable $segmentEffectiveDate,
+        CarbonImmutable $beforeDate,
+    ): ?int {
         $item = StudentMonthlyPlanItem::query()
             ->join('student_monthly_plan_days', 'student_monthly_plan_items.student_monthly_plan_day_id', '=', 'student_monthly_plan_days.id')
+            ->join('plan_points', 'student_monthly_plan_items.plan_point_id', '=', 'plan_points.id')
             ->where('student_monthly_plan_items.student_monthly_plan_id', $plan->id)
-            ->whereDate('student_monthly_plan_days.date', '<', $fromDate->toDateString())
+            ->where('plan_points.plan_id', $planId)
+            ->whereDate('student_monthly_plan_days.date', '>=', $segmentEffectiveDate->toDateString())
+            ->whereDate('student_monthly_plan_days.date', '<', $beforeDate->toDateString())
             ->whereNotNull('student_monthly_plan_items.plan_point_id')
             ->orderByDesc('student_monthly_plan_items.sort_order')
             ->select('student_monthly_plan_items.plan_point_id')

@@ -2,8 +2,10 @@
 import { Head, router, useForm } from '@inertiajs/vue3';
 import Button from 'primevue/button';
 import DatePicker from 'primevue/datepicker';
+import Dialog from 'primevue/dialog';
 import FloatLabel from 'primevue/floatlabel';
-import { computed } from 'vue';
+import Select from 'primevue/select';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../../admin/navItems';
 import AdminBreadcrumbs from '../../../components/admin/AdminBreadcrumbs.vue';
@@ -24,12 +26,27 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    plan_options: {
+        type: Array,
+        default: () => [],
+    },
+    plan_point_options: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const { t } = useI18n();
 const refreshForm = useForm({
     from_date: props.monthly_plan.refresh_from_date ?? '',
     holiday_dates: props.monthly_plan.holiday_dates ?? [],
+});
+const changePlanDialogVisible = ref(false);
+const selectedStudentPlan = ref(null);
+const changePlanForm = useForm({
+    effective_date: props.monthly_plan.refresh_from_date ?? '',
+    plan_id: null,
+    starts_after_plan_point_id: null,
 });
 
 const title = computed(() => `${props.monthly_plan.group_name} / ${t(`monthlyPlans.months.${props.monthly_plan.month}`)} ${props.monthly_plan.year}`);
@@ -68,6 +85,38 @@ const refreshDateValue = computed({
 });
 const refreshMinDate = computed(() => parseYmdDate(props.monthly_plan.refresh_min_date));
 const refreshMaxDate = computed(() => parseYmdDate(props.monthly_plan.refresh_max_date));
+const changePlanMinDate = computed(() => parseYmdDate(
+    selectedStudentPlan.value?.effective_start_date ?? props.monthly_plan.refresh_min_date,
+));
+const changePlanMaxDate = computed(() => parseYmdDate(props.monthly_plan.refresh_max_date));
+const changePlanDateValue = computed({
+    get: () => parseYmdDate(changePlanForm.effective_date),
+    set: (value) => {
+        if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+            changePlanForm.effective_date = '';
+            return;
+        }
+
+        changePlanForm.effective_date = formatYmdDate(value);
+    },
+});
+const changePlanPointOptions = computed(() => {
+    const planId = Number(changePlanForm.plan_id ?? 0);
+
+    return props.plan_point_options.filter((point) => Number(point.plan_id) === planId);
+});
+const firstScheduledPoint = computed(() => {
+    const points = changePlanPointOptions.value;
+    if (!changePlanForm.starts_after_plan_point_id) {
+        return points[0] ?? null;
+    }
+
+    const selectedIndex = points.findIndex(
+        (point) => Number(point.id) === Number(changePlanForm.starts_after_plan_point_id),
+    );
+
+    return selectedIndex >= 0 ? (points[selectedIndex + 1] ?? null) : (points[0] ?? null);
+});
 const holidayDateValues = computed({
     get: () => (refreshForm.holiday_dates ?? [])
         .map((date) => parseYmdDate(date))
@@ -102,6 +151,66 @@ const refreshFuturePlan = () => {
         preserveScroll: true,
     });
 };
+
+const openChangeStudentPlan = (studentPlan) => {
+    selectedStudentPlan.value = studentPlan;
+    const latestTransition = studentPlan.transitions?.[studentPlan.transitions.length - 1] ?? null;
+    const profilePlanId = studentPlan.profile_plan_id ? Number(studentPlan.profile_plan_id) : null;
+    const defaultPlanId = profilePlanId
+        ?? (latestTransition?.plan_id ? Number(latestTransition.plan_id) : null)
+        ?? (studentPlan.plan_id ? Number(studentPlan.plan_id) : null);
+    const profilePointId = studentPlan.profile_current_plan_point_id
+        ? Number(studentPlan.profile_current_plan_point_id)
+        : null;
+    const profilePointMatchesPlan = profilePointId !== null && props.plan_point_options.some(
+        (point) => Number(point.id) === profilePointId && Number(point.plan_id) === defaultPlanId,
+    );
+
+    changePlanForm.clearErrors();
+    const defaultDate = props.monthly_plan.refresh_from_date ?? props.monthly_plan.refresh_min_date;
+    const studentMinDate = studentPlan.effective_start_date ?? props.monthly_plan.refresh_min_date;
+    changePlanForm.effective_date = defaultDate < studentMinDate ? studentMinDate : defaultDate;
+    changePlanForm.plan_id = defaultPlanId;
+    changePlanForm.starts_after_plan_point_id = profilePointMatchesPlan
+        ? profilePointId
+        : (Number(latestTransition?.plan_id) === defaultPlanId
+            ? (latestTransition?.starts_after_plan_point_id ?? null)
+            : null);
+    changePlanDialogVisible.value = true;
+};
+
+const submitStudentPlanChange = () => {
+    if (!selectedStudentPlan.value) {
+        return;
+    }
+
+    changePlanForm.post(
+        `/admin/monthly-plans/${props.monthly_plan.id}/student-plans/${selectedStudentPlan.value.id}/change-plan`,
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                changePlanDialogVisible.value = false;
+                selectedStudentPlan.value = null;
+            },
+        },
+    );
+};
+
+watch(
+    () => changePlanForm.plan_id,
+    () => {
+        if (!changePlanForm.starts_after_plan_point_id) {
+            return;
+        }
+
+        const pointExists = changePlanPointOptions.value.some(
+            (point) => Number(point.id) === Number(changePlanForm.starts_after_plan_point_id),
+        );
+        if (!pointExists) {
+            changePlanForm.starts_after_plan_point_id = null;
+        }
+    },
+);
 </script>
 
 <template>
@@ -234,7 +343,103 @@ const refreshFuturePlan = () => {
                 </form>
             </article>
 
-            <MonthlyPlanGrid :dates="dates" :plans="plans" />
+            <MonthlyPlanGrid :dates="dates" :plans="plans" @change-student-plan="openChangeStudentPlan" />
         </section>
+
+        <Dialog
+            v-model:visible="changePlanDialogVisible"
+            modal
+            :header="t('monthlyPlans.changeStudentPlanTitle', { student: selectedStudentPlan?.student_name ?? '' })"
+            class="w-[min(38rem,calc(100vw-2rem))]"
+        >
+            <form class="grid gap-5 pt-2" @submit.prevent="submitStudentPlanChange">
+                <p class="text-sm leading-6 text-(--muted-foreground)">
+                    {{ t('monthlyPlans.changeStudentPlanHint') }}
+                </p>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="flex flex-col gap-1">
+                        <FloatLabel variant="on">
+                            <DatePicker
+                                input-id="student-plan-change-effective-date"
+                                v-model="changePlanDateValue"
+                                show-icon
+                                icon-display="input"
+                                date-format="yy-mm-dd"
+                                :min-date="changePlanMinDate"
+                                :max-date="changePlanMaxDate"
+                                :manual-input="false"
+                                class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            />
+                            <FormFieldLabel for-id="student-plan-change-effective-date" :text="t('monthlyPlans.planChangeDate')" required />
+                        </FloatLabel>
+                        <small v-if="changePlanForm.errors.effective_date" class="text-sm text-red-600">{{ changePlanForm.errors.effective_date }}</small>
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <FloatLabel variant="on">
+                            <Select
+                                input-id="student-plan-change-plan-id"
+                                v-model="changePlanForm.plan_id"
+                                :options="plan_options"
+                                option-label="name"
+                                option-value="id"
+                                filter
+                                class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                            />
+                            <FormFieldLabel for-id="student-plan-change-plan-id" :text="t('monthlyPlans.newPlan')" required />
+                        </FloatLabel>
+                        <small v-if="changePlanForm.errors.plan_id" class="text-sm text-red-600">{{ changePlanForm.errors.plan_id }}</small>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <FloatLabel variant="on">
+                        <Select
+                            input-id="student-plan-change-start-point-id"
+                            v-model="changePlanForm.starts_after_plan_point_id"
+                            :options="changePlanPointOptions"
+                            option-label="name"
+                            option-value="id"
+                            filter
+                            show-clear
+                            :disabled="!changePlanForm.plan_id"
+                            class="h-11 w-full rounded-md border border-(--border) bg-(--background) text-(--foreground) shadow-none"
+                        />
+                        <FormFieldLabel for-id="student-plan-change-start-point-id" :text="t('monthlyPlans.startAfterPlanPoint')" />
+                    </FloatLabel>
+                    <small v-if="changePlanForm.errors.starts_after_plan_point_id" class="text-sm text-red-600">
+                        {{ changePlanForm.errors.starts_after_plan_point_id }}
+                    </small>
+                    <small class="text-xs text-(--muted-foreground)">
+                        {{ t('monthlyPlans.firstScheduledPoint') }}:
+                        <strong class="text-(--foreground)">
+                            {{ firstScheduledPoint?.name ?? t('monthlyPlans.noRemainingPlanPoints') }}
+                        </strong>
+                    </small>
+                </div>
+
+                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-950">
+                    {{ t('monthlyPlans.changeStudentPlanProfileHint') }}
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <Button
+                        type="button"
+                        :label="t('common.cancel')"
+                        severity="secondary"
+                        outlined
+                        :disabled="changePlanForm.processing"
+                        @click="changePlanDialogVisible = false"
+                    />
+                    <Button
+                        type="submit"
+                        icon="pi pi-check"
+                        :label="t('monthlyPlans.applyStudentPlanChange')"
+                        :loading="changePlanForm.processing"
+                    />
+                </div>
+            </form>
+        </Dialog>
     </AdminLayout>
 </template>

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StudentMonthlyPlanChangePlanRequest;
 use App\Http\Requests\Admin\StudentMonthlyPlanGenerateRequest;
 use App\Http\Requests\Admin\StudentMonthlyPlanIndexRequest;
 use App\Http\Requests\Admin\StudentMonthlyPlanRefreshFutureRequest;
 use App\Models\Center;
 use App\Models\Group;
 use App\Models\MonthlyPlan;
+use App\Models\StudentMonthlyPlan;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
@@ -34,7 +36,7 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
         return [
             new Middleware('can:monthly_plans.view', only: ['index', 'records', 'edit']),
             new Middleware('can:monthly_plans.create', only: ['create', 'store']),
-            new Middleware('can:monthly_plans.update', only: ['refreshFuture']),
+            new Middleware('can:monthly_plans.update', only: ['refreshFuture', 'changeStudentPlan']),
             new Middleware('can:monthly_plans.delete', only: ['destroy']),
         ];
     }
@@ -173,6 +175,33 @@ class StudentMonthlyPlanController extends Controller implements HasMiddleware
             ->route('admin.monthly-plans.edit', $monthlyPlan)
             ->with('success', __('monthly_plans.future_refreshed_successfully', [
                 'students' => $result['student_plans'],
+                'items' => $result['generated_items'],
+            ]));
+    }
+
+    public function changeStudentPlan(
+        StudentMonthlyPlanChangePlanRequest $request,
+        MonthlyPlan $monthlyPlan,
+        StudentMonthlyPlan $studentMonthlyPlan,
+    ): RedirectResponse {
+        $this->dataScope->abortUnlessCanAccessMonthlyPlan($monthlyPlan);
+        abort_unless((int) $studentMonthlyPlan->monthly_plan_id === (int) $monthlyPlan->id, 404);
+
+        $data = $request->validated();
+        $result = $this->generator->changePlanForStudentMonthlyPlan(
+            monthlyPlan: $monthlyPlan,
+            studentMonthlyPlan: $studentMonthlyPlan,
+            effectiveDate: CarbonImmutable::parse((string) $data['effective_date']),
+            planId: (int) $data['plan_id'],
+            startsAfterPlanPointId: isset($data['starts_after_plan_point_id'])
+                ? (int) $data['starts_after_plan_point_id']
+                : null,
+        );
+
+        return redirect()
+            ->route('admin.monthly-plans.edit', $monthlyPlan)
+            ->with('success', __('monthly_plans.student_plan_changed_successfully', [
+                'student' => $studentMonthlyPlan->student()->value('full_name'),
                 'items' => $result['generated_items'],
             ]));
     }

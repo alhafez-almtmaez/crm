@@ -253,7 +253,17 @@ const clearStudentSearch = () => {
                             <tr v-for="plan in filteredPlanRows" :key="plan.id">
                                 <th class="student-cell" scope="row">
                                     <strong>{{ plan.student_name }}</strong>
-                                    <span class="plan-pill">{{ plan.plan_name || '-' }}</span>
+                                    <div class="plan-history">
+                                        <span class="plan-pill">
+                                            {{ plan.transitions?.length ? 'الخطة الأصلية: ' : '' }}{{ plan.plan_name || '-' }}
+                                        </span>
+                                        <span v-for="transition in plan.transitions ?? []" :key="transition.id" class="plan-pill plan-pill--transition">
+                                            من {{ transition.effective_date }}: {{ transition.plan_name || '-' }}
+                                            <template v-if="transition.starts_after_plan_point_name">
+                                                (بعد {{ transition.starts_after_plan_point_name }})
+                                            </template>
+                                        </span>
+                                    </div>
                                 </th>
                                 <td
                                     v-for="date in dates"
@@ -280,7 +290,14 @@ const clearStudentSearch = () => {
                         <header class="mobile-student-header">
                             <div>
                                 <strong>{{ plan.student_name }}</strong>
-                                <span class="plan-pill">{{ plan.plan_name || '-' }}</span>
+                                <div class="plan-history">
+                                    <span class="plan-pill">
+                                        {{ plan.transitions?.length ? 'الخطة الأصلية: ' : '' }}{{ plan.plan_name || '-' }}
+                                    </span>
+                                    <span v-for="transition in plan.transitions ?? []" :key="transition.id" class="plan-pill plan-pill--transition">
+                                        من {{ transition.effective_date }}: {{ transition.plan_name || '-' }}
+                                    </span>
+                                </div>
                             </div>
                             <span>{{ englishNumber(dates.length) }} أيام</span>
                         </header>
@@ -719,6 +736,19 @@ const clearStudentSearch = () => {
     font-weight: 900;
     line-height: 1.35;
     overflow-wrap: anywhere;
+}
+
+.plan-history {
+    display: grid;
+    justify-items: start;
+    gap: 5px;
+}
+
+.plan-pill--transition {
+    margin-top: 0;
+    border-color: #bfdbfe;
+    background: #eff6ff;
+    color: #1d4ed8;
 }
 
 .plan-table td,

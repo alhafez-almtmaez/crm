@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\HomeworkUpdateRequest;
 use App\Models\Homework;
 use App\Models\Student;
 use App\Services\Admin\AdminDataScopeService;
+use App\Services\Admin\HomeworkCertificateDeliveryService;
 use App\Services\Admin\HomeworkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,15 +26,18 @@ class HomeworkController extends Controller implements HasMiddleware
     public function __construct(
         private readonly HomeworkService $service,
         private readonly AdminDataScopeService $dataScope,
+        private readonly HomeworkCertificateDeliveryService $certificateDelivery,
     ) {}
 
     public static function middleware(): array
     {
         return [
-            new Middleware('can:homeworks.view', only: ['index', 'records', 'pointHistory', 'pdf']),
+            new Middleware('can:homeworks.view', only: ['index', 'records', 'pointHistory', 'pdf', 'deliverCertificates']),
             new Middleware('can:homeworks.create', only: ['create', 'store']),
             new Middleware('can:homeworks.update', only: ['edit', 'update']),
             new Middleware('can:homeworks.delete', only: ['destroy']),
+            new Middleware('can:students.update', only: ['deliverCertificates']),
+            new Middleware('can:certificates.send', only: ['deliverCertificates']),
         ];
     }
 
@@ -129,6 +133,36 @@ class HomeworkController extends Controller implements HasMiddleware
             ->format('a4')
             ->margins(10, 10, 10, 10)
             ->download();
+    }
+
+    public function deliverCertificates(Homework $homework): JsonResponse
+    {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
+        $result = $this->certificateDelivery->deliver($homework);
+        $problemCount = (int) $result['failed']
+            + (int) $result['partial']
+            + (int) $result['review_required'];
+
+        $message = match (true) {
+            (int) $result['candidates'] === 0 => __('homeworks.no_due_certificates'),
+            (bool) $result['has_issues'] => __('homeworks.certificate_delivery_completed_with_issues', [
+                'issued' => $result['issued'],
+                'sent' => $result['sent'],
+                'already_sent' => $result['already_sent'],
+                'problems' => $problemCount,
+            ]),
+            default => __('homeworks.certificate_delivery_completed', [
+                'issued' => $result['issued'],
+                'sent' => $result['sent'],
+                'already_sent' => $result['already_sent'],
+            ]),
+        };
+
+        return response()->json([
+            'message' => $message,
+            'meta' => $result,
+        ]);
     }
 
     public function pointHistory(Student $student): JsonResponse

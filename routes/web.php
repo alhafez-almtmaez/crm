@@ -114,6 +114,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
 
         Route::get('monthly-plans/records', [StudentMonthlyPlanController::class, 'records'])->name('monthly-plans.records');
         Route::post('monthly-plans/{monthlyPlan}/refresh-future', [StudentMonthlyPlanController::class, 'refreshFuture'])->name('monthly-plans.refresh-future');
+        Route::post('monthly-plans/{monthlyPlan}/student-plans/{studentMonthlyPlan}/change-plan', [StudentMonthlyPlanController::class, 'changeStudentPlan'])->name('monthly-plans.student-plans.change-plan');
         Route::resource('monthly-plans', StudentMonthlyPlanController::class)->only(['index', 'create', 'store', 'edit', 'destroy']);
 
         Route::get('centers/records', [CenterController::class, 'records'])->name('centers.records');
@@ -164,6 +165,8 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
 
         Route::get('homeworks/records', [HomeworkController::class, 'records'])->name('homeworks.records');
         Route::get('homeworks/students/{student}/point-history', [HomeworkController::class, 'pointHistory'])->name('homeworks.students.point-history');
+        Route::post('homeworks/{homework}/certificates/deliver', [HomeworkController::class, 'deliverCertificates'])
+            ->name('homeworks.certificates.deliver');
         Route::get('homeworks/{homework}/pdf', [HomeworkController::class, 'pdf'])->name('homeworks.pdf');
         Route::resource('homeworks', HomeworkController::class)->except(['show']);
 

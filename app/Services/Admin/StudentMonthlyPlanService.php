@@ -8,6 +8,8 @@ use App\Models\EvaluationStudent;
 use App\Models\Group;
 use App\Models\HomeworkStudentPoint;
 use App\Models\MonthlyPlan;
+use App\Models\Plan;
+use App\Models\PlanPoint;
 use App\Models\StudentMonthlyPlan;
 use App\Services\System\DateTimeFormatterService;
 use App\Support\DailyWeightLimits;
@@ -204,7 +206,7 @@ class StudentMonthlyPlanService
     }
 
     /**
-     * @return array{monthly_plan: array<string, mixed>, dates: array<int, array<string, mixed>>, plans: array<int, array<string, mixed>>}
+     * @return array{monthly_plan: array<string, mixed>, dates: array<int, array<string, mixed>>, plans: array<int, array<string, mixed>>, plan_options: array<int, array<string, mixed>>, plan_point_options: array<int, array<string, mixed>>}
      */
     public function savedPlanPayload(MonthlyPlan $monthlyPlan): array
     {
@@ -214,12 +216,15 @@ class StudentMonthlyPlanService
 
         $studentPlanModels = StudentMonthlyPlan::query()
             ->with([
-                'student:id,full_name,max_daily_weight',
+                'student:id,full_name,max_daily_weight,plan_type_id,current_plan_point_id',
                 'center:id,name',
                 'group:id,name',
                 'plan:id,name',
                 'startsAfterPlanPoint:id,name',
                 'endsAtPlanPoint:id,name',
+                'transitions' => fn ($query) => $query->orderBy('effective_date')->orderBy('id'),
+                'transitions.plan:id,name',
+                'transitions.startsAfterPlanPoint:id,name',
                 'items' => fn ($query) => $query->where('status', 'skipped')->orderBy('sort_order'),
                 'items.planPoint:id,name,sort_order',
                 'days' => fn ($query) => $query->orderBy('date'),
@@ -275,6 +280,26 @@ class StudentMonthlyPlanService
                 ? $this->workingDatesForMonth($monthlyPlan, (int) $monthlyPlan->month, (int) $monthlyPlan->year, $periodStart, $periodEnd, $holidayDates)
                 : [],
             'plans' => $studentPlans,
+            'plan_options' => Plan::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(static fn (Plan $plan): array => [
+                    'id' => (int) $plan->id,
+                    'name' => (string) $plan->name,
+                ])
+                ->all(),
+            'plan_point_options' => PlanPoint::query()
+                ->orderBy('plan_id')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(['id', 'plan_id', 'sort_order', 'name'])
+                ->map(static fn (PlanPoint $point): array => [
+                    'id' => (int) $point->id,
+                    'plan_id' => (int) $point->plan_id,
+                    'sort_order' => (int) $point->sort_order,
+                    'name' => (string) $point->name,
+                ])
+                ->all(),
         ];
     }
 
@@ -300,6 +325,9 @@ class StudentMonthlyPlanService
             ->with([
                 'student:id,full_name',
                 'plan:id,name',
+                'transitions' => fn ($query) => $query->orderBy('effective_date')->orderBy('id'),
+                'transitions.plan:id,name',
+                'transitions.startsAfterPlanPoint:id,name',
                 'days' => fn ($query) => $query->orderBy('date'),
                 'days.items' => fn ($query) => $query->orderBy('sort_order'),
                 'days.items.planPoint:id,name,sort_order',
@@ -491,9 +519,17 @@ class StudentMonthlyPlanService
             'student_name' => (string) ($plan->student?->full_name ?? ''),
             'center_name' => (string) ($plan->center?->name ?? ''),
             'group_name' => (string) ($plan->group?->name ?? ''),
+            'plan_id' => $plan->plan_id !== null ? (int) $plan->plan_id : null,
             'plan_name' => (string) ($plan->plan?->name ?? ''),
             'month' => (int) $plan->month,
             'year' => (int) $plan->year,
+            'effective_start_date' => $plan->effective_start_date?->toDateString(),
+            'profile_plan_id' => $plan->student?->plan_type_id !== null
+                ? (int) $plan->student->plan_type_id
+                : null,
+            'profile_current_plan_point_id' => $plan->student?->current_plan_point_id !== null
+                ? (int) $plan->student->current_plan_point_id
+                : null,
             'max_daily_weight' => (int) $plan->max_daily_weight,
             'daily_weight_limits' => DailyWeightLimits::normalize($plan->daily_weight_limits, $plan->max_daily_weight),
             'starts_after_plan_point_name' => $plan->startsAfterPlanPoint?->name,
@@ -501,6 +537,16 @@ class StudentMonthlyPlanService
             'generated_items_count' => (int) $plan->generated_items_count,
             'skipped_items_count' => (int) $plan->skipped_items_count,
             'status' => (string) $plan->status,
+            'transitions' => $plan->transitions->map(static fn ($transition): array => [
+                'id' => (int) $transition->id,
+                'effective_date' => $transition->effective_date?->toDateString(),
+                'plan_id' => $transition->plan_id !== null ? (int) $transition->plan_id : null,
+                'plan_name' => (string) ($transition->plan?->name ?? ''),
+                'starts_after_plan_point_id' => $transition->starts_after_plan_point_id !== null
+                    ? (int) $transition->starts_after_plan_point_id
+                    : null,
+                'starts_after_plan_point_name' => $transition->startsAfterPlanPoint?->name,
+            ])->all(),
             'completion' => $this->completionPayload(
                 $planCompletedItemsCount,
                 $planEligibleItemsCount,
@@ -533,6 +579,12 @@ class StudentMonthlyPlanService
             'student_id' => (int) $plan->student_id,
             'student_name' => (string) ($plan->student?->full_name ?? ''),
             'plan_name' => (string) ($plan->plan?->name ?? ''),
+            'transitions' => $plan->transitions->map(static fn ($transition): array => [
+                'id' => (int) $transition->id,
+                'effective_date' => $transition->effective_date?->toDateString(),
+                'plan_name' => (string) ($transition->plan?->name ?? ''),
+                'starts_after_plan_point_name' => $transition->startsAfterPlanPoint?->name,
+            ])->all(),
             'generated_items_count' => (int) $plan->generated_items_count,
             'days' => $plan->days->map(fn ($day): array => [
                 'id' => (int) $day->id,

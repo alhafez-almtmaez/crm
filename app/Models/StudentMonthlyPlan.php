@@ -98,4 +98,11 @@ class StudentMonthlyPlan extends Model
     {
         return $this->hasMany(StudentMonthlyPlanItem::class);
     }
+
+    public function transitions(): HasMany
+    {
+        return $this->hasMany(StudentMonthlyPlanTransition::class)
+            ->orderBy('effective_date')
+            ->orderBy('id');
+    }
 }

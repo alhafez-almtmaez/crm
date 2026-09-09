@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Student;
 use App\Models\StudentMonthlyPlan;
 use App\Models\StudentMonthlyPlanItem;
+use App\Models\StudentMonthlyPlanTransition;
 use App\Models\User;
 use App\Services\Admin\StudentMonthlyPlanGenerator;
 use App\Services\Admin\StudentMonthlyPlanService;
@@ -336,6 +337,157 @@ test('regenerating a saved monthly plan updates holiday dates before redistribut
         ->and($days[1]->items->pluck('plan_point_id')->all())->toBe([$second->id])
         ->and($days[2]->items->pluck('plan_point_id')->all())->toBe([$third->id])
         ->and($days[3]->items->pluck('plan_point_id')->all())->toBe([$fourth->id]);
+});
+
+test('changing one student plan preserves earlier days and stores a dated transition', function () {
+    [, , $originalPlan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $originalPoints = collect(range(1, 6))->map(
+        fn (int $number): PlanPoint => createPlanPoint($originalPlan, "حفظ {$number}", $number),
+    );
+    $newPlan = Plan::factory()->create(['name' => 'خطة التثبيت']);
+    $newPoints = collect(range(1, 5))->map(
+        fn (int $number): PlanPoint => createPlanPoint($newPlan, "تثبيت {$number}", $number),
+    );
+
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent($student, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+    $preservedItemIds = $studentPlan->items()
+        ->join('student_monthly_plan_days', 'student_monthly_plan_items.student_monthly_plan_day_id', '=', 'student_monthly_plan_days.id')
+        ->whereDate('student_monthly_plan_days.date', '<', '2026-06-03')
+        ->orderBy('student_monthly_plan_items.sort_order')
+        ->pluck('student_monthly_plan_items.id')
+        ->all();
+
+    $result = app(StudentMonthlyPlanGenerator::class)->changePlanForStudentMonthlyPlan(
+        monthlyPlan: $monthlyPlan,
+        studentMonthlyPlan: $studentPlan,
+        effectiveDate: CarbonImmutable::create(2026, 6, 3),
+        planId: $newPlan->id,
+        startsAfterPlanPointId: $newPoints[0]->id,
+    );
+
+    $itemsByDate = $studentPlan->days()
+        ->with(['items' => fn ($query) => $query->orderBy('sort_order')])
+        ->orderBy('date')
+        ->get()
+        ->mapWithKeys(fn ($day): array => [
+            $day->date->format('Y-m-d') => $day->items->pluck('plan_point_id')->all(),
+        ])
+        ->all();
+    $transition = StudentMonthlyPlanTransition::query()->firstOrFail();
+    $savedPayload = app(StudentMonthlyPlanService::class)->savedPlanPayload($monthlyPlan);
+
+    expect($result['generated_items'])->toBe(4)
+        ->and($studentPlan->items()
+            ->whereIn('id', $preservedItemIds)
+            ->orderBy('sort_order')
+            ->pluck('id')
+            ->all())->toBe($preservedItemIds)
+        ->and($itemsByDate['2026-06-01'])->toBe([$originalPoints[0]->id])
+        ->and($itemsByDate['2026-06-02'])->toBe([$originalPoints[1]->id])
+        ->and($itemsByDate['2026-06-03'])->toBe([$newPoints[1]->id])
+        ->and($itemsByDate['2026-06-06'])->toBe([$newPoints[4]->id])
+        ->and($transition->student_monthly_plan_id)->toBe($studentPlan->id)
+        ->and($transition->effective_date->toDateString())->toBe('2026-06-03')
+        ->and($transition->plan_id)->toBe($newPlan->id)
+        ->and($transition->starts_after_plan_point_id)->toBe($newPoints[0]->id)
+        ->and($student->refresh()->plan_type_id)->toBe($newPlan->id)
+        ->and($student->current_plan_point_id)->toBe($newPoints[0]->id)
+        ->and($savedPayload['plans'][0]['plan_name'])->toBe($originalPlan->name)
+        ->and($savedPayload['plans'][0]['transitions'][0]['plan_name'])->toBe('خطة التثبيت');
+});
+
+test('general redistribution keeps a stored student plan transition', function () {
+    [, , $originalPlan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $originalPoints = collect(range(1, 6))->map(
+        fn (int $number): PlanPoint => createPlanPoint($originalPlan, "حفظ {$number}", $number),
+    );
+    $newPlan = Plan::factory()->create(['name' => 'خطة التثبيت']);
+    $newPoints = collect(range(1, 5))->map(
+        fn (int $number): PlanPoint => createPlanPoint($newPlan, "تثبيت {$number}", $number),
+    );
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent($student, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+    $generator = app(StudentMonthlyPlanGenerator::class);
+
+    $generator->changePlanForStudentMonthlyPlan(
+        monthlyPlan: $monthlyPlan,
+        studentMonthlyPlan: $studentPlan,
+        effectiveDate: CarbonImmutable::create(2026, 6, 3),
+        planId: $newPlan->id,
+        startsAfterPlanPointId: $newPoints[0]->id,
+    );
+    $student->update(['max_daily_weight' => 2]);
+
+    $generator->regenerateFutureForMonthlyPlan(
+        $monthlyPlan,
+        CarbonImmutable::create(2026, 6, 1),
+    );
+
+    $itemsByDate = $studentPlan->days()
+        ->with(['items' => fn ($query) => $query->orderBy('sort_order')])
+        ->orderBy('date')
+        ->get()
+        ->mapWithKeys(fn ($day): array => [
+            $day->date->format('Y-m-d') => $day->items->pluck('plan_point_id')->all(),
+        ])
+        ->all();
+
+    expect($itemsByDate)->toBe([
+        '2026-06-01' => [$originalPoints[0]->id, $originalPoints[1]->id],
+        '2026-06-02' => [$originalPoints[2]->id, $originalPoints[3]->id],
+        '2026-06-03' => [$newPoints[1]->id, $newPoints[2]->id],
+        '2026-06-04' => [$newPoints[3]->id, $newPoints[4]->id],
+    ])->and(StudentMonthlyPlanTransition::query()->count())->toBe(1)
+        ->and($studentPlan->refresh()->plan_id)->toBe($originalPlan->id)
+        ->and($studentPlan->generated_items_count)->toBe(8);
+});
+
+test('student plan change endpoint validates the point and applies a valid change', function () {
+    [, , $originalPlan, $student] = monthlyPlanFixture(maxDailyWeight: 1);
+    $originalPoint = createPlanPoint($originalPlan, 'حفظ 1', 1);
+    $newPlan = Plan::factory()->create(['name' => 'خطة التثبيت']);
+    $newPoint = createPlanPoint($newPlan, 'تثبيت 1', 1);
+    createPlanPoint($newPlan, 'تثبيت 2', 2);
+    $studentPlan = app(StudentMonthlyPlanGenerator::class)->generateForStudent($student, 6, 2026);
+    $monthlyPlan = MonthlyPlan::query()->findOrFail($studentPlan->monthly_plan_id);
+
+    app(PermissionSyncService::class)->sync();
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $this->actingAs($admin, 'web')
+        ->from(route('admin.monthly-plans.edit', $monthlyPlan, false))
+        ->post(route('admin.monthly-plans.student-plans.change-plan', [
+            'monthlyPlan' => $monthlyPlan,
+            'studentMonthlyPlan' => $studentPlan,
+        ], false), [
+            'effective_date' => '2026-06-03',
+            'plan_id' => $newPlan->id,
+            'starts_after_plan_point_id' => $originalPoint->id,
+        ])
+        ->assertRedirect(route('admin.monthly-plans.edit', $monthlyPlan, false))
+        ->assertSessionHasErrors('starts_after_plan_point_id');
+
+    expect(StudentMonthlyPlanTransition::query()->count())->toBe(0)
+        ->and($student->refresh()->plan_type_id)->toBe($originalPlan->id);
+
+    $this->post(route('admin.monthly-plans.student-plans.change-plan', [
+        'monthlyPlan' => $monthlyPlan,
+        'studentMonthlyPlan' => $studentPlan,
+    ], false), [
+        'effective_date' => '2026-06-03',
+        'plan_id' => $newPlan->id,
+        'starts_after_plan_point_id' => $newPoint->id,
+    ])->assertRedirect(route('admin.monthly-plans.edit', $monthlyPlan, false))
+        ->assertSessionHas('success', __('monthly_plans.student_plan_changed_successfully', [
+            'student' => $student->full_name,
+            'items' => 1,
+        ]));
+
+    expect(StudentMonthlyPlanTransition::query()->count())->toBe(1)
+        ->and($student->refresh()->plan_type_id)->toBe($newPlan->id)
+        ->and($student->current_plan_point_id)->toBe($newPoint->id);
 });
 
 test('standalone item is placed by itself', function () {

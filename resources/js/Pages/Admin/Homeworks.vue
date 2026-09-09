@@ -1,9 +1,9 @@
 <script setup>
 import axios from 'axios';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import ConfirmPopup from 'primevue/confirmpopup';
 import { useConfirm } from 'primevue/useconfirm';
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
 import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
@@ -15,6 +15,15 @@ import { useServerTable } from '../../composables/useServerTable';
 const confirm = useConfirm();
 const appToast = useAppToast();
 const { t } = useI18n();
+const page = usePage();
+const deliveringHomeworkIds = ref(new Set());
+const canDeliverCertificates = computed(() => {
+    const roles = page.props.auth?.user?.roles ?? [];
+    const permissions = page.props.auth?.user?.permissions ?? [];
+
+    return roles.includes('admin')
+        || (permissions.includes('students.update') && permissions.includes('certificates.send'));
+});
 const {
     loading,
     rows: sourceRows,
@@ -51,7 +60,31 @@ const columns = computed(() => [
     { field: 'created_at_formatted', header: t('homeworks.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
 
+const isDeliveringCertificates = (homeworkId) => deliveringHomeworkIds.value.has(Number(homeworkId));
+
+const certificateDeliveryTitle = (row) => {
+    if (isDeliveringCertificates(row.id)) {
+        return t('homeworks.certificateDeliveryInProgress');
+    }
+
+    if (Number(row.completed_points_count ?? 0) === 0) {
+        return t('homeworks.noCompletedPointsForCertificates');
+    }
+
+    return t('homeworks.deliverDueCertificates');
+};
+
 const rowActions = computed(() => [
+    ...(canDeliverCertificates.value ? [{
+        key: 'deliver-certificates',
+        icon: 'pi pi-whatsapp',
+        severity: 'success',
+        outlined: true,
+        loading: (row) => isDeliveringCertificates(row.id),
+        disabled: (row) => isDeliveringCertificates(row.id)
+            || Number(row.completed_points_count ?? 0) === 0,
+        title: certificateDeliveryTitle,
+    }] : []),
     {
         key: 'pdf',
         icon: 'pi pi-file-pdf',
@@ -81,10 +114,87 @@ const openPdf = (row) => {
     window.open(`/admin/homeworks/${row.id}/pdf`, '_blank', 'noopener');
 };
 
-const handleRowAction = ({ action, data }) => {
+const handleRowAction = ({ action, data, event }) => {
+    if (action === 'deliver-certificates') {
+        askCertificateDelivery(data, event);
+        return;
+    }
+
     if (action === 'pdf') {
         openPdf(data);
     }
+};
+
+const setCertificatesDelivering = (homeworkId, delivering) => {
+    const nextIds = new Set(deliveringHomeworkIds.value);
+
+    if (delivering) {
+        nextIds.add(Number(homeworkId));
+    } else {
+        nextIds.delete(Number(homeworkId));
+    }
+
+    deliveringHomeworkIds.value = nextIds;
+};
+
+const deliverCertificates = async (row) => {
+    if (!row?.id || isDeliveringCertificates(row.id)) {
+        return;
+    }
+
+    setCertificatesDelivering(row.id, true);
+
+    try {
+        const { data } = await axios.post(`/admin/homeworks/${row.id}/certificates/deliver`);
+
+        if (data?.meta?.has_issues) {
+            appToast.push({
+                severity: 'warn',
+                summary: t('homeworks.certificateDeliveryFinishedWithIssues'),
+                detail: data?.message ?? t('homeworks.certificateDeliveryFailed'),
+                life: 6000,
+            });
+        } else if (Number(data?.meta?.candidates ?? 0) === 0) {
+            appToast.info(data?.message ?? t('homeworks.noDueCertificates'));
+        } else {
+            appToast.success(data?.message ?? t('homeworks.certificateDeliverySuccess'), undefined, 5000);
+        }
+
+        await fetchRows();
+    } catch (error) {
+        appToast.fromAxiosError(error, {
+            summary: t('notifications.requestFailedTitle'),
+            fallback: t('homeworks.certificateDeliveryFailed'),
+            life: 5000,
+        });
+    } finally {
+        setCertificatesDelivering(row.id, false);
+    }
+};
+
+const askCertificateDelivery = (row, event) => {
+    const target = event?.currentTarget ?? event?.target ?? document.body;
+
+    confirm.require({
+        target,
+        message: t('homeworks.certificateDeliveryConfirm', {
+            group: row.group_name,
+            date: row.date_formatted,
+        }),
+        icon: 'pi pi-whatsapp',
+        rejectProps: {
+            label: t('common.cancel'),
+            severity: 'secondary',
+            text: true,
+        },
+        acceptProps: {
+            label: t('homeworks.deliverDueCertificates'),
+            severity: 'success',
+        },
+        accept: () => {
+            deliverCertificates(row);
+        },
+    });
 };
 
 const deleteRow = async (row) => {

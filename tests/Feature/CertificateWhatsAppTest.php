@@ -217,7 +217,8 @@ test('certificate WhatsApp copy and filename use the clean achievement name', fu
 
     expect(data_get($sentRequest?->data(), 'content.filename'))
         ->toBe($expectedFilename)
-        ->and($caption)->toContain('تتقدّم إدارة *دار القرآن مسجد الصالحين* بأحرّ التهاني')
+        ->and($caption)->toContain('يسرّ *دار القرآن مسجد الصالحين* تهنئة')
+        ->and($caption)->not->toContain('إدارة')
         ->and($caption)->toContain('بمناسبة '.$expectedPhrase)
         ->and($caption)->toContain('📎 الشهادة مرفقة بصيغة PDF.')
         ->and($caption)->not->toContain($fixture['certificate']->certificate_number)
