@@ -764,7 +764,7 @@ onMounted(() => {
                                 <td class="px-3 py-2" :class="Number(row.points) < 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'">
                                     {{ row.points }}
                                 </td>
-                                <td class="px-3 py-2">{{ row.balance_after }}</td>
+                                <td class="px-3 py-2">{{ row.balance_after ?? t('common.na') }}</td>
                             </tr>
                         </tbody>
                     </table>

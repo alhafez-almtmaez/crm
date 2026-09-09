@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin;
 
+use App\Models\AbsenceRuleExecutionLog;
 use App\Models\Center;
 use App\Models\EvaluationStudent;
 use App\Models\Group;
@@ -505,7 +506,7 @@ class HomeworkService
     {
         $this->dataScope->abortUnlessCanAccessStudent($student);
 
-        return StudentPointTransaction::query()
+        $transactions = StudentPointTransaction::query()
             ->with([
                 'homework:id,date',
                 'evaluation:id,date',
@@ -515,9 +516,18 @@ class HomeworkService
             ->where('student_id', $student->id)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get()
+            ->get();
+
+        $recordedEvaluationStudentIds = $transactions
+            ->where('type', StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION)
+            ->pluck('evaluation_student_id')
+            ->filter()
+            ->mapWithKeys(static fn ($id): array => [(int) $id => true]);
+
+        $transactionRows = $transactions
             ->map(fn (StudentPointTransaction $transaction): array => [
                 'id' => $transaction->id,
+                'type' => $transaction->type,
                 'date' => $transaction->created_at?->locale(app()->getLocale())->translatedFormat('l ، j F ، Y H:i'),
                 'homework_date' => ($transaction->homework?->date ?? $transaction->evaluation?->date)
                     ?->locale(app()->getLocale())
@@ -527,7 +537,60 @@ class HomeworkService
                 'points' => $transaction->points,
                 'balance_before' => $transaction->balance_before,
                 'balance_after' => $transaction->balance_after,
-            ])
+                'is_historical' => false,
+                '_sort_at' => $transaction->created_at?->getTimestamp() ?? 0,
+                '_sort_id' => (int) $transaction->id,
+            ]);
+
+        $historicalRuleRows = AbsenceRuleExecutionLog::query()
+            ->with('evaluation:id,date')
+            ->where('student_id', $student->id)
+            ->where('deduction_points_count', '>', 0)
+            ->orderByDesc('executed_at')
+            ->orderByDesc('id')
+            ->get()
+            ->reject(static fn (AbsenceRuleExecutionLog $log): bool => $log->evaluation_student_id !== null
+                && $recordedEvaluationStudentIds->has((int) $log->evaluation_student_id))
+            ->map(function (AbsenceRuleExecutionLog $log): array {
+                $occurredAt = $log->executed_at ?? $log->created_at;
+                $description = $this->attendanceRuleDeductionLabel(
+                    $log->attendance_value !== null ? (int) $log->attendance_value : null,
+                    $log->attendance_type,
+                );
+
+                return [
+                    'id' => "absence-rule-log-{$log->id}",
+                    'type' => StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION,
+                    'date' => $occurredAt?->locale(app()->getLocale())->translatedFormat('l ، j F ، Y H:i'),
+                    'homework_date' => $log->evaluation?->date
+                        ?->locale(app()->getLocale())
+                        ->translatedFormat('l ، j F ، Y'),
+                    'description' => $description,
+                    'plan_point_name' => $description,
+                    'points' => -abs((int) $log->deduction_points_count),
+                    'balance_before' => null,
+                    'balance_after' => null,
+                    'is_historical' => true,
+                    '_sort_at' => $occurredAt?->getTimestamp() ?? 0,
+                    '_sort_id' => (int) $log->id,
+                ];
+            });
+
+        return $transactionRows
+            ->concat($historicalRuleRows)
+            ->sort(static function (array $left, array $right): int {
+                $timestampComparison = $right['_sort_at'] <=> $left['_sort_at'];
+
+                return $timestampComparison !== 0
+                    ? $timestampComparison
+                    : $right['_sort_id'] <=> $left['_sort_id'];
+            })
+            ->map(static function (array $row): array {
+                unset($row['_sort_at'], $row['_sort_id']);
+
+                return $row;
+            })
+            ->values()
             ->all();
     }
 
@@ -538,18 +601,29 @@ class HomeworkService
         }
 
         if ($transaction->type === StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION) {
-            $attendance = match ((int) $transaction->evaluationStudent?->attendances) {
-                EvaluationStudent::ATTENDANCE_PRESENT => __('homeworks.attendance_present'),
-                EvaluationStudent::ATTENDANCE_LATE => __('homeworks.attendance_late'),
-                EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE => __('homeworks.attendance_excused_absence'),
-                EvaluationStudent::ATTENDANCE_ABSENCE => __('homeworks.attendance_absence'),
-                default => __('homeworks.attendance_unknown'),
-            };
-
-            return __('homeworks.attendance_rule_deduction', ['attendance' => $attendance]);
+            return $this->attendanceRuleDeductionLabel($transaction->evaluationStudent?->attendances);
         }
 
         return $transaction->planPoint?->name;
+    }
+
+    private function attendanceRuleDeductionLabel(?int $attendanceValue, ?string $attendanceType = null): string
+    {
+        $attendance = match ($attendanceValue) {
+            EvaluationStudent::ATTENDANCE_PRESENT => __('homeworks.attendance_present'),
+            EvaluationStudent::ATTENDANCE_LATE => __('homeworks.attendance_late'),
+            EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE => __('homeworks.attendance_excused_absence'),
+            EvaluationStudent::ATTENDANCE_ABSENCE => __('homeworks.attendance_absence'),
+            default => match ($attendanceType) {
+                'present' => __('homeworks.attendance_present'),
+                'late' => __('homeworks.attendance_late'),
+                'excused_absence' => __('homeworks.attendance_excused_absence'),
+                'absence' => __('homeworks.attendance_absence'),
+                default => __('homeworks.attendance_unknown'),
+            },
+        };
+
+        return __('homeworks.attendance_rule_deduction', ['attendance' => $attendance]);
     }
 
     /**

@@ -683,7 +683,7 @@ const pointCardClass = (point) => {
                             <td class="px-3 py-2">{{ row.date }}</td>
                             <td class="px-3 py-2">{{ row.description || row.plan_point_name || t('common.na') }}</td>
                             <td class="px-3 py-2">{{ row.points }}</td>
-                            <td class="px-3 py-2">{{ row.balance_after }}</td>
+                            <td class="px-3 py-2">{{ row.balance_after ?? t('common.na') }}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -247,6 +247,71 @@ test('alert only absence rule sends the message and deducts configured points wi
         ->and($student->refresh()->points_balance)->toBe(75);
 });
 
+test('historical attendance rule deductions appear once in student point history', function () {
+    $center = Center::factory()->create();
+    $student = Student::factory()->active()->create(['center_id' => $center->id]);
+    $evaluation = Evaluation::factory()->create([
+        'center_id' => $center->id,
+        'date' => '2026-07-13',
+    ]);
+    $evaluationStudent = EvaluationStudent::factory()
+        ->excusedAbsence()
+        ->create([
+            'evaluation_id' => $evaluation->id,
+            'student_id' => $student->id,
+            'user_id' => $student->id,
+        ]);
+    $rule = AbsenceRule::factory()->create([
+        'center_id' => $center->id,
+        'attendance_type' => AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,
+        'occurrence_number' => 2,
+        'deduction_points_count' => 50,
+    ]);
+    $log = AbsenceRuleExecutionLog::factory()->create([
+        'evaluation_id' => $evaluation->id,
+        'evaluation_student_id' => $evaluationStudent->id,
+        'student_id' => $student->id,
+        'center_id' => $center->id,
+        'absence_rule_id' => $rule->id,
+        'attendance_type' => AbsenceRule::ATTENDANCE_TYPE_EXCUSED_ABSENCE,
+        'attendance_value' => EvaluationStudent::ATTENDANCE_EXCUSED_ABSENCE,
+        'occurrence_number' => 2,
+        'deduction_points_count' => 50,
+        'executed_at' => '2026-07-14 17:31:25',
+    ]);
+
+    $history = app(HomeworkService::class)->pointHistory($student);
+
+    expect($history)->toHaveCount(1)
+        ->and($history[0]['id'])->toBe("absence-rule-log-{$log->id}")
+        ->and($history[0]['type'])->toBe(StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION)
+        ->and($history[0]['description'])->toBe(__('homeworks.attendance_rule_deduction', [
+            'attendance' => __('homeworks.attendance_excused_absence'),
+        ]))
+        ->and($history[0]['points'])->toBe(-50)
+        ->and($history[0]['balance_before'])->toBeNull()
+        ->and($history[0]['balance_after'])->toBeNull()
+        ->and($history[0]['is_historical'])->toBeTrue();
+
+    StudentPointTransaction::query()->create([
+        'student_id' => $student->id,
+        'evaluation_id' => $evaluation->id,
+        'evaluation_student_id' => $evaluationStudent->id,
+        'absence_rule_id' => $rule->id,
+        'type' => StudentPointTransaction::TYPE_ATTENDANCE_RULE_DEDUCTION,
+        'points' => -50,
+        'balance_before' => 100,
+        'balance_after' => 50,
+    ]);
+
+    $history = app(HomeworkService::class)->pointHistory($student);
+
+    expect($history)->toHaveCount(1)
+        ->and($history[0]['id'])->toBeInt()
+        ->and($history[0]['balance_after'])->toBe(50)
+        ->and($history[0]['is_historical'])->toBeFalse();
+});
+
 test('late attendance triggers its matching monthly rule', function () {
     $messaging = new class extends WhatsAppMessagingService
     {
