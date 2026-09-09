@@ -4,7 +4,8 @@ import Column from 'primevue/column';
 import PrimeDataTable from 'primevue/datatable';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
-import { computed } from 'vue';
+import Menu from 'primevue/menu';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
@@ -27,6 +28,10 @@ const props = defineProps({
         default: true,
     },
     showHistory: {
+        type: Boolean,
+        default: false,
+    },
+    compactActions: {
         type: Boolean,
         default: false,
     },
@@ -89,6 +94,8 @@ const resolvedCreateLabel = () => props.createLabel || t('common.create');
 const resolvedSearchLabel = () => props.searchLabel || t('common.search');
 const resolvedTableTitle = () => props.tableTitle || t('common.records');
 const resolvedEmptyMessage = () => props.emptyMessage || t('common.noRecords');
+const actionMenu = ref(null);
+const actionMenuRow = ref(null);
 const resolveBadgeClass = (column, rowData) => {
     if (typeof column.badgeClassField === 'string' && column.badgeClassField !== '') {
         return rowData?.[column.badgeClassField] ?? '';
@@ -98,6 +105,10 @@ const resolveBadgeClass = (column, rowData) => {
 };
 const normalizedRowActions = computed(() => (props.rowActions ?? []).filter((action) => action && action.key));
 const actionColumnWidth = computed(() => {
+    if (props.compactActions) {
+        return '170px';
+    }
+
     const baseButtonsCount = 2 + (props.showHistory ? 1 : 0);
     const totalButtons = baseButtonsCount + normalizedRowActions.value.length;
     const width = Math.max(170, totalButtons * 48 + 20);
@@ -135,6 +146,39 @@ const resolveRowActionTitle = (action, rowData) => {
     }
 
     return t('common.actions');
+};
+const actionMenuItems = computed(() => {
+    if (!actionMenuRow.value) {
+        return [];
+    }
+
+    const rowData = actionMenuRow.value;
+    const items = normalizedRowActions.value
+        .filter((action) => shouldShowRowAction(action, rowData))
+        .map((action) => ({
+            label: resolveRowActionTitle(action, rowData),
+            icon: resolveRowActionValue(action, rowData, 'icon'),
+            disabled: isRowActionDisabled(action, rowData),
+            command: ({ originalEvent }) => emit('rowAction', {
+                action: action.key,
+                data: rowData,
+                event: originalEvent,
+            }),
+        }));
+
+    if (props.showHistory) {
+        items.push({
+            label: t('common.history'),
+            icon: 'pi pi-history',
+            command: () => emit('history', rowData),
+        });
+    }
+
+    return items;
+});
+const toggleActionMenu = (event, rowData) => {
+    actionMenuRow.value = rowData;
+    actionMenu.value?.toggle(event);
 };
 
 const handlePage = (event) => {
@@ -238,7 +282,34 @@ const handleSort = (event) => {
 
             <Column v-if="showActions" :header="t('common.actions')" :style="{ width: actionColumnWidth }">
                 <template #body="{ data }">
-                    <div class="flex gap-2">
+                    <div v-if="compactActions" class="flex gap-2">
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            icon="pi pi-ellipsis-v"
+                            :title="t('common.actions')"
+                            :aria-label="t('common.actions')"
+                            aria-haspopup="true"
+                            @click="toggleActionMenu($event, data)"
+                        />
+                        <Button
+                            size="small"
+                            severity="secondary"
+                            icon="pi pi-pencil"
+                            :title="t('common.edit')"
+                            :aria-label="t('common.edit')"
+                            @click="emit('edit', data)"
+                        />
+                        <Button
+                            size="small"
+                            severity="danger"
+                            icon="pi pi-trash"
+                            :title="t('common.delete')"
+                            :aria-label="t('common.delete')"
+                            @click="emit('delete', { data, event: $event })"
+                        />
+                    </div>
+                    <div v-else class="flex gap-2">
                         <Button
                             v-for="action in normalizedRowActions"
                             v-show="shouldShowRowAction(action, data)"
@@ -282,5 +353,7 @@ const handleSort = (event) => {
                 </template>
             </Column>
         </PrimeDataTable>
+
+        <Menu v-if="compactActions" ref="actionMenu" :model="actionMenuItems" popup append-to="body" />
     </article>
 </template>

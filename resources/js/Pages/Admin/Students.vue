@@ -548,7 +548,7 @@ const openPointHistory = async (student) => {
     pointHistoryLoading.value = true;
 
     try {
-        const { data } = await axios.get(`/admin/students/${student.id}/point-history`);
+        const { data } = await axios.get(`/admin/homeworks/students/${student.id}/point-history`);
         pointHistoryRows.value = data?.data ?? [];
     } catch (error) {
         appToast.fromAxiosError(error, {
@@ -630,6 +630,7 @@ onMounted(() => {
                 :search-label="t('students.searchStudents')"
                 :table-title="t('students.tableTitle')"
                 :show-history="true"
+                compact-actions
                 :row-actions="rowActions"
                 @update:search="search = $event"
                 @page-change="handlePageChange"
