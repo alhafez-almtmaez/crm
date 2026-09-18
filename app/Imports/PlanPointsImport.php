@@ -14,6 +14,8 @@ use Maatwebsite\Excel\Concerns\WithLimit;
 
 class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit, WithLimit
 {
+    private const MAX_ROWS = 10001;
+
     private int $imported = 0;
 
     private int $skipped = 0;
@@ -188,7 +190,8 @@ class PlanPointsImport implements SkipsEmptyRows, ToCollection, WithColumnLimit,
 
     public function limit(): int
     {
-        return 5000;
+        // Keep room for the heading while supporting plans with up to 10,000 points.
+        return self::MAX_ROWS;
     }
 
     /**

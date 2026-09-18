@@ -913,8 +913,8 @@
     },
     "messageLog": {
       "title": "Attendance Rule Message Log",
-      "open": "View message log",
-      "empty": "No rule messages have been recorded for this evaluation.",
+      "open": "View processed message log",
+      "empty": "Attendance rules have not been applied to this evaluation yet. Use the bell button to apply the rules and send alerts.",
       "loadFailed": "Could not load message log.",
       "evaluationDetails": "Evaluation details",
       "executionTime": "Execution time",
