@@ -204,10 +204,11 @@ const rowActions = computed(() => [
     },
     {
         key: 'message-logs',
-        icon: 'pi pi-whatsapp',
+        icon: 'pi pi-history',
         severity: messageLogSeverity,
         outlined: true,
         titleKey: 'evaluations.messageLog.open',
+        show: (row) => Boolean(row.message_log_status),
     },
     {
         key: 'send-alerts',
