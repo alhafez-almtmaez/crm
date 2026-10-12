@@ -35,6 +35,7 @@ class EvaluationService
         private readonly AdminDataScopeService $dataScope,
         private readonly WhatsAppMessagingService $whatsAppMessagingService,
         private readonly WhatsAppPendingMessageService $whatsAppPendingMessageService,
+        private readonly EvaluationAbsenceAlertDispatchService $alertDispatch,
     ) {}
 
     /**
@@ -119,9 +120,10 @@ class EvaluationService
             ->all();
         $previewCounts = $this->localPreviewCountsForEvaluations($evaluationIds);
         $messageLogStatuses = $this->messageLogStatusesForEvaluations($evaluationIds);
+        $activeAlertRuns = $this->alertDispatch->activeRuns($evaluationIds);
 
         $rows->setCollection(
-            $rows->getCollection()->map(function ($row) use ($messageLogStatuses, $previewCounts) {
+            $rows->getCollection()->map(function ($row) use ($messageLogStatuses, $previewCounts, $activeAlertRuns) {
                 $row->setAttribute('created_at_formatted', $this->dateTimeFormatter->formatForAdmin($row->created_at));
                 $row->setAttribute(
                     'date_formatted',
@@ -133,6 +135,7 @@ class EvaluationService
                 );
                 $row->setAttribute('local_absence_preview_count', $previewCounts[(int) $row->id] ?? 0);
                 $row->setAttribute('message_log_status', $messageLogStatuses[(int) $row->id] ?? null);
+                $row->setAttribute('absence_alert_run', $activeAlertRuns[(int) $row->id] ?? null);
 
                 return $row;
             }),

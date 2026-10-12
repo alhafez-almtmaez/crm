@@ -7,7 +7,7 @@ import DatePicker from 'primevue/datepicker';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
 import { useConfirm } from 'primevue/useconfirm';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
 import AbsenceMessageLogDialog from '../../components/admin/AbsenceMessageLogDialog.vue';
@@ -35,6 +35,12 @@ const messageLogLoading = ref(false);
 const messageLogResendingId = ref(null);
 const messageLogs = ref([]);
 const messageLogEvaluation = ref(null);
+const absenceAlertRuns = ref({});
+const submittingAlertIds = ref(new Set());
+const alertPollers = new Map();
+const alertRequests = new Map();
+const handledAlertRunIds = new Set();
+let pageActive = true;
 const filtersVisible = ref(false);
 const defaultFilters = () => ({
     center_id: null,
@@ -150,24 +156,37 @@ const filterButtonLabel = computed(() => (activeFilterCount.value > 0
     ? t('evaluations.filters.toggleWithCount', { count: activeFilterCount.value })
     : t('evaluations.filters.toggle')));
 
+const isActiveAlertRun = (run) => run?.status === 'queued' || run?.status === 'processing';
+const isSendingAlerts = (row) => {
+    const run = absenceAlertRuns.value[String(row.id)] ?? row.absence_alert_run;
+
+    return submittingAlertIds.value.has(String(row.id))
+        || (isActiveAlertRun(run) && !handledAlertRunIds.has(run.id));
+};
+
 const rows = computed(() => (sourceRows.value ?? []).map((row) => {
     const hasLocalPreview = Number(row.local_absence_preview_count ?? 0) > 0;
+    const sendingAlerts = isSendingAlerts(row);
 
     return {
         ...row,
         center_name: row.center_name ?? t('common.na'),
         group_name: row.group_name ?? t('common.na'),
         admin_name: row.admin_name ?? t('common.na'),
-        alert_status_label: row.is_send_absence_alerts
-            ? t('evaluations.alertsSent')
-            : hasLocalPreview
-                ? t('evaluations.preview.status')
-                : t('evaluations.alertsPending'),
-        alert_status_badge_class: row.is_send_absence_alerts
-            ? 'bg-emerald-700 text-white'
-            : hasLocalPreview
-                ? 'bg-sky-700 text-white'
-                : 'bg-amber-600 text-white',
+        alert_status_label: sendingAlerts
+            ? t('evaluations.alertsProcessing')
+            : row.is_send_absence_alerts
+                ? t('evaluations.alertsSent')
+                : hasLocalPreview
+                    ? t('evaluations.preview.status')
+                    : t('evaluations.alertsPending'),
+        alert_status_badge_class: sendingAlerts
+            ? 'bg-sky-700 text-white'
+            : row.is_send_absence_alerts
+                ? 'bg-emerald-700 text-white'
+                : hasLocalPreview
+                    ? 'bg-sky-700 text-white'
+                    : 'bg-amber-600 text-white',
     };
 }));
 
@@ -215,8 +234,9 @@ const rowActions = computed(() => [
         icon: 'pi pi-bell',
         severity: (row) => row.is_send_absence_alerts ? 'secondary' : 'warning',
         outlined: true,
-        disabled: (row) => Boolean(row.is_send_absence_alerts),
-        titleKey: 'evaluations.sendAlerts',
+        loading: isSendingAlerts,
+        disabled: (row) => Boolean(row.is_send_absence_alerts) || isSendingAlerts(row),
+        title: (row) => t(isSendingAlerts(row) ? 'evaluations.alertsProcessing' : 'evaluations.sendAlerts'),
     },
     {
         key: 'preview-alerts',
@@ -262,31 +282,189 @@ const deleteRow = async (row) => {
     }
 };
 
-const sendAlerts = async (row) => {
+const showAlertExecutionErrors = (executionErrors) => {
+    const messages = Array.isArray(executionErrors)
+        ? executionErrors.filter((message) => typeof message === 'string' && message.trim() !== '')
+        : [];
+
+    if (messages.length === 0) {
+        return false;
+    }
+
+    const readableError = messages[0].replace(/^Evaluation item \d+:\s*/i, '');
+    const detail = messages.length > 1 ? `${readableError} (+${messages.length - 1})` : readableError;
+    appToast.error(detail, t('notifications.requestFailedTitle'), 7000);
+
+    return true;
+};
+
+const showAlertResult = (result, message = null) => {
+    if (!pageActive || showAlertExecutionErrors(result?.errors)) {
+        return;
+    }
+
+    appToast.success(message ?? t('evaluations.sendAlertsCompleted'));
+    if (result?.local_preview) {
+        previewLoading.value = false;
+        previewMessages.value = result.preview_messages ?? [];
+        previewVisible.value = true;
+    }
+};
+
+const stopAlertPolling = (evaluationId) => {
+    const poller = alertPollers.get(evaluationId);
+    if (!poller) {
+        return;
+    }
+
+    window.clearTimeout(poller.timer);
+    poller.controller?.abort();
+    alertPollers.delete(evaluationId);
+};
+
+const finishAlertRun = async (evaluationId, run) => {
+    absenceAlertRuns.value[evaluationId] = run;
+    stopAlertPolling(evaluationId);
+    if (!pageActive || handledAlertRunIds.has(run.id)) {
+        return;
+    }
+
+    handledAlertRunIds.add(run.id);
+    if (run.status === 'failed') {
+        appToast.error(run.error || t('evaluations.sendAlertsFailed'), t('notifications.requestFailedTitle'), 7000);
+    } else {
+        showAlertResult(run.result);
+    }
+
+    await fetchRows();
+};
+
+const scheduleAlertPoll = (evaluationId, poller, delay = 3000) => {
+    if (!pageActive || alertPollers.get(evaluationId) !== poller) {
+        return;
+    }
+
+    poller.timer = window.setTimeout(() => pollAlertRun(evaluationId, poller), delay);
+};
+
+const pollAlertRun = async (evaluationId, poller) => {
+    if (!pageActive || alertPollers.get(evaluationId) !== poller) {
+        return;
+    }
+
+    poller.controller = new AbortController();
     try {
-        const { data } = await axios.post(`/admin/evaluations/${row.id}/absence-alerts`);
-        appToast.success(data?.message ?? t('evaluations.sendAlerts'));
-        if (data?.meta?.local_preview) {
-            previewLoading.value = false;
-            previewMessages.value = data.meta.preview_messages ?? [];
-            previewVisible.value = true;
+        const { data } = await axios.get(poller.statusUrl, {
+            signal: poller.controller.signal,
+            timeout: 15000,
+        });
+
+        if (!pageActive || alertPollers.get(evaluationId) !== poller) {
+            return;
         }
+
+        const run = data?.run;
+        if (!run || run.id !== poller.runId || !['queued', 'processing', 'completed', 'failed'].includes(run.status)) {
+            scheduleAlertPoll(evaluationId, poller, 5000);
+            return;
+        }
+
+        absenceAlertRuns.value[evaluationId] = run;
+        if (isActiveAlertRun(run)) {
+            scheduleAlertPoll(evaluationId, poller);
+        } else {
+            await finishAlertRun(evaluationId, run);
+        }
+    } catch (error) {
+        if (!pageActive || alertPollers.get(evaluationId) !== poller) {
+            return;
+        }
+
+        if ([401, 403, 404].includes(error?.response?.status)) {
+            handledAlertRunIds.add(poller.runId);
+            stopAlertPolling(evaluationId);
+            delete absenceAlertRuns.value[evaluationId];
+            submittingAlertIds.value.delete(evaluationId);
+            sourceRows.value = (sourceRows.value ?? []).filter((row) => String(row.id) !== evaluationId);
+            appToast.fromAxiosError(error, {
+                summary: t('notifications.loadFailedTitle'),
+                fallback: t('evaluations.alertsStatusUnavailable'),
+            });
+            await fetchRows({ silent: true });
+            return;
+        }
+
+        scheduleAlertPoll(evaluationId, poller, 5000);
+    } finally {
+        poller.controller = null;
+    }
+};
+
+const trackAlertRun = (evaluationId, run) => {
+    const key = String(evaluationId);
+    if (!pageActive || !run?.id || handledAlertRunIds.has(run.id)) {
+        return;
+    }
+
+    absenceAlertRuns.value[key] = run;
+    if (!isActiveAlertRun(run)) {
+        return finishAlertRun(key, run);
+    }
+
+    const currentPoller = alertPollers.get(key);
+    if (currentPoller?.runId === run.id) {
+        return;
+    }
+
+    stopAlertPolling(key);
+    const poller = { runId: run.id, statusUrl: run.status_url, timer: null, controller: null };
+    alertPollers.set(key, poller);
+    scheduleAlertPoll(key, poller);
+};
+
+watch(sourceRows, (records) => {
+    for (const row of records ?? []) {
+        if (isActiveAlertRun(row.absence_alert_run)) {
+            trackAlertRun(row.id, row.absence_alert_run);
+        }
+    }
+});
+
+const sendAlerts = async (row) => {
+    const evaluationId = String(row.id);
+    if (!pageActive || row.is_send_absence_alerts || isSendingAlerts(row)) {
+        return;
+    }
+
+    submittingAlertIds.value.add(evaluationId);
+    const controller = new AbortController();
+    alertRequests.set(evaluationId, controller);
+    try {
+        const { data } = await axios.post(`/admin/evaluations/${row.id}/absence-alerts`, {}, {
+            signal: controller.signal,
+        });
+        if (!pageActive) {
+            return;
+        }
+
+        if (data?.run) {
+            handledAlertRunIds.delete(data.run.id);
+            await trackAlertRun(row.id, data.run);
+            if (pageActive && isActiveAlertRun(data.run)) {
+                appToast.info(data.message ?? t('evaluations.alertsProcessing'));
+                await fetchRows();
+            }
+            return;
+        }
+
+        showAlertResult(data?.meta, data?.message);
         await fetchRows();
     } catch (error) {
-        const executionErrors = error?.response?.data?.meta?.errors;
-        const firstExecutionError = Array.isArray(executionErrors)
-            ? executionErrors.find((message) => typeof message === 'string' && message.trim() !== '')
-            : null;
+        if (!pageActive) {
+            return;
+        }
 
-        if (firstExecutionError) {
-            const readableError = firstExecutionError.replace(/^Evaluation item \d+:\s*/i, '');
-            const remainingErrors = executionErrors.length - 1;
-            const detail = remainingErrors > 0
-                ? `${readableError} (+${remainingErrors})`
-                : readableError;
-
-            appToast.error(detail, t('notifications.requestFailedTitle'), 7000);
-        } else {
+        if (!showAlertExecutionErrors(error?.response?.data?.meta?.errors)) {
             appToast.fromAxiosError(error, {
                 summary: t('notifications.requestFailedTitle'),
                 fallback: t('evaluations.sendAlertsFailed'),
@@ -294,6 +472,9 @@ const sendAlerts = async (row) => {
         }
 
         await fetchRows();
+    } finally {
+        submittingAlertIds.value.delete(evaluationId);
+        alertRequests.delete(evaluationId);
     }
 };
 
@@ -432,6 +613,10 @@ const handleRowAction = ({ action, data: row, event }) => {
         return;
     }
 
+    if (row.is_send_absence_alerts || isSendingAlerts(row)) {
+        return;
+    }
+
     const target = event?.currentTarget ?? event?.target ?? document.body;
 
     confirm.require({
@@ -454,6 +639,17 @@ const handleRowAction = ({ action, data: row, event }) => {
 
 onMounted(() => {
     fetchRows();
+});
+
+onBeforeUnmount(() => {
+    pageActive = false;
+    for (const evaluationId of alertPollers.keys()) {
+        stopAlertPolling(evaluationId);
+    }
+    for (const controller of alertRequests.values()) {
+        controller.abort();
+    }
+    alertRequests.clear();
 });
 </script>
 

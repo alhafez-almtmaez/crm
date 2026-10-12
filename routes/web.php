@@ -161,6 +161,7 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('evaluations/{evaluation}/message-logs', [EvaluationController::class, 'messageLogs'])->name('evaluations.message-logs');
         Route::post('evaluations/{evaluation}/message-logs/{log}/resend', [EvaluationController::class, 'resendMessageLog'])->name('evaluations.message-logs.resend');
         Route::post('evaluations/{evaluation}/absence-alerts', [EvaluationController::class, 'sendAbsenceAlerts'])->name('evaluations.absence-alerts');
+        Route::get('evaluations/{evaluation}/absence-alerts/{run}', [EvaluationController::class, 'absenceAlertStatus'])->name('evaluations.absence-alerts.status');
         Route::resource('evaluations', EvaluationController::class)->except(['show']);
 
         Route::get('homeworks/records', [HomeworkController::class, 'records'])->name('homeworks.records');

@@ -31,6 +31,15 @@ return [
 
     'connections' => [
 
+        'attendance_alerts' => [
+            'driver' => 'database',
+            'connection' => null,
+            'table' => 'jobs',
+            'queue' => 'attendance-alerts',
+            'retry_after' => 21_660,
+            'after_commit' => false,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],

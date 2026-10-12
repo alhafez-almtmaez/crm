@@ -8,13 +8,16 @@ use App\Http\Requests\Admin\EvaluationStoreRequest;
 use App\Http\Requests\Admin\EvaluationUpdateRequest;
 use App\Models\AbsenceRuleExecutionLog;
 use App\Models\Evaluation;
+use App\Models\EvaluationAbsenceAlertRun;
 use App\Services\Admin\AdminDataScopeService;
+use App\Services\Admin\EvaluationAbsenceAlertDispatchService;
 use App\Services\Admin\EvaluationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,6 +26,7 @@ class EvaluationController extends Controller implements HasMiddleware
     public function __construct(
         private readonly EvaluationService $service,
         private readonly AdminDataScopeService $dataScope,
+        private readonly EvaluationAbsenceAlertDispatchService $alertDispatch,
     ) {}
 
     public static function middleware(): array
@@ -30,7 +34,7 @@ class EvaluationController extends Controller implements HasMiddleware
         return [
             new Middleware('can:evaluations.view', only: ['index', 'records', 'absenceAlertPreviews', 'messageLogs']),
             new Middleware('can:evaluations.create', only: ['create', 'store']),
-            new Middleware('can:evaluations.update', only: ['edit', 'update', 'sendAbsenceAlerts', 'resendMessageLog']),
+            new Middleware('can:evaluations.update', only: ['edit', 'update', 'sendAbsenceAlerts', 'absenceAlertStatus', 'resendMessageLog']),
             new Middleware('can:evaluations.delete', only: ['destroy']),
         ];
     }
@@ -146,6 +150,15 @@ class EvaluationController extends Controller implements HasMiddleware
     {
         $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
 
+        if (! app()->environment('local') && ! $evaluation->is_send_absence_alerts) {
+            $run = $this->alertDispatch->dispatch($evaluation);
+
+            return response()->json([
+                'message' => __('evaluations.absence_alerts_queued'),
+                'run' => $run->payload(),
+            ], 202);
+        }
+
         $result = $this->service->sendAbsenceAlerts($evaluation);
         $hasErrors = $result['errors'] !== [];
         $message = ($result['local_preview'] ?? false)
@@ -163,6 +176,15 @@ class EvaluationController extends Controller implements HasMiddleware
             'message' => $message,
             'meta' => $result,
         ]);
+    }
+
+    public function absenceAlertStatus(Evaluation $evaluation, EvaluationAbsenceAlertRun $run): JsonResponse
+    {
+        $this->dataScope->abortUnlessCanAccessEvaluation($evaluation);
+        abort_unless($run->evaluation_id === (int) $evaluation->id && $run->requested_by === Auth::id(), 404);
+        $run->expireIfStale();
+
+        return response()->json(['run' => $run->payload()]);
     }
 
     public function absenceAlertPreviews(Evaluation $evaluation): JsonResponse

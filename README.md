@@ -129,6 +129,32 @@ Scripts:
 - `npm run build:client`
 - `npm run dev:ssr`
 
+## Attendance Alert Delivery
+
+Production attendance alerts run on the dedicated `attendance_alerts` database
+connection and `attendance-alerts` queue. The request returns immediately; the
+evaluations page follows the saved delivery result and prevents duplicate clicks.
+Local development still creates message previews synchronously.
+
+Deploy the migrations and refresh cached configuration and routes before starting
+the worker. For the current `/home/alhafez` installation, install the supplied
+systemd unit as root:
+
+```bash
+php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+install -m 644 ops/systemd/alhafez-attendance-alerts.service /etc/systemd/system/alhafez-attendance-alerts.service
+systemctl daemon-reload
+systemctl enable --now alhafez-attendance-alerts.service
+```
+
+The unit runs as `www-data` and processes this queue only. Its timeout is six
+hours; the dedicated connection's reservation lasts a minute longer. Failed or
+interrupted deliveries require reviewing the existing message logs before a
+manual retry. On later code deployments, `php artisan queue:restart` lets the
+worker finish its current delivery and reload the new code.
+
 ## Storage / Media Best Practice
 
 Brand images are stored using Laravel's default filesystem disk.

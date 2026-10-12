@@ -1,0 +1,20 @@
+[Unit]
+Description=Alhafez attendance alert delivery
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/home/alhafez
+ExecStart=/usr/bin/php8.4 /home/alhafez/artisan queue:work attendance_alerts --queue=attendance-alerts --sleep=3 --tries=1 --timeout=21600 --max-time=3600
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=21660
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

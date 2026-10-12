@@ -25,7 +25,7 @@ export const useServerTable = ({
 
     let searchTimeoutId = null;
 
-    const fetchRows = async () => {
+    const fetchRows = async ({ silent = false } = {}) => {
         loading.value = true;
 
         try {
@@ -45,10 +45,12 @@ export const useServerTable = ({
             currentPage.value = data.meta.current_page;
             rowsPerPage.value = data.meta.per_page;
         } catch (error) {
-            appToast.fromAxiosError(error, {
-                summary: t('notifications.loadFailedTitle'),
-                fallback: t('notifications.loadFailedDetail'),
-            });
+            if (!silent) {
+                appToast.fromAxiosError(error, {
+                    summary: t('notifications.loadFailedTitle'),
+                    fallback: t('notifications.loadFailedDetail'),
+                });
+            }
         } finally {
             loading.value = false;
         }
