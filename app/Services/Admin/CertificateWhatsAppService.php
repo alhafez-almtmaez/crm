@@ -95,7 +95,8 @@ class CertificateWhatsAppService
             }
 
             $phones = $this->recipientPhones($student);
-            if ($phones === []) {
+            $groupSerialized = $this->groupSerialized($student);
+            if ($phones === [] && $groupSerialized === null) {
                 throw ValidationException::withMessages([
                     'certificate' => __('certificates.whatsapp_no_phone'),
                 ]);
@@ -105,7 +106,7 @@ class CertificateWhatsAppService
             $freshCertificate = $this->claimDelivery($student, $freshCertificate, $filename);
 
             try {
-                $this->messagingService->assertHasEligibleRecipients($phones);
+                $this->messagingService->assertHasEligibleRecipients($phones, $groupSerialized);
             } catch (WhatsAppMessageSendException $exception) {
                 $this->releaseDeliveryClaim($student, $freshCertificate);
 
@@ -149,9 +150,19 @@ class CertificateWhatsAppService
             ]);
 
             try {
-                $this->messagingService->sendPdfDocument($phones, $caption, $pdfBytes, $filename);
+                $this->messagingService->sendPdfDocument(
+                    $phones,
+                    $caption,
+                    $pdfBytes,
+                    $filename,
+                    $groupSerialized,
+                );
             } catch (WhatsAppMessageSendException $exception) {
-                $delivery = $this->messagingService->deliveryFailureMeta($phones, null, $exception);
+                $delivery = $this->messagingService->deliveryFailureMeta(
+                    $phones,
+                    $groupSerialized,
+                    $exception,
+                );
 
                 if ($delivery['delivered_chat_ids'] === []) {
                     if (! $exception->deliveryAttempted()) {
@@ -262,6 +273,38 @@ class CertificateWhatsAppService
             ->unique()
             ->values()
             ->all();
+    }
+
+    public function groupSerialized(Student $student): ?string
+    {
+        $student->loadMissing([
+            'group:id,group_serialized',
+            'groups:id,group_serialized',
+            'center:id,group_serialized',
+        ]);
+
+        if ($student->group !== null) {
+            return filled($student->group->group_serialized)
+                ? trim((string) $student->group->group_serialized)
+                : null;
+        }
+
+        $membershipGroup = $student->groups->sortBy('id')->first();
+        if ($membershipGroup !== null) {
+            return filled($membershipGroup->group_serialized)
+                ? trim((string) $membershipGroup->group_serialized)
+                : null;
+        }
+
+        return filled($student->center?->group_serialized)
+            ? trim((string) $student->center->group_serialized)
+            : null;
+    }
+
+    public function hasConfiguredRecipients(Student $student): bool
+    {
+        return $this->recipientPhones($student) !== []
+            || $this->groupSerialized($student) !== null;
     }
 
     private function markAsSent(

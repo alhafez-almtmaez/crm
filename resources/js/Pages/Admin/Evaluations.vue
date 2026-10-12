@@ -273,10 +273,27 @@ const sendAlerts = async (row) => {
         }
         await fetchRows();
     } catch (error) {
-        appToast.fromAxiosError(error, {
-            summary: t('notifications.requestFailedTitle'),
-            fallback: t('evaluations.sendAlertsFailed'),
-        });
+        const executionErrors = error?.response?.data?.meta?.errors;
+        const firstExecutionError = Array.isArray(executionErrors)
+            ? executionErrors.find((message) => typeof message === 'string' && message.trim() !== '')
+            : null;
+
+        if (firstExecutionError) {
+            const readableError = firstExecutionError.replace(/^Evaluation item \d+:\s*/i, '');
+            const remainingErrors = executionErrors.length - 1;
+            const detail = remainingErrors > 0
+                ? `${readableError} (+${remainingErrors})`
+                : readableError;
+
+            appToast.error(detail, t('notifications.requestFailedTitle'), 7000);
+        } else {
+            appToast.fromAxiosError(error, {
+                summary: t('notifications.requestFailedTitle'),
+                fallback: t('evaluations.sendAlertsFailed'),
+            });
+        }
+
+        await fetchRows();
     }
 };
 

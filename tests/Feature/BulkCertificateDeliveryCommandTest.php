@@ -675,6 +675,58 @@ test('bulk send reruns never resend sent certificates or certificates awaiting r
     expect(Http::recorded())->toHaveCount($requestCountAfterFirstRun);
 });
 
+test('bulk delivery includes a group only recipient in previews and sends', function (bool $useCenterGroup) {
+    config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
+    $actor = bulkCertificateActor(['students.update', 'certificates.send']);
+    ['center' => $center, 'group' => $group] = bulkCertificateLocation();
+    $groupChatId = '120363999999999999@g.us';
+    $plan = Plan::factory()->create();
+    $point = bulkCertificatePoint($plan);
+    $student = bulkCertificateStudent($center, $group, $plan, $point, parentPhone: null);
+
+    if ($useCenterGroup) {
+        $center->update(['group_serialized' => $groupChatId]);
+        $student->update(['group_id' => null]);
+    } else {
+        $group->update(['group_serialized' => $groupChatId]);
+    }
+    $student->groups()->detach();
+    bulkCertificateTransaction($student, $point, '2026-08-20 08:00:00');
+    $cutoff = Carbon::parse('2026-08-31 21:00:00', 'UTC');
+    $deliveries = app(BulkCertificateDeliveryService::class);
+
+    expect($deliveries->preview($cutoff)['missing_certificates']['configured_recipients'])->toBe(1);
+
+    $this->artisan(
+        'certificates:bulk-deliver',
+        bulkCertificateExecutionOptions($actor, 'issue'),
+    )->assertSuccessful();
+
+    expect($deliveries->preview($cutoff)['ready_to_send']['configured_recipients'])->toBe(1);
+
+    Device::factory()->connected()->create(['session_id' => 'bulk-group-session']);
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('render')->once()->andReturn("%PDF-1.7\nbulk-group-certificate");
+    });
+    Http::fake([
+        'https://whatsapp.test/client/sendMessage/*' => Http::response(['success' => true]),
+    ]);
+
+    $this->artisan(
+        'certificates:bulk-deliver',
+        bulkCertificateExecutionOptions($actor, 'send'),
+    )->expectsOutputToContain('sent=1 partial=0 review=0 inactive=0 unregistered=0 no_recipient=0')
+        ->assertSuccessful();
+
+    Http::assertSentCount(1);
+    Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/')
+        && $request['chatId'] === $groupChatId
+        && $request['content']['mimetype'] === 'application/pdf');
+})->with([
+    'primary student group without a membership pivot' => [false],
+    'center group for a student without any groups' => [true],
+]);
+
 test('bulk send refreshes student status and phone data immediately before each long-running delivery', function () {
     $actor = bulkCertificateActor(['students.update', 'certificates.send']);
     ['center' => $center, 'group' => $group] = bulkCertificateLocation();

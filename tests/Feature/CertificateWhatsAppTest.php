@@ -171,6 +171,86 @@ test('an issued certificate is sent as a named PDF containing the achievement af
         ->and($fixture['certificate']->whatsapp_image_filename)->toBeNull();
 });
 
+test('an issued certificate is also sent to the student WhatsApp group', function () {
+    config([
+        'services.whatsapp_api.url' => 'https://whatsapp.test',
+        'services.whatsapp_api.message_delay_seconds' => 0,
+    ]);
+    $fixture = certificateWhatsAppFixture();
+    $groupChatId = '120363999999999999@g.us';
+    $fixture['student']->group()->update(['group_serialized' => $groupChatId]);
+
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('render')->once()->andReturn("%PDF-1.7\ncertificate-for-group");
+    });
+
+    Http::fake(function (Request $request) {
+        if (str_contains($request->url(), '/client/isRegisteredUser/')) {
+            return Http::response(['success' => true, 'result' => true]);
+        }
+
+        if (str_contains($request->url(), '/client/sendMessage/')) {
+            return Http::response(['success' => true]);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->actingAs($fixture['user'], 'web')
+        ->postJson(route('admin.students.certificates.whatsapp', [
+            $fixture['student'],
+            $fixture['certificate'],
+        ]))
+        ->assertOk()
+        ->assertJsonPath('certificate.was_sent_via_whatsapp', true);
+
+    $sendChatIds = collect(Http::recorded())
+        ->map(static fn (array $record): Request => $record[0])
+        ->filter(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/'))
+        ->map(static fn (Request $request): mixed => $request['chatId'])
+        ->values()
+        ->all();
+
+    expect($sendChatIds)->toBe([
+        '962791234567@s.whatsapp.net',
+        $groupChatId,
+    ]);
+});
+
+test('a certificate can be sent to the WhatsApp group when the student has no phone numbers', function () {
+    config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
+    $fixture = certificateWhatsAppFixture();
+    $groupChatId = '120363999999999999@g.us';
+    $fixture['student']->update([
+        'parent_phone_number' => null,
+        'phone_number' => null,
+    ]);
+    $fixture['student']->group()->update(['group_serialized' => $groupChatId]);
+
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('render')->once()->andReturn("%PDF-1.7\ngroup-only-certificate");
+    });
+
+    Http::fake([
+        'https://whatsapp.test/client/sendMessage/*' => Http::response(['success' => true]),
+    ]);
+
+    $this->actingAs($fixture['user'], 'web')
+        ->postJson(route('admin.students.certificates.whatsapp', [
+            $fixture['student'],
+            $fixture['certificate'],
+        ]))
+        ->assertOk()
+        ->assertJsonPath('certificate.was_sent_via_whatsapp', true);
+
+    Http::assertNotSent(static fn (Request $request): bool => str_contains(
+        $request->url(),
+        '/client/isRegisteredUser/',
+    ));
+    Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/')
+        && $request['chatId'] === $groupChatId);
+});
+
 test('certificate WhatsApp copy and filename use the clean achievement name', function (
     string $achievementType,
     string $achievementName,

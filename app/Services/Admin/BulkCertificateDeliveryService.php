@@ -223,6 +223,8 @@ class BulkCertificateDeliveryService
                     'full_name',
                     'parent_phone_number',
                     'phone_number',
+                    'group_id',
+                    'center_id',
                     'is_active',
                 ]);
             $sendProducedResult = false;
@@ -253,7 +255,7 @@ class BulkCertificateDeliveryService
                 continue;
             }
 
-            if (! $hasDeliveryState && $this->certificateWhatsApp->recipientPhones($student) === []) {
+            if (! $hasDeliveryState && ! $this->certificateWhatsApp->hasConfiguredRecipients($student)) {
                 $summary['no_recipient']++;
                 $event['status'] = 'no_recipient';
                 $summary['failures'][] = $this->failureItem($event);
@@ -482,7 +484,7 @@ class BulkCertificateDeliveryService
                 ),
             )
             ->with([
-                'student:id,full_name,parent_phone_number,phone_number,is_active',
+                'student:id,full_name,parent_phone_number,phone_number,group_id,center_id,is_active',
                 'planPoint:id,plan_id,sort_order,name',
                 'planPoint.plan:id,name,category',
             ])
@@ -538,7 +540,7 @@ class BulkCertificateDeliveryService
                 ),
             )
             ->with([
-                'student:id,full_name,parent_phone_number,phone_number,is_active',
+                'student:id,full_name,parent_phone_number,phone_number,group_id,center_id,is_active',
                 'planPoint:id,plan_id,sort_order,name',
                 'planPoint.plan:id,name',
             ])
@@ -602,10 +604,10 @@ class BulkCertificateDeliveryService
         foreach ($records as $record) {
             $student = $studentFor($record);
             $plan = $planFor($record);
-            $phones = $student instanceof Student
-                ? $this->certificateWhatsApp->recipientPhones($student)
-                : [];
-            $recipientCount = count($phones);
+            $recipientCount = $student instanceof Student
+                ? count($this->certificateWhatsApp->recipientPhones($student))
+                    + (int) ($this->certificateWhatsApp->groupSerialized($student) !== null)
+                : 0;
             $studentId = (int) ($student?->id ?? 0);
             $planId = (int) ($plan?->id ?? 0);
 

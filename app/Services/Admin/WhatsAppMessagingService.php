@@ -42,7 +42,8 @@ class WhatsAppMessagingService
     }
 
     /**
-     * Send one PDF document with a caption to personal WhatsApp numbers.
+     * Send one PDF document with a caption to personal WhatsApp numbers and,
+     * when provided, the related WhatsApp group.
      *
      * @param  array<int, string>  $phones
      */
@@ -51,6 +52,7 @@ class WhatsAppMessagingService
         string $caption,
         string $pdfBytes,
         string $filename,
+        ?string $groupSerialized = null,
     ): void {
         $filename = $this->validatedPdfFilename($filename);
         $this->assertValidPdf($pdfBytes);
@@ -59,7 +61,7 @@ class WhatsAppMessagingService
         $filesize = strlen($pdfBytes);
 
         $this->sendPreparedMessageToChatIds(
-            $this->recipientChatIds($phones),
+            $this->recipientChatIds($phones, $groupSerialized),
             $caption,
             static fn (string $chatId): array => [
                 'chatId' => $chatId,
