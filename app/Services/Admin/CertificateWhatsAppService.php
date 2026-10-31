@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Exceptions\WhatsAppMessageSendException;
 use App\Models\Certificate;
+use App\Models\Group;
 use App\Models\Student;
 use App\Services\System\CertificateAchievementService;
 use Illuminate\Support\Facades\Auth;
@@ -283,17 +284,19 @@ class CertificateWhatsAppService
             'center:id,group_serialized',
         ]);
 
-        if ($student->group !== null) {
-            return filled($student->group->group_serialized)
-                ? trim((string) $student->group->group_serialized)
-                : null;
+        if (filled($student->group?->group_serialized)) {
+            return trim((string) $student->group->group_serialized);
         }
 
-        $membershipGroup = $student->groups->sortBy('id')->first();
+        $membershipGroup = $student->groups->sortBy('id')->first(
+            static fn (Group $group): bool => filled($group->group_serialized),
+        );
         if ($membershipGroup !== null) {
-            return filled($membershipGroup->group_serialized)
-                ? trim((string) $membershipGroup->group_serialized)
-                : null;
+            return trim((string) $membershipGroup->group_serialized);
+        }
+
+        if ($student->group !== null || $student->groups->isNotEmpty()) {
+            return null;
         }
 
         return filled($student->center?->group_serialized)

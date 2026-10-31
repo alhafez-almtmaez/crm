@@ -179,6 +179,11 @@ test('an issued certificate is also sent to the student WhatsApp group', functio
     $fixture = certificateWhatsAppFixture();
     $groupChatId = '120363999999999999@g.us';
     $fixture['student']->group()->update(['group_serialized' => $groupChatId]);
+    $otherGroup = Group::factory()->create([
+        'center_id' => $fixture['student']->center_id,
+        'group_serialized' => '120363888888888888@g.us',
+    ]);
+    $fixture['student']->groups()->attach($otherGroup);
 
     $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
         $mock->shouldReceive('render')->once()->andReturn("%PDF-1.7\ncertificate-for-group");
@@ -216,6 +221,47 @@ test('an issued certificate is also sent to the student WhatsApp group', functio
         $groupChatId,
     ]);
 });
+
+test('certificates use a linked membership when earlier student groups have no WhatsApp link', function (bool $keepPrimaryGroup) {
+    config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
+    $fixture = certificateWhatsAppFixture();
+    $student = $fixture['student'];
+    $student->group()->update(['group_serialized' => null]);
+    $student->center()->update(['group_serialized' => '120363777777777777@g.us']);
+    $groupChatId = '120363999999999999@g.us';
+    $linkedGroup = Group::factory()->create([
+        'center_id' => $student->center_id,
+        'group_serialized' => $groupChatId,
+    ]);
+    $student->groups()->attach($linkedGroup);
+    $student->update([
+        'group_id' => $keepPrimaryGroup ? $student->group_id : null,
+        'parent_phone_number' => null,
+        'phone_number' => null,
+    ]);
+
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('render')->once()->andReturn("%PDF-1.7\nmembership-certificate");
+    });
+    Http::fake([
+        'https://whatsapp.test/client/sendMessage/*' => Http::response(['success' => true]),
+    ]);
+
+    $this->actingAs($fixture['user'], 'web')
+        ->postJson(route('admin.students.certificates.whatsapp', [
+            $student,
+            $fixture['certificate'],
+        ]))
+        ->assertOk()
+        ->assertJsonPath('certificate.was_sent_via_whatsapp', true);
+
+    Http::assertSentCount(1);
+    Http::assertSent(static fn (Request $request): bool => str_contains($request->url(), '/client/sendMessage/')
+        && $request['chatId'] === $groupChatId);
+})->with([
+    'an unlinked primary group and a linked membership' => [true],
+    'no primary group and a linked membership after an unlinked one' => [false],
+]);
 
 test('a certificate can be sent to the WhatsApp group when the student has no phone numbers', function () {
     config(['services.whatsapp_api.url' => 'https://whatsapp.test']);
