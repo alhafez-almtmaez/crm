@@ -968,6 +968,15 @@
     "exportPdf": "تصدير PDF",
     "deliverDueCertificates": "إصدار وإرسال الشهادات المستحقة",
     "printDueCertificates": "طباعة شهادات هذا الواجب",
+    "filters": {
+      "date": "تاريخ الواجب",
+      "datePlaceholder": "اختر يومًا أو فترة",
+      "allCenters": "كل المراكز",
+      "allGroups": "كل المجموعات",
+      "allAdmins": "كل المشرفين",
+      "apply": "عرض النتائج",
+      "clear": "مسح الفلاتر"
+    },
     "certificatePrintStatus": "طباعة الشهادات",
     "certificateNotPrinted": "لم تُطبع بعد",
     "certificatePrintedCount": "سبق تجهيز {count} للطباعة",

@@ -1,9 +1,12 @@
 <script setup>
 import axios from 'axios';
 import { Head, router, usePage } from '@inertiajs/vue3';
+import Button from 'primevue/button';
 import ConfirmPopup from 'primevue/confirmpopup';
+import DatePicker from 'primevue/datepicker';
+import Select from 'primevue/select';
 import { useConfirm } from 'primevue/useconfirm';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { adminNavItems } from '../../admin/navItems';
 import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
@@ -17,6 +20,35 @@ const confirm = useConfirm();
 const appToast = useAppToast();
 const { t } = useI18n();
 const page = usePage();
+const props = defineProps({
+    filterOptions: { type: Object, default: () => ({}) },
+});
+
+const emptyFilters = () => ({ dates: null, center_id: null, group_id: null, admin_id: null });
+const filters = ref(emptyFilters());
+const appliedFilters = ref({});
+const filterCenters = computed(() => props.filterOptions.centers ?? []);
+const filterGroups = computed(() => {
+    const groups = props.filterOptions.groups ?? [];
+    if (filters.value.center_id !== null) {
+        return groups.filter((group) => group.center_id === filters.value.center_id);
+    }
+
+    const names = new Map(filterCenters.value.map((center) => [center.id, center.name]));
+    return groups.map((group) => ({
+        ...group,
+        name: names.has(group.center_id) ? `${group.name} · ${names.get(group.center_id)}` : group.name,
+    }));
+});
+const hasFilters = computed(() => Object.values(filters.value).some((value) => value !== null)
+    || Object.keys(appliedFilters.value).length > 0);
+
+watch(() => filters.value.center_id, () => {
+    if (!filterGroups.value.some((group) => group.id === filters.value.group_id)) {
+        filters.value.group_id = null;
+    }
+});
+
 const deliveringHomeworkIds = ref(new Set());
 const printingHomework = ref(null);
 const canPrintCertificates = computed(() => (page.props.auth?.user?.roles ?? []).includes('admin')
@@ -42,9 +74,34 @@ const {
     onSortChange: handleSortChange,
 } = useServerTable({
     endpoint: '/admin/homeworks/records',
-    defaultSortBy: 'id',
+    defaultSortBy: 'date',
     defaultSortDir: 'desc',
+    extraParams: () => appliedFilters.value,
 });
+
+const dateParameter = (value) => {
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${value.getFullYear()}-${month}-${day}`;
+};
+
+const applyFilters = () => {
+    const { dates, center_id, group_id, admin_id } = filters.value;
+    const [from, to] = dates ?? [];
+    appliedFilters.value = {
+        ...(from ? { date_from: dateParameter(from), date_to: dateParameter(to ?? from) } : {}),
+        ...(center_id ? { center_id } : {}),
+        ...(group_id ? { group_id } : {}),
+        ...(admin_id && props.filterOptions.can_filter_by_admin ? { admin_id } : {}),
+    };
+    currentPage.value = 1;
+    return fetchRows();
+};
+
+const clearFilters = () => {
+    filters.value = emptyFilters();
+    return applyFilters();
+};
 
 const rows = computed(() => (sourceRows.value ?? []).map((row) => ({
     ...row,
@@ -60,8 +117,8 @@ const rows = computed(() => (sourceRows.value ?? []).map((row) => ({
 })));
 
 const columns = computed(() => [
-    { field: 'id', header: t('common.id'), sortable: true },
     { field: 'date_formatted', header: t('homeworks.date'), sortable: true, sortField: 'date' },
+    { field: 'id', header: t('common.id'), sortable: true },
     { field: 'center_name', header: t('homeworks.center'), sortable: true, sortField: 'center_name' },
     { field: 'group_name', header: t('homeworks.group'), sortable: true, sortField: 'group_name' },
     { field: 'admin_name', header: t('students.admin'), sortable: true, sortField: 'admin_name' },
@@ -297,7 +354,83 @@ onMounted(() => {
                 @edit="openEdit"
                 @delete="askDelete"
                 @row-action="handleRowAction"
-            />
+            >
+                <template #filters>
+                    <form class="space-y-3" @submit.prevent="applyFilters">
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <div class="min-w-0 space-y-1">
+                                <label for="homeworks-filter-date" class="block text-sm font-semibold">{{ t('homeworks.filters.date') }}</label>
+                                <DatePicker
+                                    v-model="filters.dates"
+                                    input-id="homeworks-filter-date"
+                                    selection-mode="range"
+                                    date-format="dd/mm/yy"
+                                    :manual-input="false"
+                                    :placeholder="t('homeworks.filters.datePlaceholder')"
+                                    show-icon
+                                    icon-display="input"
+                                    show-button-bar
+                                    fluid
+                                />
+                            </div>
+                            <div class="min-w-0 space-y-1">
+                                <label for="homeworks-filter-center" class="block text-sm font-medium">{{ t('homeworks.center') }}</label>
+                                <Select
+                                    v-model="filters.center_id"
+                                    input-id="homeworks-filter-center"
+                                    :options="filterCenters"
+                                    option-label="name"
+                                    option-value="id"
+                                    :placeholder="t('homeworks.filters.allCenters')"
+                                    filter
+                                    show-clear
+                                    fluid
+                                />
+                            </div>
+                            <div class="min-w-0 space-y-1">
+                                <label for="homeworks-filter-group" class="block text-sm font-medium">{{ t('homeworks.group') }}</label>
+                                <Select
+                                    v-model="filters.group_id"
+                                    input-id="homeworks-filter-group"
+                                    :options="filterGroups"
+                                    option-label="name"
+                                    option-value="id"
+                                    :placeholder="t('homeworks.filters.allGroups')"
+                                    filter
+                                    show-clear
+                                    fluid
+                                />
+                            </div>
+                            <div v-if="filterOptions.can_filter_by_admin" class="min-w-0 space-y-1">
+                                <label for="homeworks-filter-admin" class="block text-sm font-medium">{{ t('students.admin') }}</label>
+                                <Select
+                                    v-model="filters.admin_id"
+                                    input-id="homeworks-filter-admin"
+                                    :options="filterOptions.admins ?? []"
+                                    option-label="name"
+                                    option-value="id"
+                                    :placeholder="t('homeworks.filters.allAdmins')"
+                                    filter
+                                    show-clear
+                                    fluid
+                                />
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap justify-end gap-2">
+                            <Button
+                                type="button"
+                                icon="pi pi-filter-slash"
+                                severity="secondary"
+                                outlined
+                                :label="t('homeworks.filters.clear')"
+                                :disabled="loading || !hasFilters"
+                                @click="clearFilters"
+                            />
+                            <Button type="submit" icon="pi pi-filter" :label="t('homeworks.filters.apply')" :loading="loading" />
+                        </div>
+                    </form>
+                </template>
+            </DataTable>
             <ConfirmPopup />
             <HomeworkCertificatePrintDialog
                 v-if="printingHomework"

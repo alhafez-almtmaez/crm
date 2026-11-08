@@ -17,6 +17,7 @@ use App\Support\GroupMonthlyPlanCoverage;
 use App\Support\GroupWorkingDays;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -40,10 +41,13 @@ class HomeworkService
     {
         $search = trim((string) ($filters['search'] ?? ''));
         $perPage = (int) ($filters['per_page'] ?? 50);
-        $sortBy = (string) ($filters['sort_by'] ?? 'id');
+        $sortBy = (string) ($filters['sort_by'] ?? 'date');
         $sortDir = (string) ($filters['sort_dir'] ?? 'desc');
         $centerId = (int) ($filters['center_id'] ?? 0);
         $groupId = (int) ($filters['group_id'] ?? 0);
+        $adminId = $this->dataScope->isAdmin() ? (int) ($filters['admin_id'] ?? 0) : 0;
+        $dateFrom = $filters['date_from'] ?? null;
+        $dateTo = $filters['date_to'] ?? null;
         $sortMap = [
             'id' => 'homeworks.id',
             'date' => 'homeworks.date',
@@ -53,12 +57,10 @@ class HomeworkService
             'created_at' => 'homeworks.created_at',
         ];
 
-        $sortColumn = $sortMap[$sortBy] ?? 'homeworks.id';
+        $sortColumn = $sortMap[$sortBy] ?? 'homeworks.date';
         $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
 
-        $rows = Homework::query()
-            ->leftJoin('groups', 'homeworks.group_id', '=', 'groups.id')
-            ->leftJoin('centers', 'groups.center_id', '=', 'centers.id')
+        $rows = $this->withLocation()
             ->leftJoin('users as admins', 'homeworks.admin_id', '=', 'admins.id')
             ->leftJoin('homework_students', 'homeworks.id', '=', 'homework_students.homework_id')
             ->leftJoin('students as homework_scope_students', 'homework_students.student_id', '=', 'homework_scope_students.id')
@@ -66,7 +68,7 @@ class HomeworkService
             ->select([
                 'homeworks.id',
                 'homeworks.date',
-                'homeworks.center_id',
+                'centers.id as center_id',
                 'homeworks.group_id',
                 'homeworks.admin_id',
                 'homeworks.created_at',
@@ -85,23 +87,29 @@ class HomeworkService
                     ->selectRaw('COUNT(*)'),
                 'printed_certificates_count',
             )
-            ->when($centerId > 0, fn ($query) => $query->where('groups.center_id', $centerId))
+            ->when($centerId > 0, fn ($query) => $query->where('centers.id', $centerId))
             ->when($groupId > 0, fn ($query) => $query->where('homeworks.group_id', $groupId))
+            ->when($adminId > 0, fn ($query) => $query->where('homeworks.admin_id', $adminId))
+            ->when($dateFrom, fn ($query) => $query->whereDate('homeworks.date', '>=', $dateFrom))
+            ->when($dateTo, fn ($query) => $query->whereDate('homeworks.date', '<=', $dateTo))
             ->when($this->dataScope->shouldScope(), fn ($query) => $this->dataScope->applyStudentAccess($query, 'homework_scope_students'))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($builder) use ($search): void {
+                    $textType = in_array($builder->getConnection()->getDriverName(), ['mysql', 'mariadb'], true) ? 'CHAR' : 'TEXT';
+                    $pattern = "%{$search}%";
+
                     $builder
-                        ->where('homeworks.id', 'like', "%{$search}%")
-                        ->orWhere('homeworks.date', 'like', "%{$search}%")
-                        ->orWhere('centers.name', 'like', "%{$search}%")
-                        ->orWhere('groups.name', 'like', "%{$search}%")
-                        ->orWhere('admins.name', 'like', "%{$search}%");
+                        ->whereRaw("CAST(homeworks.id AS {$textType}) LIKE ?", [$pattern])
+                        ->orWhereRaw("CAST(homeworks.date AS {$textType}) LIKE ?", [$pattern])
+                        ->orWhereLike('centers.name', $pattern)
+                        ->orWhereLike('groups.name', $pattern)
+                        ->orWhereLike('admins.name', $pattern);
                 });
             })
             ->groupBy([
                 'homeworks.id',
                 'homeworks.date',
-                'homeworks.center_id',
+                'centers.id',
                 'homeworks.group_id',
                 'homeworks.admin_id',
                 'homeworks.created_at',
@@ -110,6 +118,7 @@ class HomeworkService
                 'admins.name',
             ])
             ->orderBy($sortColumn, $sortDir)
+            ->when($sortColumn !== 'homeworks.id', fn ($query) => $query->orderByDesc('homeworks.id'))
             ->paginate($perPage)
             ->withQueryString();
 
@@ -126,6 +135,51 @@ class HomeworkService
         );
 
         return $rows;
+    }
+
+    /** @return array{centers: list<array{id: int, name: string}>, groups: list<array{id: int, name: string, center_id: int}>, admins: list<array{id: int, name: string}>, can_filter_by_admin: bool} */
+    public function filterOptions(): array
+    {
+        $isAdmin = $this->dataScope->isAdmin();
+        $locations = $this->withLocation()
+            ->tap(fn (Builder $query) => $this->dataScope->applyHomeworkAccess($query))
+            ->when($isAdmin, fn (Builder $query) => $query->leftJoin('users as admins', 'homeworks.admin_id', '=', 'admins.id'))
+            ->distinct()
+            ->toBase()
+            ->get([
+                'centers.id as center_id',
+                'centers.name as center_name',
+                'groups.id as group_id',
+                'groups.name as group_name',
+                ...($isAdmin ? ['admins.id as admin_id', 'admins.name as admin_name'] : []),
+            ]);
+
+        $options = static fn (string $type): array => $locations
+            ->whereNotNull($type.'_id')
+            ->unique($type.'_id')
+            ->sortBy($type.'_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->map(static fn (object $row): array => [
+                'id' => (int) $row->{$type.'_id'},
+                'name' => (string) $row->{$type.'_name'},
+                ...($type === 'group' ? ['center_id' => (int) $row->center_id] : []),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'centers' => $options('center'),
+            'groups' => $options('group'),
+            'admins' => $isAdmin ? $options('admin') : [],
+            'can_filter_by_admin' => $isAdmin,
+        ];
+    }
+
+    /** @return Builder<Homework> */
+    private function withLocation(): Builder
+    {
+        return Homework::query()
+            ->leftJoin('groups', 'homeworks.group_id', '=', 'groups.id')
+            ->leftJoin('centers', 'groups.center_id', '=', 'centers.id');
     }
 
     /**

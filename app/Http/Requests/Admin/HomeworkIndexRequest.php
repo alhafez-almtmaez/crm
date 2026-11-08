@@ -18,20 +18,15 @@ class HomeworkIndexRequest extends FormRequest
      */
     public function rules(): array
     {
+        $canFilterByAdmin = app(AdminDataScopeService::class)->isAdmin($this->user());
+
         return [
             'search' => ['nullable', 'string', 'max:120'],
-            'center_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('centers', 'id')
-                    ->where(fn ($query) => app(AdminDataScopeService::class)->applyCenterAccess($query, 'centers')),
-            ],
-            'group_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('groups', 'id')
-                    ->where(fn ($query) => app(AdminDataScopeService::class)->applyGroupAccess($query, 'groups')),
-            ],
+            'center_id' => ['nullable', 'integer', 'min:1'],
+            'group_id' => ['nullable', 'integer', 'min:1'],
+            'admin_id' => $canFilterByAdmin ? ['nullable', 'integer', 'min:1'] : ['prohibited'],
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', Rule::when($this->filled('date_from'), 'after_or_equal:date_from')],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
             'sort_by' => ['nullable', Rule::in([

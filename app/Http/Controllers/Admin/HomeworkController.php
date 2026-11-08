@@ -46,7 +46,9 @@ class HomeworkController extends Controller implements HasMiddleware
 
     public function index(): Response
     {
-        return Inertia::render('Admin/Homeworks');
+        return Inertia::render('Admin/Homeworks', [
+            'filterOptions' => $this->service->filterOptions(),
+        ]);
     }
 
     public function records(HomeworkIndexRequest $request): JsonResponse

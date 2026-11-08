@@ -968,6 +968,15 @@
     "exportPdf": "Export PDF",
     "deliverDueCertificates": "Issue and Send Due Certificates",
     "printDueCertificates": "Print This Assignment's Certificates",
+    "filters": {
+      "date": "Assignment Date",
+      "datePlaceholder": "Select a day or date range",
+      "allCenters": "All Centers",
+      "allGroups": "All Groups",
+      "allAdmins": "All Supervisors",
+      "apply": "Show Results",
+      "clear": "Clear Filters"
+    },
     "certificatePrintStatus": "Certificate Printing",
     "certificateNotPrinted": "Not printed yet",
     "certificatePrintedCount": "{count} prepared for printing",
