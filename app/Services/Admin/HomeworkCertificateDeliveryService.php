@@ -6,6 +6,7 @@ use App\Models\Homework;
 use App\Models\PlanPoint;
 use App\Models\Student;
 use App\Models\StudentPointTransaction;
+use App\Services\System\CertificateAchievementDateService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Cache;
@@ -22,10 +23,11 @@ class HomeworkCertificateDeliveryService
         private readonly CertificateWhatsAppService $certificateWhatsApp,
         private readonly WhatsAppMessagingService $whatsAppMessaging,
         private readonly AdminDataScopeService $dataScope,
+        private readonly CertificateAchievementDateService $achievementDates,
     ) {}
 
     /**
-     * Issue every certificate checkpoint reached by this homework, then send
+     * Issue certificates first earned through the selected homework, then send
      * each certificate as a PDF attachment. Existing and previously sent
      * certificates are kept idempotent by the underlying certificate services.
      *
@@ -149,9 +151,8 @@ class HomeworkCertificateDeliveryService
     }
 
     /**
-     * A completion recorded by the selected homework proves every certificate
-     * checkpoint at or before it in the same historical plan. This also lets a
-     * later homework recover a certificate that was due but never issued.
+     * Use the same first completion evidence as the certificate achievement date.
+     * Only include checkpoints whose evidence belongs to the selected homework.
      *
      * @return array<int, array{transaction: StudentPointTransaction, checkpoint: PlanPoint}>
      */
@@ -231,14 +232,14 @@ class HomeworkCertificateDeliveryService
                 continue;
             }
 
+            $firstEvidenceByCheckpoint = $this->achievementDates->earliestEvidenceForCheckpoints(
+                $firstTransaction->student,
+                $checkpoints,
+            );
+
             foreach ($checkpoints as $checkpoint) {
-                $evidence = $planTransactions->first(
-                    fn (StudentPointTransaction $transaction): bool => $this->transactionReachesCheckpoint(
-                        $transaction,
-                        $checkpoint,
-                    ),
-                );
-                if (! $evidence instanceof StudentPointTransaction) {
+                $evidence = $firstEvidenceByCheckpoint[(int) $checkpoint->id] ?? null;
+                if ($evidence === null || $evidence->homework_id !== (int) $homework->id) {
                     continue;
                 }
 
@@ -262,21 +263,6 @@ class HomeworkCertificateDeliveryService
         ]);
 
         return $targets;
-    }
-
-    private function transactionReachesCheckpoint(
-        StudentPointTransaction $transaction,
-        PlanPoint $checkpoint,
-    ): bool {
-        $evidence = $transaction->planPoint;
-        if (! $evidence instanceof PlanPoint
-            || (int) $evidence->plan_id !== (int) $checkpoint->plan_id) {
-            return false;
-        }
-
-        return (int) $checkpoint->sort_order < (int) $evidence->sort_order
-            || ((int) $checkpoint->sort_order === (int) $evidence->sort_order
-                && (int) $checkpoint->id <= (int) $evidence->id);
     }
 
     /** @param array<string, mixed> $summary */

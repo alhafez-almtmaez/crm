@@ -88,12 +88,18 @@ function fakeHomeworkCertificateWhatsApp(): void
     });
 }
 
-test('a homework action issues due certificates and sends the PDF files through WhatsApp', function () {
+test('a homework action only issues and sends certificates first earned by that homework', function () {
     $admin = User::factory()->create();
     $admin->assignRole('admin');
     $center = Center::factory()->create(['name' => 'مركز الإتقان']);
     $group = Group::factory()->create(['center_id' => $center->id]);
     $plan = Plan::factory()->quran()->create();
+    $olderCheckpoint = PlanPoint::factory()->create([
+        'plan_id' => $plan->id,
+        'sort_order' => 5,
+        'requires_certificate' => true,
+        'surah_name' => 'الكهف',
+    ]);
     $checkpoint = PlanPoint::factory()->create([
         'plan_id' => $plan->id,
         'sort_order' => 10,
@@ -122,7 +128,16 @@ test('a homework action issues due certificates and sends the PDF files through 
         'admin_id' => $admin->id,
         'date' => '2026-09-06',
     ]);
-    recordHomeworkCertificateCompletion($homework, $student, $plan, $evidencePoint, $admin);
+    $olderHomework = Homework::factory()->create([
+        'center_id' => $center->id,
+        'group_id' => $group->id,
+        'admin_id' => $admin->id,
+        'date' => '2026-09-05',
+    ]);
+    recordHomeworkCertificateCompletion($olderHomework, $student, $plan, $olderCheckpoint, $admin)
+        ->forceFill(['created_at' => '2026-09-05 10:00:00'])->save();
+    recordHomeworkCertificateCompletion($homework, $student, $plan, $evidencePoint, $admin)
+        ->forceFill(['created_at' => '2026-09-06 10:00:00'])->save();
     Device::factory()->connected()->create(['session_id' => 'homework-certificate-session']);
 
     $pdf = "%PDF-1.7\nhomework-certificate";
