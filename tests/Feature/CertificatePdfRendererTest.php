@@ -65,7 +65,7 @@ test('certificate PDF renderer uses the real certificate view and A4 landscape s
     $certificates = Mockery::mock(StudentCertificateService::class);
     $certificates->shouldReceive('viewPayload')
         ->once()
-        ->with($student, $certificate, true)
+        ->with($student, $certificate, true, true)
         ->andReturn(certificatePdfRendererPayload());
 
     $driver = Mockery::mock(PdfDriver::class);

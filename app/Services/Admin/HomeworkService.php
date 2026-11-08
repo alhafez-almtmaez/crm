@@ -76,6 +76,15 @@ class HomeworkService
                 DB::raw('COUNT(DISTINCT homework_students.id) as students_count'),
                 DB::raw('COALESCE(SUM(CASE WHEN homework_student_points.is_done = true THEN 1 ELSE 0 END), 0) as completed_points_count'),
             ])
+            ->selectSub(
+                DB::table('homework_certificate_prints')
+                    ->join('certificates', 'certificates.id', '=', 'homework_certificate_prints.certificate_id')
+                    ->join('students as homework_print_students', 'homework_print_students.id', '=', 'certificates.student_id')
+                    ->whereColumn('homework_certificate_prints.homework_id', 'homeworks.id')
+                    ->tap(fn ($query) => $this->dataScope->applyStudentAccess($query, 'homework_print_students'))
+                    ->selectRaw('COUNT(*)'),
+                'printed_certificates_count',
+            )
             ->when($centerId > 0, fn ($query) => $query->where('groups.center_id', $centerId))
             ->when($groupId > 0, fn ($query) => $query->where('homeworks.group_id', $groupId))
             ->when($this->dataScope->shouldScope(), fn ($query) => $this->dataScope->applyStudentAccess($query, 'homework_scope_students'))

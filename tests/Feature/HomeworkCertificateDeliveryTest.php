@@ -253,3 +253,88 @@ test('homework certificate delivery requires both issue and WhatsApp permissions
         ->postJson(route('admin.homeworks.certificates.deliver', $homework))
         ->assertForbidden();
 });
+
+test('printing filters certificates earned in one homework and records successful reprints without sending WhatsApp', function () {
+    $supervisor = User::factory()->create();
+    $supervisor->givePermissionTo(['homeworks.view', 'students.update']);
+    $otherSupervisor = User::factory()->create();
+    $group = Group::factory()->create();
+    $plan = Plan::factory()->quran()->create();
+    $olderHomework = Homework::factory()->create(['group_id' => $group->id, 'date' => '2026-09-05']);
+    $homework = Homework::factory()->create(['group_id' => $group->id, 'date' => '2026-09-06']);
+    $olderCheckpoint = PlanPoint::factory()->create([
+        'plan_id' => $plan->id, 'sort_order' => 5, 'requires_certificate' => true, 'surah_name' => 'الكهف',
+    ]);
+    $first = PlanPoint::factory()->create([
+        'plan_id' => $plan->id, 'sort_order' => 10, 'requires_certificate' => true, 'surah_name' => 'مريم',
+    ]);
+    $second = PlanPoint::factory()->create([
+        'plan_id' => $plan->id, 'sort_order' => 20, 'requires_certificate' => true, 'part_name' => 'الجزء الثاني',
+    ]);
+    $third = PlanPoint::factory()->create([
+        'plan_id' => $plan->id, 'sort_order' => 30, 'requires_certificate' => true, 'surah_name' => 'يس',
+    ]);
+    $students = collect([$supervisor, $supervisor, $supervisor, $otherSupervisor])->map(function (User $owner) use (
+        $group, $plan, $olderHomework, $homework, $olderCheckpoint, $third, $supervisor,
+    ): Student {
+        $student = Student::factory()->active()->create([
+            'admin_id' => $owner->id,
+            'center_id' => $group->center_id,
+            'group_id' => $group->id,
+            'plan_type_id' => $plan->id,
+        ]);
+        recordHomeworkCertificateCompletion($olderHomework, $student, $plan, $olderCheckpoint, $supervisor)
+            ->forceFill(['created_at' => '2026-09-05 10:00:00'])->save();
+        recordHomeworkCertificateCompletion($homework, $student, $plan, $third, $supervisor)
+            ->forceFill(['created_at' => '2026-09-06 10:00:00'])->save();
+
+        return $student;
+    });
+
+    Http::fake();
+    $this->actingAs($supervisor, 'web');
+    $optionsUrl = route('admin.homeworks.certificates.print-options', $homework);
+    $printUrl = route('admin.homeworks.certificates.print', $homework);
+    $options = collect($this->getJson($optionsUrl)->assertOk()->assertJsonCount(9, 'data')->json('data'));
+    expect($options->pluck('plan_point_id')->unique()->values()->all())->toBe([$first->id, $second->id, $third->id])
+        ->and($options->pluck('student_id')->unique()->values()->all())->toBe($students->take(3)->pluck('id')->all())
+        ->and(Certificate::query()->count())->toBe(0);
+
+    $selection = [
+        'student_ids' => [$students[0]->id, $students[1]->id, $students[3]->id],
+        'type_keys' => $options->whereIn('plan_point_id', [$first->id, $second->id])->pluck('type_key')->unique()->values()->all(),
+    ];
+    $expectedPairs = [[$students[0]->id, $first->id], [$students[0]->id, $second->id], [$students[1]->id, $first->id], [$students[1]->id, $second->id]];
+    $pdf = "%PDF-1.7\ncombined-homework-certificates";
+    $attempts = 0;
+    $this->mock(CertificatePdfRenderer::class, function (MockInterface $mock) use ($expectedPairs, $pdf, &$attempts): void {
+        $mock->shouldReceive('renderBatch')->times(3)->andReturnUsing(function (array $pages) use ($expectedPairs, $pdf, &$attempts): string {
+            expect(array_map(static fn (array $page): array => [$page['student']->id, $page['certificate']->plan_point_id], $pages))->toBe($expectedPairs);
+            if ($attempts++ === 0) {
+                throw new RuntimeException('Test PDF renderer failed.');
+            }
+
+            return $pdf;
+        });
+    });
+
+    $this->postJson($printUrl, $selection)->assertServerError();
+    $this->assertDatabaseCount('homework_certificate_prints', 0);
+
+    foreach (range(1, 2) as $attempt) {
+        $this->postJson($printUrl, $selection)
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertContent($pdf);
+    }
+
+    $this->assertDatabaseCount('certificates', 4);
+    $this->assertDatabaseCount('homework_certificate_prints', 4);
+    $this->assertDatabaseMissing('homework_certificate_prints', ['homework_id' => $olderHomework->id]);
+    $options = collect($this->getJson($optionsUrl)->assertOk()->json('data'));
+    expect($options->where('printed', true)->count())->toBe(4);
+    $records = collect($this->getJson(route('admin.homeworks.records'))->assertOk()->json('data'))->keyBy('id');
+    expect((int) $records[$homework->id]['printed_certificates_count'])->toBe(4)
+        ->and((int) $records[$olderHomework->id]['printed_certificates_count'])->toBe(0);
+    Http::assertNothingSent();
+});

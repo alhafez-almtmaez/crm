@@ -168,6 +168,10 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::get('homeworks/students/{student}/point-history', [HomeworkController::class, 'pointHistory'])->name('homeworks.students.point-history');
         Route::post('homeworks/{homework}/certificates/deliver', [HomeworkController::class, 'deliverCertificates'])
             ->name('homeworks.certificates.deliver');
+        Route::get('homeworks/{homework}/certificates/print-options', [HomeworkController::class, 'certificatePrintOptions'])
+            ->name('homeworks.certificates.print-options');
+        Route::post('homeworks/{homework}/certificates/print', [HomeworkController::class, 'printCertificates'])
+            ->name('homeworks.certificates.print');
         Route::get('homeworks/{homework}/pdf', [HomeworkController::class, 'pdf'])->name('homeworks.pdf');
         Route::resource('homeworks', HomeworkController::class)->except(['show']);
 

@@ -6,6 +6,8 @@ return [
     'deleted_successfully' => 'Homework deleted successfully.',
     'certificate_delivery_in_progress' => 'Certificates for this assignment are currently being issued and sent. Wait for the operation to finish.',
     'no_due_certificates' => 'No due certificates are linked to this assignment\'s completions.',
+    'certificate_print_selection_changed' => 'A selected certificate has changed. Reopen the certificate list and try again.',
+    'certificate_print_title' => 'Assignment certificates for printing',
     'certificate_delivery_completed' => 'Assignment certificates processed: :issued newly issued, :sent sent through WhatsApp as attached PDF files, and :already_sent already sent.',
     'certificate_delivery_completed_with_issues' => 'Assignment certificates processed with issues: :issued newly issued, :sent sent as attached PDF files, :already_sent already sent, and :problems need review.',
     'certificate_delivery_student_missing' => 'The student linked to the certificate could not be found.',

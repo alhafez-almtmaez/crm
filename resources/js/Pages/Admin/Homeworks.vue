@@ -9,6 +9,7 @@ import { adminNavItems } from '../../admin/navItems';
 import AdminBreadcrumbs from '../../components/admin/AdminBreadcrumbs.vue';
 import AdminLayout from '../../components/admin/AdminLayout.vue';
 import DataTable from '../../components/admin/DataTable.vue';
+import HomeworkCertificatePrintDialog from '../../components/admin/HomeworkCertificatePrintDialog.vue';
 import { useAppToast } from '../../composables/useAppToast';
 import { useServerTable } from '../../composables/useServerTable';
 
@@ -17,6 +18,9 @@ const appToast = useAppToast();
 const { t } = useI18n();
 const page = usePage();
 const deliveringHomeworkIds = ref(new Set());
+const printingHomework = ref(null);
+const canPrintCertificates = computed(() => (page.props.auth?.user?.roles ?? []).includes('admin')
+    || (page.props.auth?.user?.permissions ?? []).includes('students.update'));
 const canDeliverCertificates = computed(() => {
     const roles = page.props.auth?.user?.roles ?? [];
     const permissions = page.props.auth?.user?.permissions ?? [];
@@ -47,6 +51,12 @@ const rows = computed(() => (sourceRows.value ?? []).map((row) => ({
     center_name: row.center_name ?? t('common.na'),
     group_name: row.group_name ?? t('common.na'),
     admin_name: row.admin_name ?? t('common.na'),
+    certificate_print_status: Number(row.printed_certificates_count) > 0
+        ? t('homeworks.certificatePrintedCount', { count: row.printed_certificates_count })
+        : t('homeworks.certificateNotPrinted'),
+    certificate_print_status_class: Number(row.printed_certificates_count) > 0
+        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+        : 'bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300',
 })));
 
 const columns = computed(() => [
@@ -57,6 +67,12 @@ const columns = computed(() => [
     { field: 'admin_name', header: t('students.admin'), sortable: true, sortField: 'admin_name' },
     { field: 'students_count', header: t('homeworks.studentsCount') },
     { field: 'completed_points_count', header: t('homeworks.completedPointsCount') },
+    ...(canPrintCertificates.value ? [{
+        field: 'certificate_print_status',
+        header: t('homeworks.certificatePrintStatus'),
+        badge: true,
+        badgeClassField: 'certificate_print_status_class',
+    }] : []),
     { field: 'created_at_formatted', header: t('homeworks.createdAt'), sortable: true, sortField: 'created_at' },
 ]);
 
@@ -75,6 +91,13 @@ const certificateDeliveryTitle = (row) => {
 };
 
 const rowActions = computed(() => [
+    ...(canPrintCertificates.value ? [{
+        key: 'print-certificates',
+        icon: 'pi pi-verified',
+        severity: 'secondary',
+        outlined: true,
+        title: t('homeworks.printDueCertificates'),
+    }] : []),
     ...(canDeliverCertificates.value ? [{
         key: 'deliver-certificates',
         icon: 'pi pi-whatsapp',
@@ -115,6 +138,11 @@ const openPdf = (row) => {
 };
 
 const handleRowAction = ({ action, data, event }) => {
+    if (action === 'print-certificates') {
+        printingHomework.value = data;
+        return;
+    }
+
     if (action === 'deliver-certificates') {
         askCertificateDelivery(data, event);
         return;
@@ -271,6 +299,12 @@ onMounted(() => {
                 @row-action="handleRowAction"
             />
             <ConfirmPopup />
+            <HomeworkCertificatePrintDialog
+                v-if="printingHomework"
+                :homework="printingHomework"
+                @close="printingHomework = null"
+                @printed="fetchRows()"
+            />
         </section>
     </AdminLayout>
 </template>

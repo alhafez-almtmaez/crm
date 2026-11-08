@@ -771,7 +771,7 @@ class StudentCertificateService
     /**
      * @return array<string, mixed>
      */
-    public function viewPayload(Student $student, Certificate $certificate, bool $pdf = false): array
+    public function viewPayload(Student $student, Certificate $certificate, bool $pdf = false, bool $includeStylesheet = true): array
     {
         $centerName = $this->nullableTrim($certificate->center_name)
             ?? __('certificates.default_center_name');
@@ -797,7 +797,7 @@ class StudentCertificateService
             ? $contentTemplate['rendered_sections']
             : [];
         $showCenterIdentity = (bool) $certificate->show_center_manager_signature;
-        $renderAssets = $this->renderAssetPayload($design, $pdf, $showCenterIdentity);
+        $renderAssets = $this->renderAssetPayload($design, $pdf, $showCenterIdentity, $includeStylesheet);
         $qrCode = $this->certificateQrCodes->payload(
             $this->verificationUrl($certificate),
             (string) ($design['accent_color'] ?? ''),
@@ -853,6 +853,7 @@ class StudentCertificateService
         array $design,
         bool $pdf = false,
         bool $showCenterIdentity = true,
+        bool $includeStylesheet = true,
     ): array {
         $achievementType = is_string($design['achievement_type'] ?? null)
             ? $design['achievement_type']
@@ -867,9 +868,11 @@ class StudentCertificateService
         }
 
         return [
-            'stylesheet_url' => $pdf
-                ? $this->pdfStylesheetDataUri($design)
-                : $this->versionedPublicAssetUrl((string) config('certificates.assets.stylesheet')),
+            'stylesheet_url' => match (true) {
+                ! $includeStylesheet => '',
+                $pdf => $this->pdfStylesheetForDesigns([$design]),
+                default => $this->versionedPublicAssetUrl((string) config('certificates.assets.stylesheet')),
+            },
             'font_preload_urls' => $pdf ? [] : $this->fontPreloadUrls($design),
             'images' => $images,
         ];
@@ -1101,7 +1104,8 @@ class StudentCertificateService
         return asset($relativePath).'?v='.filemtime($path);
     }
 
-    private function pdfStylesheetDataUri(array $design): string
+    /** @param list<array<string, mixed>> $designs */
+    public function pdfStylesheetForDesigns(array $designs): string
     {
         $relativePath = (string) config('certificates.assets.stylesheet', '');
         $path = $this->validatedPublicPath($relativePath);
@@ -1114,7 +1118,12 @@ class StudentCertificateService
             return 'data:text/css;base64,';
         }
 
-        foreach ($this->selectedFontAssetMap($design) as $cssPath => $publicPath) {
+        $fontAssets = [];
+        foreach ($designs as $design) {
+            $fontAssets += $this->selectedFontAssetMap($design);
+        }
+
+        foreach ($fontAssets as $cssPath => $publicPath) {
             $css = str_replace($cssPath, $this->localDataUri($publicPath), $css);
         }
 

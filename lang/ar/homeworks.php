@@ -6,6 +6,8 @@ return [
     'deleted_successfully' => 'تم حذف الواجب بنجاح.',
     'certificate_delivery_in_progress' => 'يجري الآن إصدار وإرسال شهادات هذا الواجب. انتظر حتى تكتمل العملية.',
     'no_due_certificates' => 'لا توجد شهادات مستحقة مرتبطة بإنجازات هذا الواجب.',
+    'certificate_print_selection_changed' => 'تغيّرت حالة إحدى الشهادات المختارة. أعد فتح قائمة الشهادات وحاول مجددًا.',
+    'certificate_print_title' => 'شهادات الواجب للطباعة',
     'certificate_delivery_completed' => 'تمت معالجة شهادات الواجب: :issued شهادة جديدة، و:sent شهادة أُرسلت كملف PDF مرفق عبر واتساب، و:already_sent سبق إرسالها.',
     'certificate_delivery_completed_with_issues' => 'اكتملت معالجة شهادات الواجب مع ملاحظات: :issued شهادة جديدة، و:sent أُرسلت كملف PDF مرفق، و:already_sent سبق إرسالها، و:problems تحتاج إلى مراجعة.',
     'certificate_delivery_student_missing' => 'تعذر العثور على الطالب المرتبط بالشهادة.',

@@ -10,10 +10,12 @@ use App\Models\Homework;
 use App\Models\Student;
 use App\Services\Admin\AdminDataScopeService;
 use App\Services\Admin\HomeworkCertificateDeliveryService;
+use App\Services\Admin\HomeworkCertificatePrintService;
 use App\Services\Admin\HomeworkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Inertia\Inertia;
@@ -27,16 +29,17 @@ class HomeworkController extends Controller implements HasMiddleware
         private readonly HomeworkService $service,
         private readonly AdminDataScopeService $dataScope,
         private readonly HomeworkCertificateDeliveryService $certificateDelivery,
+        private readonly HomeworkCertificatePrintService $certificatePrint,
     ) {}
 
     public static function middleware(): array
     {
         return [
-            new Middleware('can:homeworks.view', only: ['index', 'records', 'pointHistory', 'pdf', 'deliverCertificates']),
+            new Middleware('can:homeworks.view', only: ['index', 'records', 'pointHistory', 'pdf', 'deliverCertificates', 'certificatePrintOptions', 'printCertificates']),
             new Middleware('can:homeworks.create', only: ['create', 'store']),
             new Middleware('can:homeworks.update', only: ['edit', 'update']),
             new Middleware('can:homeworks.delete', only: ['destroy']),
-            new Middleware('can:students.update', only: ['deliverCertificates']),
+            new Middleware('can:students.update', only: ['deliverCertificates', 'certificatePrintOptions', 'printCertificates']),
             new Middleware('can:certificates.send', only: ['deliverCertificates']),
         ];
     }
@@ -162,6 +165,35 @@ class HomeworkController extends Controller implements HasMiddleware
         return response()->json([
             'message' => $message,
             'meta' => $result,
+        ]);
+    }
+
+    public function certificatePrintOptions(Homework $homework): JsonResponse
+    {
+        return response()->json(['data' => $this->certificatePrint->options($homework)]);
+    }
+
+    public function printCertificates(Request $request, Homework $homework): HttpResponse
+    {
+        $this->dataScope->abortUnlessCanAccessHomework($homework);
+
+        $selection = $request->validate([
+            'student_ids' => ['sometimes', 'array', 'list'],
+            'student_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'type_keys' => ['sometimes', 'array', 'list'],
+            'type_keys.*' => ['required', 'string', 'size:64', 'distinct'],
+        ]);
+
+        $pdf = $this->certificatePrint->print(
+            $homework,
+            array_map('intval', $selection['student_ids'] ?? []),
+            $selection['type_keys'] ?? [],
+        );
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="homework-'.$homework->id.'-certificates.pdf"',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
