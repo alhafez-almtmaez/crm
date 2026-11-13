@@ -991,6 +991,7 @@
     "certificatePrintCount": "Certificates to print: {count}",
     "certificatePrintNoMatches": "No certificates match the selection.",
     "certificatePrintPdf": "Print PDF",
+    "certificatePrintPaperHint": "A4 landscape PDF with safe margins. Choose Fit to page when printing to keep the entire frame.",
     "certificateReprintPdf": "Reprint PDF",
     "certificatePrintFailed": "Could not prepare the certificates PDF for printing.",
     "certificateDeliveryConfirm": "Due certificates from the {group} assignment on {date} will be issued, then each certificate will be sent through WhatsApp as an attached PDF file without a link. Continue?",

@@ -167,6 +167,10 @@ onMounted(loadOptions);
             </ul>
         </template>
 
+        <p v-if="rows.length" class="mt-4 text-xs text-surface-500">
+            {{ t('homeworks.certificatePrintPaperHint') }}
+        </p>
+
         <template #footer>
             <Button :label="t('common.close')" severity="secondary" text :disabled="printing" @click="emit('close')" />
             <Button

@@ -599,8 +599,10 @@ body.certificate-preview-body {
     }
 
     .certificate {
-        width: 297mm;
-        height: 210mm;
+        /* Keep the complete frame inside common printers' non-printable edges.
+           These dimensions preserve the A4 aspect ratio on the full-size sheet. */
+        width: 277.2mm;
+        height: 196mm;
         box-shadow: none;
     }
 

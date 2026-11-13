@@ -991,6 +991,7 @@
     "certificatePrintCount": "عدد الشهادات للطباعة: {count}",
     "certificatePrintNoMatches": "لا توجد شهادات مطابقة للاختيار.",
     "certificatePrintPdf": "طباعة PDF",
+    "certificatePrintPaperHint": "الملف A4 أفقي بهوامش أمان. عند الطباعة اختر ملاءمة الصفحة للحفاظ على الإطار كاملًا.",
     "certificateReprintPdf": "إعادة طباعة PDF",
     "certificatePrintFailed": "تعذر تجهيز ملف الشهادات للطباعة.",
     "certificateDeliveryConfirm": "سيتم إصدار الشهادات المستحقة من إنجازات واجب مجموعة {group} بتاريخ {date}، ثم إرسال كل شهادة كملف PDF مرفق عبر واتساب، دون إرسال رابط. هل تريد المتابعة؟",
